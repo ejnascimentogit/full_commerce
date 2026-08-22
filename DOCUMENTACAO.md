@@ -90,8 +90,9 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 
 - [x] Migrar o código para o repositório `full_commerce`
 - [x] Deploy do painel admin no Cloudflare
+- [x] Criar o schema `ecommerce` no Supabase do projeto `admfullcontrolefinanceiro` (separado do schema `public` do financeiro) — 14 tabelas espelhando `packages/types`, RLS ativado sem políticas ainda
 - [ ] Carrossel de rolagem para a vitrine "Ofertas da Semana" (hoje é grid)
-- [ ] Conectar banco de dados e backend reais (Supabase ou outro) — trocar `NEXT_PUBLIC_API_MODE` para `rest`
+- [ ] Construir o backend real (rotas de `api-contract.md`) sobre o schema `ecommerce` do Supabase e trocar `NEXT_PUBLIC_API_MODE` para `rest`
 - [ ] App mobile (React Native) — o domínio (`packages/types`, `packages/api-client`) já foi desenhado para ser reaproveitado
 - [ ] Cadastro/login de fornecedor (`vendorAdmin`) pelo próprio admin — hoje só existe via seed
 - [ ] Extrato de pagamento e integração real com gateway (cartão/PIX) — o fluxo de checkout já está pronto para plugar
