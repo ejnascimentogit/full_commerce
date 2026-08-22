@@ -60,6 +60,15 @@ function createRestApiClient(baseUrl: string): ApiClient {
     createProduct: (input: CreateProductInput) => request<Product>("/api/products", { method: "POST", body: JSON.stringify(input) }),
     updateProduct: (id: string, patch: UpdateProductInput) =>
       request<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    uploadProductPhoto: async (productId: string | null, file: File) => {
+      if (!productId) throw new Error("Salve o produto antes de enviar fotos.");
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${baseUrl}/api/products/${productId}/photos`, { method: "POST", body: form, credentials: "include" });
+      if (!res.ok) throw new Error(`API error ${res.status} on /api/products/${productId}/photos`);
+      const data = (await res.json()) as { url: string };
+      return data.url;
+    },
     getAdminOrders: (params) => {
       const qs = new URLSearchParams();
       if (params?.status) qs.set("status", params.status);

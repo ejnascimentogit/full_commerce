@@ -81,6 +81,8 @@ export interface ApiClient {
   getCurrentAdminUser(): Promise<AdminUser | null>;
   createProduct(input: CreateProductInput): Promise<Product>;
   updateProduct(id: string, patch: UpdateProductInput): Promise<Product>;
+  /** Mock: resize/encode do lado do cliente. Real: POST /api/products/:id/photos (multipart) — precisa do produto já existir. */
+  uploadProductPhoto(productId: string | null, file: File): Promise<string>;
   getAdminOrders(params?: { status?: OrderStatus; vendorId?: string }): Promise<Order[]>;
   createVendor(input: Omit<Vendor, "id">): Promise<Vendor>;
   updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor>;

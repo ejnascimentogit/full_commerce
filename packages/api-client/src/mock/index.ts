@@ -22,6 +22,7 @@ import { createCustomer, findById as findCustomerById, verifyPassword } from "./
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
 import { clearAdminSession, findAdminUserById, getAdminSessionUserId, setAdminSessionUserId, verifyAdminPassword } from "./admin-store";
 import { createProduct as createProductStore, findProductById, listProducts, updateProduct as updateProductStore } from "./products-store";
+import { resizeImageToDataUrl } from "./image";
 import { createVendor as createVendorStore, listVendors, updateVendor as updateVendorStore } from "./vendors-store";
 
 const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -181,6 +182,11 @@ export const mockApiClient: ApiClient = {
   async updateProduct(id: string, patch: UpdateProductInput): Promise<Product> {
     await delay(300);
     return updateProductStore(id, patch);
+  },
+
+  async uploadProductPhoto(_productId: string | null, file: File): Promise<string> {
+    await delay(400);
+    return resizeImageToDataUrl(file);
   },
 
   async getAdminOrders(params): Promise<Order[]> {

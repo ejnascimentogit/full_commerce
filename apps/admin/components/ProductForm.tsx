@@ -35,8 +35,34 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [avgWeight, setAvgWeight] = useState(product?.avgWeight?.toString() ?? "");
   const [stock, setStock] = useState(product?.stock?.toString() ?? "0");
   const [status, setStatus] = useState<Product["status"]>(product?.status ?? "active");
+  const [photos, setPhotos] = useState<string[]>(product?.photos ?? []);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const url = await apiClient.uploadProductPhoto(product?.id ?? null, file);
+      setPhotos((prev) => [...prev, url]);
+    } catch {
+      setError("Não foi possível enviar a foto.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removePhoto(index: number) {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function makeCover(index: number) {
+    setPhotos((prev) => [prev[index], ...prev.filter((_, i) => i !== index)]);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +74,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         description,
         sku,
         categoryId,
-        photos: product?.photos ?? [],
+        photos,
         unitType,
         basePrice: Number(basePrice),
         salePrice: salePrice ? Number(salePrice) : undefined,
@@ -87,6 +113,49 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
           rows={3}
           className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Fotos</label>
+        <div className="flex flex-wrap gap-3">
+          {photos.map((url, index) => (
+            <div key={url + index} className="relative w-24 h-24 rounded-md overflow-hidden border border-slate-200 group">
+              {/* eslint-disable-next-line @next/next/no-img-element -- local/data-URI mock photos */}
+              <img src={url} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+              {index === 0 && (
+                <span className="absolute top-1 left-1 bg-brand-600 text-white text-[10px] font-medium px-1.5 py-0.5 rounded">
+                  Capa
+                </span>
+              )}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                {index !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => makeCover(index)}
+                    title="Tornar capa"
+                    className="text-white text-xs bg-white/20 rounded px-1.5 py-0.5 hover:bg-white/30"
+                  >
+                    ★
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removePhoto(index)}
+                  title="Remover"
+                  className="text-white text-xs bg-white/20 rounded px-1.5 py-0.5 hover:bg-white/30"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <label className="w-24 h-24 rounded-md border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs cursor-pointer hover:border-brand-400 hover:text-brand-600 text-center px-1">
+            {uploading ? "Enviando..." : "+ Adicionar foto"}
+            <input type="file" accept="image/*" onChange={handlePhotoSelected} disabled={uploading} className="hidden" />
+          </label>
+        </div>
+        <p className="text-xs text-slate-400 mt-1.5">A primeira foto é a capa exibida no catálogo. Passe o mouse para trocar ou remover.</p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
