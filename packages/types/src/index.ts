@@ -196,10 +196,28 @@ export interface Banner {
   active: boolean;
 }
 
+export interface SiteFeatureBullet {
+  icon: string;
+  title: string;
+  text: string;
+}
+
+export interface SiteCopy {
+  /** Nome exibido no header quando não há logo, e no <title> das páginas. */
+  storeName: string;
+  heroTitle: string;
+  /** Os 3 selos abaixo do título da home (ex: "Sem pedido mínimo"). */
+  featureBullets: SiteFeatureBullet[];
+}
+
 export interface StoreSettings {
   /** Cor base da marca (hex, ex: "#1d4ed8") — o front deriva os demais tons (50/100/500/700) a partir dela. */
   brandColor: string;
   logoUrl?: string;
   /** Carrossel de banners da home, em ordem. */
   banners: Banner[];
+  /** Interruptor geral: se false, nenhum cupom/promoção aplica desconto no checkout, mesmo que a Promotion esteja ativa. */
+  promotionsEnabled: boolean;
+  /** Textos editáveis da home — dá autonomia pro admin trocar nome/frases sem depender de deploy. */
+  siteCopy: SiteCopy;
 }

@@ -1,4 +1,4 @@
-import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, Product } from "@ecommerce/types";
+import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, Product, Promotion } from "@ecommerce/types";
 
 // Pure business-rule functions — no React, no fetch, no storage. Shared by every
 // app (storefront, mobile, admin) so the rules from the ecommerce skill (frete
@@ -40,11 +40,55 @@ export function calculateShipping(customer: Pick<Customer, "documentType">): num
   return customer.documentType === "cnpj" ? 0 : 19.9;
 }
 
-export function calculateOrderTotals(items: OrderItem[], customer: Pick<Customer, "documentType">) {
+export function calculateOrderTotals(
+  items: OrderItem[],
+  customer: Pick<Customer, "documentType">,
+  options?: { discount?: number; freeShippingOverride?: boolean },
+) {
   const subtotal = items.reduce((sum, item) => sum + item.estimatedSubtotal, 0);
-  const shipping = calculateShipping(customer);
-  const discount = 0;
-  return { subtotal, discount, shipping, total: subtotal - discount + shipping };
+  const shipping = options?.freeShippingOverride ? 0 : calculateShipping(customer);
+  const discount = options?.discount ?? 0;
+  return { subtotal, discount, shipping, total: Math.max(0, subtotal - discount) + shipping };
+}
+
+// Cupons/promoções automáticas — regidas pelo interruptor StoreSettings.promotionsEnabled
+// (checado por quem chama, não aqui: essas funções são puras e não sabem de settings).
+export function isPromotionActive(
+  promotion: Pick<Promotion, "startsAt" | "endsAt" | "maxUses" | "currentUses">,
+  at: string = new Date().toISOString(),
+): boolean {
+  if (promotion.startsAt > at || promotion.endsAt < at) return false;
+  if (promotion.maxUses != null && promotion.currentUses >= promotion.maxUses) return false;
+  return true;
+}
+
+export function findPromotionByCoupon(promotions: Promotion[], code: string): Promotion | undefined {
+  const target = code.trim().toUpperCase();
+  if (!target) return undefined;
+  return promotions.find((p) => p.couponCode && p.couponCode.toUpperCase() === target && isPromotionActive(p));
+}
+
+export interface PromotionCartLine {
+  product: Product;
+  subtotal: number;
+}
+
+// Desconto em R$ que a promoção tira do subtotal — não mexe em frete (freeShipping
+// é aplicado à parte, via freeShippingOverride em calculateOrderTotals) nem valida
+// vigência/usos (isso é isPromotionActive, chamado antes).
+export function calculatePromotionDiscount(promotion: Promotion, lines: PromotionCartLine[], orderSubtotal: number): number {
+  if (promotion.rules.minOrderValue && orderSubtotal < promotion.rules.minOrderValue) return 0;
+  const eligible = lines.filter((line) => {
+    if (promotion.rules.categoryIds && !promotion.rules.categoryIds.includes(line.product.categoryId)) return false;
+    if (promotion.rules.vendorId && line.product.vendorId !== promotion.rules.vendorId) return false;
+    if (promotion.rules.productIds && !promotion.rules.productIds.includes(line.product.id)) return false;
+    return true;
+  });
+  const eligibleSubtotal = eligible.reduce((sum, line) => sum + line.subtotal, 0);
+  if (eligibleSubtotal <= 0) return 0;
+  if (promotion.type === "percentage") return Math.round(eligibleSubtotal * (promotion.value / 100) * 100) / 100;
+  if (promotion.type === "fixed" || promotion.type === "coupon") return Math.min(promotion.value, eligibleSubtotal);
+  return 0;
 }
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {

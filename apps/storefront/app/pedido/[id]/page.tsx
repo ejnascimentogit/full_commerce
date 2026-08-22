@@ -110,6 +110,12 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
             <span>Subtotal</span>
             <span>R$ {order.subtotal.toFixed(2).replace(".", ",")}</span>
           </div>
+          {order.discount > 0 && (
+            <div className="flex justify-between text-green-600">
+              <span>Desconto</span>
+              <span>− R$ {order.discount.toFixed(2).replace(".", ",")}</span>
+            </div>
+          )}
           <div className="flex justify-between text-slate-600">
             <span>Frete</span>
             <span className={order.shipping === 0 ? "text-green-600 font-medium" : ""}>

@@ -48,6 +48,8 @@ export interface CreateOrderInput {
   addressId: string;
   paymentMethod: "card" | "pix" | "boleto";
   installments?: number;
+  /** Revalidado no backend (defesa em profundidade) — o desconto exibido no checkout é só uma prévia. */
+  couponCode?: string;
 }
 
 export interface RegisterInput {
@@ -79,6 +81,8 @@ export interface ApiClient {
   getFeaturedPromotions(): Promise<Promotion[]>;
   getBestSellingProducts(limit?: number): Promise<Product[]>;
   getStoreSettings(): Promise<StoreSettings>;
+  /** null se não existe, expirou, esgotou usos, ou StoreSettings.promotionsEnabled é false. */
+  getPromotionByCoupon(code: string): Promise<Promotion | null>;
 
   // Cliente (loja)
   register(input: RegisterInput): Promise<Customer>;
@@ -113,4 +117,8 @@ export interface ApiClient {
   getAdminPromotions(params?: { vendorId?: string }): Promise<Promotion[]>;
   createPromotion(input: CreatePromotionInput): Promise<Promotion>;
   updatePromotion(id: string, patch: UpdatePromotionInput): Promise<Promotion>;
+  /** Departamentos — só platformAdmin, é estrutura global do catálogo. */
+  createCategory(input: Omit<Category, "id">): Promise<Category>;
+  updateCategory(id: string, patch: Partial<Omit<Category, "id">>): Promise<Category>;
+  deleteCategory(id: string): Promise<void>;
 }

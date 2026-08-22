@@ -10,7 +10,12 @@ import type {
   UpdateProductInput,
 } from "../types";
 import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
-import { categories } from "./data";
+import {
+  createCategory as createCategoryStore,
+  deleteCategory as deleteCategoryStore,
+  listCategories,
+  updateCategory as updateCategoryStore,
+} from "./categories-store";
 import { createRegion as createRegionStore, listRegions, updateRegion as updateRegionStore } from "./regions-store";
 import { getSettings, updateSettings } from "./settings-store";
 import { createPromotion as createPromotionStore, listPromotions, updatePromotion as updatePromotionStore } from "./promotions-store";
@@ -22,7 +27,15 @@ import {
   nextOrderNumber,
   saveOrder,
 } from "./orders-store";
-import { buildOrderItem, calculateOrderTotals, getBestSellingProducts, matchRegionByNeighborhood } from "../domain";
+import {
+  buildOrderItem,
+  calculateOrderTotals,
+  calculatePromotionDiscount,
+  findPromotionByCoupon,
+  getBestSellingProducts,
+  isPromotionActive,
+  matchRegionByNeighborhood,
+} from "../domain";
 import { isValidDocument } from "../documents";
 import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
@@ -41,7 +54,7 @@ export const mockApiClient: ApiClient = {
 
   async getCategories(): Promise<Category[]> {
     await delay();
-    return categories;
+    return listCategories();
   },
 
   async getVendors(params): Promise<Vendor[]> {
@@ -77,8 +90,7 @@ export const mockApiClient: ApiClient = {
 
   async getFeaturedPromotions(): Promise<Promotion[]> {
     await delay();
-    const now = new Date().toISOString();
-    return listPromotions().filter((p) => p.isFeatured && p.startsAt <= now && p.endsAt >= now);
+    return listPromotions().filter((p) => p.isFeatured && isPromotionActive(p));
   },
 
   async getBestSellingProducts(limit = 12): Promise<Product[]> {
@@ -89,6 +101,12 @@ export const mockApiClient: ApiClient = {
   async getStoreSettings(): Promise<StoreSettings> {
     await delay();
     return getSettings();
+  },
+
+  async getPromotionByCoupon(code: string): Promise<Promotion | null> {
+    await delay();
+    if (!getSettings().promotionsEnabled) return null;
+    return findPromotionByCoupon(listPromotions(), code) ?? null;
   },
 
   async register(input: RegisterInput): Promise<Customer> {
@@ -127,13 +145,36 @@ export const mockApiClient: ApiClient = {
     const address = customer.addresses.find((a) => a.id === input.addressId) ?? customer.addresses[0];
     if (!address) throw new Error("Cliente não tem endereço cadastrado");
 
-    const items = input.items.map(({ productId, quantity }) => {
+    const products = input.items.map(({ productId, quantity }) => {
       const product = findProductById(productId);
       if (!product) throw new Error(`Product not found: ${productId}`);
-      return buildOrderItem(product, quantity);
+      return { product, quantity };
     });
+    const items = products.map(({ product, quantity }) => buildOrderItem(product, quantity));
+    const subtotal = items.reduce((sum, item) => sum + item.estimatedSubtotal, 0);
 
-    const totals = calculateOrderTotals(items, customer);
+    // Cupom: revalidado aqui mesmo que já tenha sido pré-visto no checkout — nunca
+    // confia só no valor calculado no cliente.
+    let discount = 0;
+    let freeShippingOverride = false;
+    let appliedPromotion: Promotion | undefined;
+    if (input.couponCode && getSettings().promotionsEnabled) {
+      const promotion = findPromotionByCoupon(listPromotions(), input.couponCode);
+      if (promotion) {
+        appliedPromotion = promotion;
+        if (promotion.type === "freeShipping") {
+          freeShippingOverride = true;
+        } else {
+          discount = calculatePromotionDiscount(
+            promotion,
+            items.map((item, i) => ({ product: products[i].product, subtotal: item.estimatedSubtotal })),
+            subtotal,
+          );
+        }
+      }
+    }
+
+    const totals = calculateOrderTotals(items, customer, { discount, freeShippingOverride });
     const now = new Date().toISOString();
 
     const order: Order = {
@@ -153,7 +194,9 @@ export const mockApiClient: ApiClient = {
       createdAt: now,
     };
 
-    return saveOrder(order);
+    const saved = saveOrder(order);
+    if (appliedPromotion) updatePromotionStore(appliedPromotion.id, { currentUses: appliedPromotion.currentUses + 1 });
+    return saved;
   },
 
   async getOrder(id: string): Promise<Order> {
@@ -258,6 +301,21 @@ export const mockApiClient: ApiClient = {
   async updatePromotion(id: string, patch: UpdatePromotionInput): Promise<Promotion> {
     await delay(300);
     return updatePromotionStore(id, patch);
+  },
+
+  async createCategory(input: Omit<Category, "id">): Promise<Category> {
+    await delay(300);
+    return createCategoryStore(input);
+  },
+
+  async updateCategory(id: string, patch: Partial<Omit<Category, "id">>): Promise<Category> {
+    await delay(300);
+    return updateCategoryStore(id, patch);
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    await delay(300);
+    deleteCategoryStore(id);
   },
 };
 

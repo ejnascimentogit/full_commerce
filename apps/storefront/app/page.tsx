@@ -39,12 +39,12 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 py-10 grid md:grid-cols-2 gap-8 items-center">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight">
-              A melhor forma de abastecer o seu negócio.
+              {settings?.siteCopy.heroTitle ?? "A melhor forma de abastecer o seu negócio."}
             </h1>
             <div className="mt-6 grid sm:grid-cols-3 gap-4">
-              <Feature icon="🛒" title="Sem pedido mínimo" text="Seu pedido não precisa ser grande para ser importante." />
-              <Feature icon="🚚" title="Frete grátis para CNPJ" text="Faça quantos pedidos desejar, o frete é por nossa conta." />
-              <Feature icon="⏱️" title="Entrega rápida" text="Prazo exato calculado pelo seu bairro no cadastro." />
+              {settings?.siteCopy.featureBullets.map((f) => (
+                <Feature key={f.title} icon={f.icon} title={f.title} text={f.text} />
+              ))}
             </div>
             <div className="mt-6 flex items-center gap-4">
               <a href="/conta/criar" className="bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-md hover:bg-brand-700">

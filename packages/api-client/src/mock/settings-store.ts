@@ -6,6 +6,16 @@ const STORAGE_KEY = "ecommerce.mock.settings";
 function seedSettings(): StoreSettings {
   return {
     brandColor: "#1d4ed8",
+    promotionsEnabled: true,
+    siteCopy: {
+      storeName: "fullcommerce",
+      heroTitle: "A melhor forma de abastecer o seu negócio.",
+      featureBullets: [
+        { icon: "🛒", title: "Sem pedido mínimo", text: "Seu pedido não precisa ser grande para ser importante." },
+        { icon: "🚚", title: "Frete grátis para CNPJ", text: "Faça quantos pedidos desejar, o frete é por nossa conta." },
+        { icon: "⏱️", title: "Entrega rápida", text: "Prazo exato calculado pelo seu bairro no cadastro." },
+      ],
+    },
     banners: [
       {
         id: "banner-seed-1",
@@ -32,7 +42,9 @@ function readSettings(): StoreSettings {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
-      return JSON.parse(raw);
+      // Merge sobre o seed cobre sessões antigas que salvaram settings antes de
+      // campos novos existirem (promotionsEnabled, siteCopy) — sem isso, ficariam undefined.
+      return { ...seedSettings(), ...JSON.parse(raw) };
     } catch {
       // fall through to reseed
     }

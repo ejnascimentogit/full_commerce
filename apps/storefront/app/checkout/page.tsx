@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient, unitPriceOf, calculateShipping } from "@ecommerce/api-client";
-import type { Address, Product } from "@ecommerce/types";
+import { apiClient, unitPriceOf, calculateShipping, calculatePromotionDiscount } from "@ecommerce/api-client";
+import type { Address, Product, Promotion } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
@@ -20,6 +20,11 @@ export default function CheckoutPage() {
   const [installments, setInstallments] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedPromotion, setAppliedPromotion] = useState<Promotion | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !customer) {
@@ -47,12 +52,49 @@ export default function CheckoutPage() {
     return <div className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-500">Carregando...</div>;
   }
 
-  const subtotal = lines.reduce((sum, l) => {
-    const p = products[l.productId];
-    return p ? sum + unitPriceOf(p) * l.quantity : sum;
-  }, 0);
-  const shipping = calculateShipping(customer);
-  const total = subtotal + shipping;
+  const resolvedLines = lines
+    .map((l) => ({ line: l, product: products[l.productId] }))
+    .filter((l): l is { line: (typeof lines)[number]; product: Product } => Boolean(l.product));
+
+  const subtotal = resolvedLines.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity, 0);
+  const baseShipping = calculateShipping(customer);
+  const isFreeShippingCoupon = appliedPromotion?.type === "freeShipping";
+  const shipping = isFreeShippingCoupon ? 0 : baseShipping;
+  const discount = appliedPromotion
+    ? calculatePromotionDiscount(
+        appliedPromotion,
+        resolvedLines.map(({ line, product }) => ({ product, subtotal: unitPriceOf(product) * line.quantity })),
+        subtotal,
+      )
+    : 0;
+  const total = Math.max(0, subtotal - discount) + shipping;
+
+  async function handleApplyCoupon() {
+    setCheckingCoupon(true);
+    setCouponError(null);
+    try {
+      const promotion = await apiClient.getPromotionByCoupon(couponInput);
+      if (!promotion) {
+        setCouponError("Cupom inválido, expirado ou promoções estão desativadas no momento.");
+        setAppliedPromotion(null);
+        return;
+      }
+      if (promotion.rules.minOrderValue && subtotal < promotion.rules.minOrderValue) {
+        setCouponError(`Esse cupom exige pedido mínimo de R$ ${promotion.rules.minOrderValue.toFixed(2).replace(".", ",")}.`);
+        setAppliedPromotion(null);
+        return;
+      }
+      setAppliedPromotion(promotion);
+    } finally {
+      setCheckingCoupon(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedPromotion(null);
+    setCouponInput("");
+    setCouponError(null);
+  }
 
   async function handleConfirm() {
     setSubmitting(true);
@@ -64,6 +106,7 @@ export default function CheckoutPage() {
         addressId,
         paymentMethod: method,
         installments: method === "card" ? installments : undefined,
+        couponCode: appliedPromotion?.couponCode,
       });
       clear();
       router.push(`/pedido/${order.id}`);
@@ -144,16 +187,59 @@ export default function CheckoutPage() {
       </section>
 
       <section className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
+        <h2 className="font-semibold text-slate-900 mb-3">Cupom de desconto</h2>
+        {appliedPromotion ? (
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-3 py-2">
+            <span className="text-sm text-green-700 font-medium">
+              Cupom <span className="font-mono">{appliedPromotion.couponCode}</span> aplicado
+              {appliedPromotion.type === "percentage" && ` — ${appliedPromotion.value}% off`}
+              {appliedPromotion.type === "freeShipping" && " — frete grátis"}
+              {(appliedPromotion.type === "fixed" || appliedPromotion.type === "coupon") &&
+                ` — R$ ${appliedPromotion.value.toFixed(2).replace(".", ",")} off`}
+            </span>
+            <button type="button" onClick={removeCoupon} className="text-green-700 text-sm hover:underline">
+              Remover
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={couponInput}
+              onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+              placeholder="Código do cupom"
+              className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleApplyCoupon}
+              disabled={checkingCoupon || !couponInput}
+              className="text-brand-600 border border-brand-200 rounded-md px-4 text-sm font-medium hover:bg-brand-50 disabled:opacity-50"
+            >
+              {checkingCoupon ? "Verificando..." : "Aplicar"}
+            </button>
+          </div>
+        )}
+        {couponError && <p className="text-red-600 text-xs mt-2">{couponError}</p>}
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
         <h2 className="font-semibold text-slate-900 mb-3">Resumo</h2>
         <div className="text-sm space-y-1.5">
           <div className="flex justify-between text-slate-600">
             <span>Subtotal</span>
             <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
           </div>
+          {discount > 0 && (
+            <div className="flex justify-between text-green-600">
+              <span>Desconto</span>
+              <span>− R$ {discount.toFixed(2).replace(".", ",")}</span>
+            </div>
+          )}
           <div className="flex justify-between text-slate-600">
             <span>Frete</span>
             <span className={shipping === 0 ? "text-green-600 font-medium" : ""}>
-              {shipping === 0 ? "Grátis (CNPJ)" : `R$ ${shipping.toFixed(2).replace(".", ",")}`}
+              {shipping === 0 ? (isFreeShippingCoupon ? "Grátis (cupom)" : "Grátis (CNPJ)") : `R$ ${shipping.toFixed(2).replace(".", ",")}`}
             </span>
           </div>
           <div className="flex justify-between font-bold text-slate-900 text-base pt-2 border-t border-slate-200">

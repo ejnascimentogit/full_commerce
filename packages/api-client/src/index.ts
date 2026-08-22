@@ -20,9 +20,12 @@ export {
   ORDER_STATUS_FLOW,
   ORDER_STATUS_LABEL,
   calculateOrderTotals,
+  calculatePromotionDiscount,
   calculateShipping,
   deriveBrandPalette,
+  findPromotionByCoupon,
   getBestSellingProducts,
+  isPromotionActive,
   matchRegionByNeighborhood,
   unitPriceOf,
 } from "./domain";

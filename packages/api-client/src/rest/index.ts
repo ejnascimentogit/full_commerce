@@ -51,6 +51,7 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getFeaturedPromotions: () => request<Promotion[]>("/api/promotions/active?featured=true"),
     getBestSellingProducts: (limit = 12) => request<Product[]>(`/api/products/best-sellers?limit=${limit}`),
     getStoreSettings: () => request<StoreSettings>("/api/settings"),
+    getPromotionByCoupon: (code: string) => request<Promotion | null>(`/api/promotions/coupon/${encodeURIComponent(code)}`),
 
     register: (input: RegisterInput) => request<Customer>("/api/auth/register", { method: "POST", body: JSON.stringify(input) }),
     login: (email: string, password: string) =>
@@ -108,6 +109,10 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<Promotion>("/api/admin/promotions", { method: "POST", body: JSON.stringify(input) }),
     updatePromotion: (id: string, patch: UpdatePromotionInput) =>
       request<Promotion>(`/api/admin/promotions/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    createCategory: (input: Omit<Category, "id">) => request<Category>("/api/categories", { method: "POST", body: JSON.stringify(input) }),
+    updateCategory: (id: string, patch: Partial<Omit<Category, "id">>) =>
+      request<Category>(`/api/categories/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    deleteCategory: (id: string) => request<void>(`/api/categories/${id}`, { method: "DELETE" }),
   };
 }
 

@@ -34,7 +34,9 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | POST | `/api/products/:id/photos` | *(vendorAdmin)* Upload de foto (multipart), retorna URL |
 | DELETE | `/api/products/:id/photos/:photoId` | *(vendorAdmin)* Remove foto |
 | GET | `/api/categories` | Lista categorias (árvore) |
-| POST | `/api/categories` | *(platformAdmin)* Cria categoria |
+| POST | `/api/categories` | *(platformAdmin)* Cria categoria/departamento |
+| PATCH | `/api/categories/:id` | *(platformAdmin)* Edita nome/ícone/slug |
+| DELETE | `/api/categories/:id` | *(platformAdmin)* Remove categoria |
 | GET | `/api/vendors` | Lista fornecedores ativos (para vitrines por fornecedor na home) |
 | GET | `/api/vendors/:id` | Detalhe do fornecedor |
 | POST | `/api/vendors` | *(platformAdmin)* Cadastra fornecedor |
@@ -58,7 +60,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/api/orders` | Cria pedido a partir do carrinho (`shippingAddressId, paymentMethod, installments?`) — congela o espelho do pedido |
+| POST | `/api/orders` | Cria pedido a partir do carrinho (`shippingAddressId, paymentMethod, installments?, couponCode?`) — congela o espelho do pedido; o desconto do cupom é recalculado/revalidado no backend, nunca confia no valor mostrado no checkout |
 | GET | `/api/orders` | *(cliente)* Lista pedidos do cliente autenticado |
 | GET | `/api/orders/:id` | Detalhe do pedido — inclui `items[]` (espelho), `statusHistory[]`, `tracking?` |
 | GET | `/api/orders/:id/status` | Só o status atual + histórico — usado para polling leve no acompanhamento |
@@ -80,6 +82,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/api/promotions/active?featured=true` | Promoções ativas (para exibir banners/selos no catálogo); `featured=true` retorna só as da vitrine "Ofertas da Semana" |
+| GET | `/api/promotions/coupon/:code` | Busca promoção por código de cupom para pré-visualizar desconto no checkout — `null` se inválido/expirado/esgotado ou se `StoreSettings.promotionsEnabled` for `false` |
 | POST | `/api/admin/promotions` | *(vendorAdmin: própria · platformAdmin: qualquer)* Cria promoção/cupom |
 | PATCH | `/api/admin/promotions/:id` | *(vendorAdmin: própria · platformAdmin: qualquer)* Edita/desativa promoção |
 

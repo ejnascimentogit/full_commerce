@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Banner, StoreSettings } from "@ecommerce/types";
+import type { Banner, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -14,10 +14,14 @@ export default function ConfiguracoesPage() {
   const [brandColor, setBrandColor] = useState("#1d4ed8");
   const [savingColor, setSavingColor] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [savingPromotionsToggle, setSavingPromotionsToggle] = useState(false);
 
   const [bannerTitle, setBannerTitle] = useState("");
   const [bannerLink, setBannerLink] = useState("");
   const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  const [siteCopy, setSiteCopy] = useState<SiteCopy | null>(null);
+  const [savingCopy, setSavingCopy] = useState(false);
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
@@ -27,10 +31,35 @@ export default function ConfiguracoesPage() {
     apiClient.getStoreSettings().then((s) => {
       setSettings(s);
       setBrandColor(s.brandColor);
+      setSiteCopy(s.siteCopy);
     });
   }
 
   useEffect(refresh, []);
+
+  async function togglePromotionsEnabled() {
+    if (!settings) return;
+    setSavingPromotionsToggle(true);
+    await apiClient.updateStoreSettings({ promotionsEnabled: !settings.promotionsEnabled });
+    setSavingPromotionsToggle(false);
+    refresh();
+  }
+
+  async function handleSaveCopy() {
+    if (!siteCopy) return;
+    setSavingCopy(true);
+    await apiClient.updateStoreSettings({ siteCopy });
+    setSavingCopy(false);
+    refresh();
+  }
+
+  function updateFeatureBullet(index: number, patch: Partial<SiteCopy["featureBullets"][number]>) {
+    setSiteCopy((prev) => {
+      if (!prev) return prev;
+      const featureBullets = prev.featureBullets.map((b, i) => (i === index ? { ...b, ...patch } : b));
+      return { ...prev, featureBullets };
+    });
+  }
 
   async function handleSaveColor() {
     setSavingColor(true);
@@ -102,7 +131,7 @@ export default function ConfiguracoesPage() {
     refresh();
   }
 
-  if (user?.role !== "platformAdmin" || !settings) return null;
+  if (user?.role !== "platformAdmin" || !settings || !siteCopy) return null;
 
   const sortedBanners = [...settings.banners].sort((a, b) => a.order - b.order);
 
@@ -135,6 +164,28 @@ export default function ConfiguracoesPage() {
             className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50"
           >
             {savingColor ? "Salvando..." : "Salvar cor"}
+          </button>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">Promoções e cupons</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Desligado, nenhum cupom aplica desconto no checkout — mesmo as promoções cadastradas continuam ativas
+              (é só um freio geral, não precisa apagar nada).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={togglePromotionsEnabled}
+            disabled={savingPromotionsToggle}
+            className={`shrink-0 ml-4 relative w-12 h-7 rounded-full transition-colors disabled:opacity-50 ${settings.promotionsEnabled ? "bg-brand-600" : "bg-slate-300"}`}
+          >
+            <span
+              className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${settings.promotionsEnabled ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
       </section>
@@ -223,6 +274,75 @@ export default function ConfiguracoesPage() {
             {uploadingBanner ? "Enviando..." : "+ Adicionar imagem do banner"}
             <input type="file" accept="image/*" onChange={handleBannerUpload} disabled={uploadingBanner} className="hidden" />
           </label>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
+        <h2 className="font-semibold text-slate-900 mb-1">Textos do site</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Nome da loja, título de destaque da home e os 3 selos — troque à vontade, sem precisar mexer em código.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nome da loja</label>
+            <input
+              type="text"
+              value={siteCopy.storeName}
+              onChange={(e) => setSiteCopy({ ...siteCopy, storeName: e.target.value })}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Título de destaque da home</label>
+            <input
+              type="text"
+              value={siteCopy.heroTitle}
+              onChange={(e) => setSiteCopy({ ...siteCopy, heroTitle: e.target.value })}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Selos (abaixo do título)</label>
+            <div className="space-y-2">
+              {siteCopy.featureBullets.map((bullet, i) => (
+                <div key={i} className="grid grid-cols-[56px_1fr_2fr] gap-2">
+                  <input
+                    type="text"
+                    value={bullet.icon}
+                    onChange={(e) => updateFeatureBullet(i, { icon: e.target.value })}
+                    className="border border-slate-300 rounded-md px-2 py-2 text-sm text-center"
+                    aria-label={`Ícone do selo ${i + 1}`}
+                  />
+                  <input
+                    type="text"
+                    value={bullet.title}
+                    onChange={(e) => updateFeatureBullet(i, { title: e.target.value })}
+                    placeholder="Título"
+                    className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={bullet.text}
+                    onChange={(e) => updateFeatureBullet(i, { text: e.target.value })}
+                    placeholder="Descrição"
+                    className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveCopy}
+            disabled={savingCopy}
+            className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
+          >
+            {savingCopy ? "Salvando..." : "Salvar textos"}
+          </button>
         </div>
       </section>
     </AdminShell>
