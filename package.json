@@ -1,0 +1,11 @@
+{
+  "name": "ecommerce",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:storefront": "npm run dev -w apps/storefront"
+  }
+}

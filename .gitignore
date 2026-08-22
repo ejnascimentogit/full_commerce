@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+*.log
+*.tsbuildinfo
+
+# nunca versionar credenciais
+Senhas*
+senha*
+*.pem
+*.key
