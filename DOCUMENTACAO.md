@@ -34,7 +34,12 @@ npm run dev:admin        # admin em http://localhost:3001
 
 ## Deploy
 
-O storefront já está preparado para deploy no **Cloudflare Workers** via adapter OpenNext (`apps/storefront/wrangler.jsonc`, scripts `cf:build`/`cf:deploy` no `package.json`). Já publicado em: `https://fullcommerce-storefront.<sua-conta>.workers.dev`. O admin ainda não foi publicado (mesmo processo, root directory `apps/admin`).
+Loja e admin publicados no **Cloudflare Workers** via adapter OpenNext (`wrangler.jsonc` + scripts `cf:build`/`cf:deploy` em cada app), ambos com deploy automático a cada push no branch `main` do repositório `full_commerce`:
+
+- Loja: https://fullcommerce-storefront.ejnascimento1.workers.dev
+- Admin: https://fullcommerce-admin.ejnascimento1.workers.dev
+
+Observability (Logs + Traces) ativado nos dois Workers para acompanhar erros em produção.
 
 ## Contas de acesso
 
@@ -83,10 +88,11 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 
 ## Pendências conhecidas
 
-- [ ] Migrar o código para o repositório `full_commerce` (hoje está em `gestao_financeira`)
+- [x] Migrar o código para o repositório `full_commerce`
+- [x] Deploy do painel admin no Cloudflare
 - [ ] Carrossel de rolagem para a vitrine "Ofertas da Semana" (hoje é grid)
 - [ ] Conectar banco de dados e backend reais (Supabase ou outro) — trocar `NEXT_PUBLIC_API_MODE` para `rest`
 - [ ] App mobile (React Native) — o domínio (`packages/types`, `packages/api-client`) já foi desenhado para ser reaproveitado
-- [ ] Deploy do painel admin no Cloudflare (mesmo processo já feito para a loja)
 - [ ] Cadastro/login de fornecedor (`vendorAdmin`) pelo próprio admin — hoje só existe via seed
 - [ ] Extrato de pagamento e integração real com gateway (cartão/PIX) — o fluxo de checkout já está pronto para plugar
+- [ ] Domínio próprio (o pendente combinado antes era usar DuckDNS) apontando para os Workers, em vez do `*.workers.dev`
