@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 export default function EntrarPage() {
+  return (
+    <Suspense>
+      <EntrarForm />
+    </Suspense>
+  );
+}
+
+function EntrarForm() {
   const { login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();

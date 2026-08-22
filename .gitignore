@@ -5,6 +5,8 @@ out/
 .env.local
 *.log
 *.tsbuildinfo
+.open-next/
+.wrangler/
 
 # nunca versionar credenciais
 Senhas*
