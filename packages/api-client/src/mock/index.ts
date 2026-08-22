@@ -1,16 +1,19 @@
 import type {
   ApiClient,
   CreateOrderInput,
+  CreatePromotionInput,
   CreateProductInput,
   Paginated,
   ProductQuery,
   RegisterInput,
+  UpdatePromotionInput,
   UpdateProductInput,
 } from "../types";
 import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
-import { categories, promotions } from "./data";
+import { categories } from "./data";
 import { createRegion as createRegionStore, listRegions, updateRegion as updateRegionStore } from "./regions-store";
 import { getSettings, updateSettings } from "./settings-store";
+import { createPromotion as createPromotionStore, listPromotions, updatePromotion as updatePromotionStore } from "./promotions-store";
 import {
   advanceOrderStatus as advanceOrderStatusStore,
   findAllOrders,
@@ -74,7 +77,8 @@ export const mockApiClient: ApiClient = {
 
   async getFeaturedPromotions(): Promise<Promotion[]> {
     await delay();
-    return promotions.filter((p) => p.isFeatured);
+    const now = new Date().toISOString();
+    return listPromotions().filter((p) => p.isFeatured && p.startsAt <= now && p.endsAt >= now);
   },
 
   async getBestSellingProducts(limit = 12): Promise<Product[]> {
@@ -238,6 +242,22 @@ export const mockApiClient: ApiClient = {
   async uploadLogo(file: File): Promise<string> {
     await delay(400);
     return resizeImageToDataUrl(file, 400, 0.9);
+  },
+
+  async getAdminPromotions(params): Promise<Promotion[]> {
+    await delay();
+    const all = listPromotions();
+    return params?.vendorId ? all.filter((p) => p.rules.vendorId === params.vendorId) : all;
+  },
+
+  async createPromotion(input: CreatePromotionInput): Promise<Promotion> {
+    await delay(300);
+    return createPromotionStore(input);
+  },
+
+  async updatePromotion(id: string, patch: UpdatePromotionInput): Promise<Promotion> {
+    await delay(300);
+    return updatePromotionStore(id, patch);
   },
 };
 

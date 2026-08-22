@@ -64,6 +64,8 @@ export interface RegisterInput {
 
 export type CreateProductInput = Omit<Product, "id">;
 export type UpdateProductInput = Partial<Omit<Product, "id" | "vendorId">>;
+export type CreatePromotionInput = Omit<Promotion, "id" | "currentUses">;
+export type UpdatePromotionInput = Partial<Omit<Promotion, "id">>;
 
 // Mirrors references/api-contract.md in the ecommerce skill.
 // UI components depend only on this interface, never on mock/ or rest/ directly —
@@ -107,4 +109,8 @@ export interface ApiClient {
   updateStoreSettings(patch: Partial<StoreSettings>): Promise<StoreSettings>;
   /** Mock: mesmo resize/encode do upload de foto de produto. Real: POST /api/settings/logo (multipart). */
   uploadLogo(file: File): Promise<string>;
+  /** platformAdmin: todas · vendorAdmin: só as com rules.vendorId === o próprio. */
+  getAdminPromotions(params?: { vendorId?: string }): Promise<Promotion[]>;
+  createPromotion(input: CreatePromotionInput): Promise<Promotion>;
+  updatePromotion(id: string, patch: UpdatePromotionInput): Promise<Promotion>;
 }

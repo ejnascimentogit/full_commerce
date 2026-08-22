@@ -6,11 +6,13 @@ export type {
   ApiClient,
   CreateOrderInput,
   CreateOrderItemInput,
+  CreatePromotionInput,
   CreateProductInput,
   Paginated,
   ProductQuery,
   RegisterAddressInput,
   RegisterInput,
+  UpdatePromotionInput,
   UpdateProductInput,
 } from "./types";
 export { packageLabels } from "./mock";

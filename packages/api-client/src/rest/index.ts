@@ -2,10 +2,12 @@ import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus,
 import type {
   ApiClient,
   CreateOrderInput,
+  CreatePromotionInput,
   CreateProductInput,
   Paginated,
   ProductQuery,
   RegisterInput,
+  UpdatePromotionInput,
   UpdateProductInput,
 } from "../types";
 
@@ -100,6 +102,12 @@ function createRestApiClient(baseUrl: string): ApiClient {
       const data = (await res.json()) as { url: string };
       return data.url;
     },
+    getAdminPromotions: (params) =>
+      request<Promotion[]>(`/api/admin/promotions${params?.vendorId ? `?vendorId=${params.vendorId}` : ""}`),
+    createPromotion: (input: CreatePromotionInput) =>
+      request<Promotion>("/api/admin/promotions", { method: "POST", body: JSON.stringify(input) }),
+    updatePromotion: (id: string, patch: UpdatePromotionInput) =>
+      request<Promotion>(`/api/admin/promotions/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   };
 }
 
