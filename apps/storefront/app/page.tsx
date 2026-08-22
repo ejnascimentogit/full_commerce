@@ -1,17 +1,34 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { apiClient } from "@ecommerce/api-client";
+import type { Category, Product, StoreSettings, Vendor } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { ProductCard } from "@/components/ProductCard";
 import { VendorShowcase } from "@/components/VendorShowcase";
+import { BannerCarousel } from "@/components/BannerCarousel";
 
-export default async function HomePage() {
-  const [categories, featuredVendors, allProducts] = await Promise.all([
-    apiClient.getCategories(),
-    apiClient.getVendors({ featured: true }),
-    apiClient.getProducts({ pageSize: 100 }),
-  ]);
+// Client component: os dados (produtos/vitrines/config) vêm do mock em
+// localStorage, que só existe no navegador — uma page Server Component nunca
+// veria criações/edições feitas no admin. Ver nota em orders-store.ts.
+export default function HomePage() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [featuredVendors, setFeaturedVendors] = useState<Vendor[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [bestSellers, setBestSellers] = useState<Product[]>([]);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
 
-  const weeklyOffers = allProducts.items.filter((p) => p.salePrice != null);
+  useEffect(() => {
+    apiClient.getCategories().then(setCategories);
+    apiClient.getVendors({ featured: true }).then(setFeaturedVendors);
+    apiClient.getProducts({ pageSize: 100 }).then((r) => setAllProducts(r.items));
+    apiClient.getBestSellingProducts(6).then(setBestSellers);
+    apiClient.getStoreSettings().then(setSettings);
+  }, []);
+
+  const weeklyOffers = allProducts.filter((p) => p.salePrice != null);
+  const seasonalProducts = allProducts.filter((p) => p.isSeasonal);
 
   return (
     <>
@@ -38,7 +55,7 @@ export default async function HomePage() {
               </a>
             </div>
           </div>
-          <div className="hidden md:block aspect-video bg-brand-50 rounded-2xl" aria-hidden />
+          {settings && <BannerCarousel banners={settings.banners} />}
         </div>
       </section>
 
@@ -56,12 +73,30 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {bestSellers.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 py-8">
+          <h2 className="text-xl font-bold text-slate-900 mb-3">🔥 Mais vendidos</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {bestSellers.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {seasonalProducts.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 py-8">
+          <h2 className="text-xl font-bold text-slate-900 mb-3">🎁 Produtos Sazonais</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {seasonalProducts.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {featuredVendors.map((vendor) => (
-        <VendorShowcase
-          key={vendor.id}
-          vendor={vendor}
-          products={allProducts.items.filter((p) => p.vendorId === vendor.id)}
-        />
+        <VendorShowcase key={vendor.id} vendor={vendor} products={allProducts.filter((p) => p.vendorId === vendor.id)} />
       ))}
     </>
   );

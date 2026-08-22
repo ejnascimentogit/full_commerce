@@ -8,6 +8,7 @@ import type {
   OrderStatus,
   Product,
   Promotion,
+  StoreSettings,
   Vendor,
 } from "@ecommerce/types";
 
@@ -74,6 +75,8 @@ export interface ApiClient {
   getProducts(params?: ProductQuery): Promise<Paginated<Product>>;
   getProduct(id: string): Promise<Product>;
   getFeaturedPromotions(): Promise<Promotion[]>;
+  getBestSellingProducts(limit?: number): Promise<Product[]>;
+  getStoreSettings(): Promise<StoreSettings>;
 
   // Cliente (loja)
   register(input: RegisterInput): Promise<Customer>;
@@ -100,4 +103,8 @@ export interface ApiClient {
   /** Roteirização: cria/edita uma zona de entrega e os bairros que ela cobre. */
   createRegion(input: Omit<DeliveryRegion, "id">): Promise<DeliveryRegion>;
   updateRegion(id: string, patch: Partial<Omit<DeliveryRegion, "id">>): Promise<DeliveryRegion>;
+  /** Cor de marca, logo, carrossel de banners da home. */
+  updateStoreSettings(patch: Partial<StoreSettings>): Promise<StoreSettings>;
+  /** Mock: mesmo resize/encode do upload de foto de produto. Real: POST /api/settings/logo (multipart). */
+  uploadLogo(file: File): Promise<string>;
 }

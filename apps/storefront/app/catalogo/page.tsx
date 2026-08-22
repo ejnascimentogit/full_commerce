@@ -1,23 +1,49 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
+import type { Category, Product, Vendor } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { ProductCard } from "@/components/ProductCard";
 
-interface CatalogoPageProps {
-  searchParams: Promise<{ categoria?: string; fornecedor?: string; q?: string }>;
+// Client component pelo mesmo motivo de app/page.tsx — dados do mock vivem em
+// localStorage, só existem no navegador.
+export default function CatalogoPage() {
+  return (
+    <Suspense>
+      <CatalogoContent />
+    </Suspense>
+  );
 }
 
-export default async function CatalogoPage({ searchParams }: CatalogoPageProps) {
-  const params = await searchParams;
-  const [categories, vendors] = await Promise.all([apiClient.getCategories(), apiClient.getVendors()]);
+function CatalogoContent() {
+  const searchParams = useSearchParams();
+  const categoria = searchParams.get("categoria") ?? undefined;
+  const fornecedor = searchParams.get("fornecedor") ?? undefined;
+  const q = searchParams.get("q") ?? undefined;
 
-  const activeCategory = categories.find((c) => c.slug === params.categoria);
-  const { items: products, total } = await apiClient.getProducts({
-    categoryId: activeCategory?.id,
-    vendorId: params.fornecedor,
-    q: params.q,
-    pageSize: 60,
-  });
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    apiClient.getCategories().then(setCategories);
+    apiClient.getVendors().then(setVendors);
+  }, []);
+
+  const activeCategory = categories.find((c) => c.slug === categoria);
+
+  useEffect(() => {
+    apiClient
+      .getProducts({ categoryId: activeCategory?.id, vendorId: fornecedor, q, pageSize: 60 })
+      .then((r) => {
+        setProducts(r.items);
+        setTotal(r.total);
+      });
+  }, [activeCategory?.id, fornecedor, q]);
 
   return (
     <>
@@ -58,7 +84,7 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
                 <li key={v.id}>
                   <a
                     href={`/catalogo?fornecedor=${v.id}`}
-                    className={`block px-2 py-1 rounded ${params.fornecedor === v.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+                    className={`block px-2 py-1 rounded ${fornecedor === v.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
                   >
                     {v.name}
                   </a>

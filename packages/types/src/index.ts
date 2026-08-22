@@ -90,6 +90,8 @@ export interface Product {
   boxQuantity?: number;
   isVariableWeight: boolean;
   avgWeight?: number;
+  /** Vitrine "Produtos Sazonais" na home — curadoria manual do admin, não calculado. */
+  isSeasonal?: boolean;
   stock: number;
   variants: ProductVariant[];
   status: "active" | "inactive" | "draft";
@@ -183,4 +185,21 @@ export interface Promotion {
   couponCode?: string;
   maxUses?: number;
   currentUses: number;
+}
+
+export interface Banner {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  linkUrl?: string;
+  order: number;
+  active: boolean;
+}
+
+export interface StoreSettings {
+  /** Cor base da marca (hex, ex: "#1d4ed8") — o front deriva os demais tons (50/100/500/700) a partir dela. */
+  brandColor: string;
+  logoUrl?: string;
+  /** Carrossel de banners da home, em ordem. */
+  banners: Banner[];
 }

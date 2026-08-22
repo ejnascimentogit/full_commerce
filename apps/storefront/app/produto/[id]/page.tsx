@@ -1,21 +1,36 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
 import { notFound } from "next/navigation";
 import { apiClient, packageLabels } from "@ecommerce/api-client";
+import type { Category, Product, Vendor } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { AddToCartBar } from "@/components/AddToCartBar";
 
 const unitSuffix: Record<string, string> = { un: "un", kg: "kg", cx: "cx" };
 
-export default async function ProdutoPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+// Client component pelo mesmo motivo de app/page.tsx — dados do mock vivem em
+// localStorage, só existem no navegador.
+export default function ProdutoPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [notFoundYet, setNotFoundYet] = useState(false);
 
-  const [categories, vendors] = await Promise.all([apiClient.getCategories(), apiClient.getVendors()]);
+  useEffect(() => {
+    apiClient.getCategories().then(setCategories);
+    apiClient.getVendors().then(setVendors);
+    apiClient
+      .getProduct(id)
+      .then(setProduct)
+      .catch(() => setNotFoundYet(true));
+  }, [id]);
 
-  let product;
-  try {
-    product = await apiClient.getProduct(id);
-  } catch {
-    notFound();
+  if (notFoundYet) notFound();
+  if (!product) {
+    return <div className="mx-auto max-w-5xl px-4 py-16 text-center text-slate-500">Carregando...</div>;
   }
 
   const vendor = vendors.find((v) => v.id === product.vendorId);

@@ -1,4 +1,4 @@
-import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
+import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import type {
   ApiClient,
   CreateOrderInput,
@@ -47,6 +47,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
     },
     getProduct: (id: string) => request<Product>(`/api/products/${id}`),
     getFeaturedPromotions: () => request<Promotion[]>("/api/promotions/active?featured=true"),
+    getBestSellingProducts: (limit = 12) => request<Product[]>(`/api/products/best-sellers?limit=${limit}`),
+    getStoreSettings: () => request<StoreSettings>("/api/settings"),
 
     register: (input: RegisterInput) => request<Customer>("/api/auth/register", { method: "POST", body: JSON.stringify(input) }),
     login: (email: string, password: string) =>
@@ -88,6 +90,16 @@ function createRestApiClient(baseUrl: string): ApiClient {
     createRegion: (input: Omit<DeliveryRegion, "id">) => request<DeliveryRegion>("/api/regions", { method: "POST", body: JSON.stringify(input) }),
     updateRegion: (id: string, patch: Partial<Omit<DeliveryRegion, "id">>) =>
       request<DeliveryRegion>(`/api/regions/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    updateStoreSettings: (patch: Partial<StoreSettings>) =>
+      request<StoreSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch) }),
+    uploadLogo: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${baseUrl}/api/settings/logo`, { method: "POST", body: form, credentials: "include" });
+      if (!res.ok) throw new Error(`API error ${res.status} on /api/settings/logo`);
+      const data = (await res.json()) as { url: string };
+      return data.url;
+    },
   };
 }
 

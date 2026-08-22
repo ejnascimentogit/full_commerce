@@ -33,6 +33,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [boxQuantity, setBoxQuantity] = useState(product?.boxQuantity?.toString() ?? "");
   const [isVariableWeight, setIsVariableWeight] = useState(product?.isVariableWeight ?? false);
   const [avgWeight, setAvgWeight] = useState(product?.avgWeight?.toString() ?? "");
+  const [isSeasonal, setIsSeasonal] = useState(product?.isSeasonal ?? false);
   const [stock, setStock] = useState(product?.stock?.toString() ?? "0");
   const [status, setStatus] = useState<Product["status"]>(product?.status ?? "active");
   const [photos, setPhotos] = useState<string[]>(product?.photos ?? []);
@@ -81,6 +82,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         boxQuantity: unitType === "cx" ? Number(boxQuantity) : undefined,
         isVariableWeight,
         avgWeight: isVariableWeight ? Number(avgWeight) : undefined,
+        isSeasonal,
         stock: Number(stock),
         variants: product?.variants ?? [],
         status,
@@ -213,6 +215,13 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
             <Field label="Peso médio (kg)" value={avgWeight} onChange={setAvgWeight} type="number" />
           </div>
         )}
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={isSeasonal} onChange={(e) => setIsSeasonal(e.target.checked)} />
+          Produto sazonal (entra na vitrine "Produtos Sazonais" da home)
+        </label>
       </div>
 
       <div className="max-w-xs">

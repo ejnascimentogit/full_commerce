@@ -14,7 +14,17 @@ export type {
   UpdateProductInput,
 } from "./types";
 export { packageLabels } from "./mock";
-export { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, calculateOrderTotals, calculateShipping, matchRegionByNeighborhood, unitPriceOf } from "./domain";
+export {
+  ORDER_STATUS_FLOW,
+  ORDER_STATUS_LABEL,
+  calculateOrderTotals,
+  calculateShipping,
+  deriveBrandPalette,
+  getBestSellingProducts,
+  matchRegionByNeighborhood,
+  unitPriceOf,
+} from "./domain";
+export type { BrandPalette } from "./domain";
 export { formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
 export { lookupCep, formatCep } from "./cep";
 export type { CepAddress } from "./cep";

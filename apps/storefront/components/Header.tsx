@@ -2,14 +2,13 @@ import Link from "next/link";
 import type { Category } from "@ecommerce/types";
 import { CartBadge } from "./CartBadge";
 import { AccountMenu } from "./AccountMenu";
+import { LogoLink } from "./LogoLink";
 
 export function Header({ categories }: { categories: Category[] }) {
   return (
     <header className="bg-brand-600 text-white">
       <div className="mx-auto max-w-7xl px-4 py-4 flex items-center gap-6">
-        <Link href="/" className="text-2xl font-bold tracking-tight shrink-0">
-          full<span className="text-brand-100">commerce</span>
-        </Link>
+        <LogoLink />
 
         <form action="/catalogo" method="get" className="flex-1 max-w-2xl" role="search">
           <input

@@ -7,9 +7,10 @@ import type {
   RegisterInput,
   UpdateProductInput,
 } from "../types";
-import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
+import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import { categories, promotions } from "./data";
 import { createRegion as createRegionStore, listRegions, updateRegion as updateRegionStore } from "./regions-store";
+import { getSettings, updateSettings } from "./settings-store";
 import {
   advanceOrderStatus as advanceOrderStatusStore,
   findAllOrders,
@@ -18,7 +19,7 @@ import {
   nextOrderNumber,
   saveOrder,
 } from "./orders-store";
-import { buildOrderItem, calculateOrderTotals, matchRegionByNeighborhood } from "../domain";
+import { buildOrderItem, calculateOrderTotals, getBestSellingProducts, matchRegionByNeighborhood } from "../domain";
 import { isValidDocument } from "../documents";
 import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
@@ -74,6 +75,16 @@ export const mockApiClient: ApiClient = {
   async getFeaturedPromotions(): Promise<Promotion[]> {
     await delay();
     return promotions.filter((p) => p.isFeatured);
+  },
+
+  async getBestSellingProducts(limit = 12): Promise<Product[]> {
+    await delay();
+    return getBestSellingProducts(findAllOrders(), listProducts(), limit);
+  },
+
+  async getStoreSettings(): Promise<StoreSettings> {
+    await delay();
+    return getSettings();
   },
 
   async register(input: RegisterInput): Promise<Customer> {
@@ -217,6 +228,16 @@ export const mockApiClient: ApiClient = {
   async updateRegion(id: string, patch: Partial<Omit<DeliveryRegion, "id">>): Promise<DeliveryRegion> {
     await delay(300);
     return updateRegionStore(id, patch);
+  },
+
+  async updateStoreSettings(patch: Partial<StoreSettings>): Promise<StoreSettings> {
+    await delay(300);
+    return updateSettings(patch);
+  },
+
+  async uploadLogo(file: File): Promise<string> {
+    await delay(400);
+    return resizeImageToDataUrl(file, 400, 0.9);
   },
 };
 

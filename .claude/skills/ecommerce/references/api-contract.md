@@ -83,6 +83,15 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | POST | `/api/admin/promotions` | *(vendorAdmin: própria · platformAdmin: qualquer)* Cria promoção/cupom |
 | PATCH | `/api/admin/promotions/:id` | *(vendorAdmin: própria · platformAdmin: qualquer)* Edita/desativa promoção |
 
+## Vitrines calculadas e configurações da loja
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/products/best-sellers?limit=` | Produtos mais vendidos, calculado a partir dos pedidos (soma de quantidade, exclui `CANCELLED`/`REFUNDED`) — não é curadoria manual |
+| GET | `/api/settings` | Configuração pública da loja (`brandColor, logoUrl?, banners[]`) |
+| PATCH | `/api/admin/settings` | *(platformAdmin)* Atualiza cor de marca, logo (URL) e/ou lista de banners |
+| POST | `/api/admin/settings/logo` | *(platformAdmin)* Upload da logo (multipart), retorna URL |
+
 ## Notas de implementação
 
 - Endpoints `admin/*` exigem token de usuário com `role: platformAdmin | vendorAdmin` — o backend decide o mecanismo de autorização, mas o `api-client` deve prever um client separado (`adminApiClient`) que sempre manda o token do usuário admin e deixa claro, por tipo, que o resultado pode vir filtrado por fornecedor quando o papel for `vendorAdmin`.
