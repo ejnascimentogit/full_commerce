@@ -18,6 +18,7 @@ import {
   saveOrder,
 } from "./orders-store";
 import { buildOrderItem, calculateOrderTotals } from "../domain";
+import { isValidDocument } from "../documents";
 import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
 import { clearAdminSession, findAdminUserById, getAdminSessionUserId, setAdminSessionUserId, verifyAdminPassword } from "./admin-store";
@@ -76,6 +77,7 @@ export const mockApiClient: ApiClient = {
 
   async register(input: RegisterInput): Promise<Customer> {
     await delay(300);
+    if (!isValidDocument(input.documentType, input.document)) throw new Error("INVALID_DOCUMENT");
     const customer = createCustomer(input);
     setSessionCustomerId(customer.id);
     return customer;

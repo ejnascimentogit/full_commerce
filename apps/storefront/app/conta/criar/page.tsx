@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, formatDocument, isValidDocument, onlyDigits } from "@ecommerce/api-client";
 import type { DeliveryRegion, DocumentType } from "@ecommerce/types";
 import { useAuth } from "@/lib/auth-context";
 
@@ -30,8 +30,25 @@ export default function CriarContaPage() {
     });
   }, []);
 
+  const documentDigitCount = documentType === "cpf" ? 11 : 14;
+  const documentComplete = onlyDigits(document).length === documentDigitCount;
+  const documentValid = documentComplete && isValidDocument(documentType, document);
+
+  function handleDocumentChange(value: string) {
+    setDocument(formatDocument(documentType, value));
+  }
+
+  function handleDocumentTypeChange(type: DocumentType) {
+    setDocumentType(type);
+    setDocument(""); // formato muda (CPF x CNPJ) — evita máscara inválida de sobra
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!documentValid) {
+      setError(`${documentType.toUpperCase()} inválido — confira os números digitados.`);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -47,7 +64,14 @@ export default function CriarContaPage() {
       });
       router.push("/conta");
     } catch (err) {
-      setError(err instanceof Error && err.message === "EMAIL_IN_USE" ? "Esse e-mail já está cadastrado." : "Não foi possível criar a conta.");
+      const code = err instanceof Error ? err.message : "";
+      setError(
+        code === "EMAIL_IN_USE"
+          ? "Esse e-mail já está cadastrado."
+          : code === "INVALID_DOCUMENT"
+            ? `${documentType.toUpperCase()} inválido — confira os números digitados.`
+            : "Não foi possível criar a conta.",
+      );
       setSubmitting(false);
     }
   }
@@ -60,14 +84,14 @@ export default function CriarContaPage() {
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => setDocumentType("cnpj")}
+            onClick={() => handleDocumentTypeChange("cnpj")}
             className={`flex-1 border rounded-md py-2 text-sm font-medium ${documentType === "cnpj" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}
           >
             Pessoa jurídica (CNPJ)
           </button>
           <button
             type="button"
-            onClick={() => setDocumentType("cpf")}
+            onClick={() => handleDocumentTypeChange("cpf")}
             className={`flex-1 border rounded-md py-2 text-sm font-medium ${documentType === "cpf" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}
           >
             Pessoa física (CPF)
@@ -81,7 +105,21 @@ export default function CriarContaPage() {
         {documentType === "cnpj" && (
           <Field label="Razão social" value={businessName} onChange={setBusinessName} required />
         )}
-        <Field label={documentType.toUpperCase()} value={document} onChange={setDocument} required />
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">{documentType.toUpperCase()}</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            required
+            value={document}
+            onChange={(e) => handleDocumentChange(e.target.value)}
+            placeholder={documentType === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"}
+            className={`w-full border rounded-md px-3 py-2 text-sm ${documentComplete && !documentValid ? "border-red-400" : "border-slate-300"}`}
+          />
+          {documentComplete && !documentValid && (
+            <p className="text-red-600 text-xs mt-1">{documentType.toUpperCase()} inválido.</p>
+          )}
+        </div>
         <Field label="E-mail" type="email" value={email} onChange={setEmail} required />
         <Field label="Telefone" value={phone} onChange={setPhone} required />
         <Field label="Senha" type="password" value={password} onChange={setPassword} required />
@@ -106,7 +144,7 @@ export default function CriarContaPage() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || (documentComplete && !documentValid)}
           className="w-full bg-brand-600 text-white font-semibold rounded-md py-2.5 hover:bg-brand-700 disabled:opacity-50"
         >
           {submitting ? "Criando..." : "Criar conta"}
