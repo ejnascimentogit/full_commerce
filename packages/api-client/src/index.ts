@@ -9,12 +9,15 @@ export type {
   CreateProductInput,
   Paginated,
   ProductQuery,
+  RegisterAddressInput,
   RegisterInput,
   UpdateProductInput,
 } from "./types";
 export { packageLabels } from "./mock";
-export { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, calculateOrderTotals, calculateShipping, unitPriceOf } from "./domain";
+export { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, calculateOrderTotals, calculateShipping, matchRegionByNeighborhood, unitPriceOf } from "./domain";
 export { formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
+export { lookupCep, formatCep } from "./cep";
+export type { CepAddress } from "./cep";
 
 // The single place that decides mock vs. real backend. Everything else in the
 // three apps imports `apiClient` from here and never touches mock/ or rest/ directly.

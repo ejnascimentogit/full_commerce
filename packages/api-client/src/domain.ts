@@ -1,4 +1,4 @@
-import type { Customer, OrderItem, OrderStatus, Product } from "@ecommerce/types";
+import type { Customer, DeliveryRegion, OrderItem, OrderStatus, Product } from "@ecommerce/types";
 
 // Pure business-rule functions — no React, no fetch, no storage. Shared by every
 // app (storefront, mobile, admin) so the rules from the ecommerce skill (frete
@@ -24,6 +24,15 @@ export function buildOrderItem(product: Product, quantity: number): OrderItem {
     quantity,
     estimatedSubtotal,
   };
+}
+
+// Roteirização: a região do cliente não é escolhida por ele — é o resultado de
+// casar o bairro do endereço contra as zonas que o admin cadastrou. Sem match,
+// o cliente fica sem regionId (undefined) até o admin criar/ajustar uma zona.
+export function matchRegionByNeighborhood(regions: DeliveryRegion[], neighborhood: string): DeliveryRegion | undefined {
+  const target = neighborhood.trim().toLowerCase();
+  if (!target) return undefined;
+  return regions.find((r) => r.active && r.neighborhoods.some((n) => n.trim().toLowerCase() === target));
 }
 
 export function calculateShipping(customer: Pick<Customer, "documentType">): number {

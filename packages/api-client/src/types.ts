@@ -11,6 +11,16 @@ import type {
   Vendor,
 } from "@ecommerce/types";
 
+export interface RegisterAddressInput {
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;
@@ -47,7 +57,8 @@ export interface RegisterInput {
   document: string;
   businessName?: string;
   phone: string;
-  regionId: string;
+  /** Vira o primeiro endereço (padrão) do cliente. regionId é resolvido automaticamente pelo bairro — não é escolhido no cadastro. */
+  address: RegisterAddressInput;
 }
 
 export type CreateProductInput = Omit<Product, "id">;
@@ -57,9 +68,9 @@ export type UpdateProductInput = Partial<Omit<Product, "id" | "vendorId">>;
 // UI components depend only on this interface, never on mock/ or rest/ directly —
 // that's what lets NEXT_PUBLIC_API_MODE swap implementations with zero UI changes.
 export interface ApiClient {
-  getRegions(): Promise<DeliveryRegion[]>;
+  getRegions(params?: { includeInactive?: boolean }): Promise<DeliveryRegion[]>;
   getCategories(): Promise<Category[]>;
-  getVendors(params?: { featured?: boolean }): Promise<Vendor[]>;
+  getVendors(params?: { featured?: boolean; includeInactive?: boolean }): Promise<Vendor[]>;
   getProducts(params?: ProductQuery): Promise<Paginated<Product>>;
   getProduct(id: string): Promise<Product>;
   getFeaturedPromotions(): Promise<Promotion[]>;
@@ -86,4 +97,7 @@ export interface ApiClient {
   getAdminOrders(params?: { status?: OrderStatus; vendorId?: string }): Promise<Order[]>;
   createVendor(input: Omit<Vendor, "id">): Promise<Vendor>;
   updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor>;
+  /** Roteirização: cria/edita uma zona de entrega e os bairros que ela cobre. */
+  createRegion(input: Omit<DeliveryRegion, "id">): Promise<DeliveryRegion>;
+  updateRegion(id: string, patch: Partial<Omit<DeliveryRegion, "id">>): Promise<DeliveryRegion>;
 }

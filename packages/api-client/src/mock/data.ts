@@ -2,9 +2,22 @@ import type { Category, Customer, DeliveryRegion, Product, Promotion, Vendor } f
 import { placeholderPhoto } from "./placeholder";
 
 export const regions: DeliveryRegion[] = [
-  { id: "reg-recife", name: "Região Metropolitana do Recife", active: true, cutoffTime: "19:00", estimatedDeliveryHours: 24 },
-  { id: "reg-fortaleza", name: "Região Metropolitana de Fortaleza", active: true, cutoffTime: "18:00", estimatedDeliveryHours: 24 },
-  { id: "reg-joaopessoa", name: "Região Metropolitana de João Pessoa", active: true, cutoffTime: "18:00", estimatedDeliveryHours: 48 },
+  {
+    id: "reg-recife",
+    name: "Recife — Zona Sul",
+    active: true,
+    cutoffTime: "19:00",
+    estimatedDeliveryHours: 24,
+    neighborhoods: ["Boa Viagem", "Pina", "Imbiribeira", "Ipsep"],
+  },
+  {
+    id: "reg-recife-centro",
+    name: "Recife — Centro",
+    active: true,
+    cutoffTime: "18:00",
+    estimatedDeliveryHours: 24,
+    neighborhoods: ["Boa Vista", "Santo Antônio", "Recife", "São José"],
+  },
 ];
 
 export const categories: Category[] = [

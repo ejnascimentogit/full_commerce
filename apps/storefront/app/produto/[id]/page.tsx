@@ -9,11 +9,7 @@ const unitSuffix: Record<string, string> = { un: "un", kg: "kg", cx: "cx" };
 export default async function ProdutoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [regions, categories, vendors] = await Promise.all([
-    apiClient.getRegions(),
-    apiClient.getCategories(),
-    apiClient.getVendors(),
-  ]);
+  const [categories, vendors] = await Promise.all([apiClient.getCategories(), apiClient.getVendors()]);
 
   let product;
   try {
@@ -30,7 +26,7 @@ export default async function ProdutoPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <RegionBar region={regions[0]} />
+      <RegionBar />
       <Header categories={categories} />
 
       <div className="mx-auto max-w-5xl px-4 py-8 grid md:grid-cols-2 gap-10">

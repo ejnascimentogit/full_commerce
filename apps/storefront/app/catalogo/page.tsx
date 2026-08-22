@@ -9,11 +9,7 @@ interface CatalogoPageProps {
 
 export default async function CatalogoPage({ searchParams }: CatalogoPageProps) {
   const params = await searchParams;
-  const [regions, categories, vendors] = await Promise.all([
-    apiClient.getRegions(),
-    apiClient.getCategories(),
-    apiClient.getVendors(),
-  ]);
+  const [categories, vendors] = await Promise.all([apiClient.getCategories(), apiClient.getVendors()]);
 
   const activeCategory = categories.find((c) => c.slug === params.categoria);
   const { items: products, total } = await apiClient.getProducts({
@@ -25,7 +21,7 @@ export default async function CatalogoPage({ searchParams }: CatalogoPageProps) 
 
   return (
     <>
-      <RegionBar region={regions[0]} />
+      <RegionBar />
       <Header categories={categories} />
 
       <div className="mx-auto max-w-7xl px-4 py-6 grid md:grid-cols-[220px_1fr] gap-6">

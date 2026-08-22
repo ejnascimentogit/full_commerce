@@ -1,4 +1,4 @@
-import type { Customer } from "@ecommerce/types";
+import type { Address, Customer } from "@ecommerce/types";
 import { mockCustomer } from "./data";
 
 // Mock-only "database" of customers, persisted to localStorage so register/login
@@ -46,15 +46,21 @@ export function findById(id: string): Customer | undefined {
   return customer;
 }
 
-export function createCustomer(input: Omit<StoredCustomer, "id" | "addresses" | "createdAt" | "status">): Customer {
+type CreateCustomerInput = Omit<StoredCustomer, "id" | "addresses" | "createdAt" | "status" | "regionId"> & {
+  address: Omit<Address, "id" | "isDefault">;
+  regionId?: string;
+};
+
+export function createCustomer(input: CreateCustomerInput): Customer {
   const customers = readAll();
   if (customers.some((c) => c.email.toLowerCase() === input.email.toLowerCase())) {
     throw new Error("EMAIL_IN_USE");
   }
+  const { address, ...rest } = input;
   const customer: StoredCustomer = {
-    ...input,
+    ...rest,
     id: `customer-${Date.now()}`,
-    addresses: [],
+    addresses: [{ ...address, id: `addr-${Date.now()}`, isDefault: true }],
     createdAt: new Date().toISOString(),
     status: "active",
   };

@@ -21,7 +21,7 @@ export default function FornecedoresPage() {
   }, [user, router]);
 
   function refresh() {
-    apiClient.getVendors().then(setVendors);
+    apiClient.getVendors({ includeInactive: true }).then(setVendors);
   }
 
   useEffect(refresh, []);

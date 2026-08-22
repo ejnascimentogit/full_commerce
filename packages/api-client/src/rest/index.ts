@@ -26,9 +26,15 @@ function createRestApiClient(baseUrl: string): ApiClient {
   }
 
   return {
-    getRegions: () => request<DeliveryRegion[]>("/api/regions"),
+    getRegions: (params) => request<DeliveryRegion[]>(`/api/regions${params?.includeInactive ? "?includeInactive=true" : ""}`),
     getCategories: () => request<Category[]>("/api/categories"),
-    getVendors: (params) => request<Vendor[]>(`/api/vendors${params?.featured ? "?featured=true" : ""}`),
+    getVendors: (params) => {
+      const qs = new URLSearchParams();
+      if (params?.featured) qs.set("featured", "true");
+      if (params?.includeInactive) qs.set("includeInactive", "true");
+      const query = qs.toString();
+      return request<Vendor[]>(`/api/vendors${query ? `?${query}` : ""}`);
+    },
     getProducts: (params: ProductQuery = {}) => {
       const qs = new URLSearchParams();
       if (params.categoryId) qs.set("categoryId", params.categoryId);
@@ -79,6 +85,9 @@ function createRestApiClient(baseUrl: string): ApiClient {
     createVendor: (input: Omit<Vendor, "id">) => request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input) }),
     updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>
       request<Vendor>(`/api/vendors/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    createRegion: (input: Omit<DeliveryRegion, "id">) => request<DeliveryRegion>("/api/regions", { method: "POST", body: JSON.stringify(input) }),
+    updateRegion: (id: string, patch: Partial<Omit<DeliveryRegion, "id">>) =>
+      request<DeliveryRegion>(`/api/regions/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   };
 }
 

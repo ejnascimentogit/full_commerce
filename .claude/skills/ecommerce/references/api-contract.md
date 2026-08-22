@@ -11,11 +11,11 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/api/auth/register` | Cadastro de cliente (`name, email, password, documentType, document, businessName?, phone, regionId`) |
+| POST | `/api/auth/register` | Cadastro de cliente (`name, email, password, documentType, document, businessName?, phone, address: { street, number, complement?, neighborhood, city, state, zipCode }`) — backend resolve `regionId` casando `address.neighborhood` contra `DeliveryRegion.neighborhoods` |
 | POST | `/api/auth/login` | Login (`email, password`) → retorna `token`, `customer` |
 | POST | `/api/auth/refresh` | Renova token |
 | GET | `/api/customers/me` | Dados do cliente autenticado |
-| PATCH | `/api/customers/me` | Atualiza dados cadastrais (inclui trocar `regionId`) |
+| PATCH | `/api/customers/me` | Atualiza dados cadastrais |
 | GET | `/api/customers/me/addresses` | Lista endereços |
 | POST | `/api/customers/me/addresses` | Adiciona endereço |
 | PATCH | `/api/customers/me/addresses/:id` | Edita endereço |
@@ -39,7 +39,9 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | GET | `/api/vendors/:id` | Detalhe do fornecedor |
 | POST | `/api/vendors` | *(platformAdmin)* Cadastra fornecedor |
 | PATCH | `/api/vendors/:id` | *(platformAdmin)* Atualiza fornecedor (ativo, destaque) |
-| GET | `/api/regions` | Lista regiões de entrega ativas — usado no seletor de região |
+| GET | `/api/regions?includeInactive=` | Lista zonas de entrega (só ativas por padrão; `includeInactive=true` para o admin gerenciar todas) |
+| POST | `/api/admin/regions` | *(platformAdmin)* Cria zona de entrega (roteirização): `name, cutoffTime, estimatedDeliveryHours, neighborhoods[]` |
+| PATCH | `/api/admin/regions/:id` | *(platformAdmin)* Edita zona — inclui adicionar/remover bairros de `neighborhoods[]` |
 
 ## Carrinho
 

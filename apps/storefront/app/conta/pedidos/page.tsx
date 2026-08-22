@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
-import type { Category, DeliveryRegion, Order } from "@ecommerce/types";
+import type { Category, Order } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { useAuth } from "@/lib/auth-context";
@@ -12,12 +12,10 @@ import { useAuth } from "@/lib/auth-context";
 export default function MeusPedidosPage() {
   const { customer, loading } = useAuth();
   const router = useRouter();
-  const [regions, setRegions] = useState<DeliveryRegion[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[] | null>(null);
 
   useEffect(() => {
-    apiClient.getRegions().then(setRegions);
     apiClient.getCategories().then(setCategories);
   }, []);
 
@@ -35,7 +33,7 @@ export default function MeusPedidosPage() {
 
   return (
     <>
-      {regions[0] && <RegionBar region={regions[0]} />}
+      <RegionBar />
       <Header categories={categories} />
 
       <div className="mx-auto max-w-3xl px-4 py-8">

@@ -10,6 +10,8 @@ const NAV = [
   { href: "/produtos", label: "Produtos", icon: "📦" },
   { href: "/pedidos", label: "Pedidos", icon: "🧾" },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true },
+  { href: "/regioes", label: "Roteirização", icon: "🗺️", platformOnly: true },
+  { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

@@ -8,7 +8,8 @@ import type {
   UpdateProductInput,
 } from "../types";
 import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
-import { categories, promotions, regions } from "./data";
+import { categories, promotions } from "./data";
+import { createRegion as createRegionStore, listRegions, updateRegion as updateRegionStore } from "./regions-store";
 import {
   advanceOrderStatus as advanceOrderStatusStore,
   findAllOrders,
@@ -17,7 +18,7 @@ import {
   nextOrderNumber,
   saveOrder,
 } from "./orders-store";
-import { buildOrderItem, calculateOrderTotals } from "../domain";
+import { buildOrderItem, calculateOrderTotals, matchRegionByNeighborhood } from "../domain";
 import { isValidDocument } from "../documents";
 import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
@@ -29,9 +30,9 @@ import { createVendor as createVendorStore, listVendors, updateVendor as updateV
 const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const mockApiClient: ApiClient = {
-  async getRegions(): Promise<DeliveryRegion[]> {
+  async getRegions(params): Promise<DeliveryRegion[]> {
     await delay();
-    return regions.filter((r) => r.active);
+    return listRegions().filter((r) => params?.includeInactive || r.active);
   },
 
   async getCategories(): Promise<Category[]> {
@@ -41,7 +42,7 @@ export const mockApiClient: ApiClient = {
 
   async getVendors(params): Promise<Vendor[]> {
     await delay();
-    return listVendors().filter((v) => v.active && (params?.featured ? v.isFeatured : true));
+    return listVendors().filter((v) => (params?.includeInactive || v.active) && (params?.featured ? v.isFeatured : true));
   },
 
   async getProducts(params: ProductQuery = {}): Promise<Paginated<Product>> {
@@ -78,7 +79,9 @@ export const mockApiClient: ApiClient = {
   async register(input: RegisterInput): Promise<Customer> {
     await delay(300);
     if (!isValidDocument(input.documentType, input.document)) throw new Error("INVALID_DOCUMENT");
-    const customer = createCustomer(input);
+    // Roteirização: a região não vem do formulário — é resolvida pelo bairro do endereço.
+    const region = matchRegionByNeighborhood(listRegions(), input.address.neighborhood);
+    const customer = createCustomer({ ...input, regionId: region?.id });
     setSessionCustomerId(customer.id);
     return customer;
   },
@@ -204,6 +207,16 @@ export const mockApiClient: ApiClient = {
   async updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor> {
     await delay(300);
     return updateVendorStore(id, patch);
+  },
+
+  async createRegion(input: Omit<DeliveryRegion, "id">): Promise<DeliveryRegion> {
+    await delay(300);
+    return createRegionStore(input);
+  },
+
+  async updateRegion(id: string, patch: Partial<Omit<DeliveryRegion, "id">>): Promise<DeliveryRegion> {
+    await delay(300);
+    return updateRegionStore(id, patch);
   },
 };
 

@@ -31,7 +31,8 @@ export interface Customer {
   businessName?: string;
   phone: string;
   addresses: Address[];
-  regionId: string;
+  /** Resolvido automaticamente pelo bairro do endereço (ver DeliveryRegion.neighborhoods) — nunca escolhido pelo cliente. Ausente = fora de toda zona cadastrada, aguardando roteirização do admin. */
+  regionId?: string;
   createdAt: string;
   status: "active" | "inactive";
 }
@@ -42,6 +43,8 @@ export interface DeliveryRegion {
   active: boolean;
   cutoffTime: string; // "19:00"
   estimatedDeliveryHours: number;
+  /** Roteirização: bairros cobertos por esta zona (comparação case-insensitive). Um endereço cujo bairro não conste em nenhuma zona fica sem regionId até o admin ajustar. */
+  neighborhoods: string[];
 }
 
 export interface Vendor {
@@ -136,7 +139,7 @@ export interface Order {
   customerId: string;
   items: OrderItem[];
   shippingAddress: Address;
-  regionId: string;
+  regionId?: string;
   paymentMethod: "card" | "pix" | "boleto";
   subtotal: number;
   discount: number;

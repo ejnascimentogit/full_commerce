@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, formatDocument, isValidDocument, onlyDigits } from "@ecommerce/api-client";
-import type { DeliveryRegion, DocumentType } from "@ecommerce/types";
+import { formatCep, formatDocument, isValidDocument, lookupCep, onlyDigits } from "@ecommerce/api-client";
+import type { DocumentType } from "@ecommerce/types";
 import { useAuth } from "@/lib/auth-context";
 
 export default function CriarContaPage() {
   const { register } = useAuth();
   const router = useRouter();
-  const [regions, setRegions] = useState<DeliveryRegion[]>([]);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -19,16 +18,19 @@ export default function CriarContaPage() {
   const [document, setDocument] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
-  const [regionId, setRegionId] = useState("");
+
+  const [zipCode, setZipCode] = useState("");
+  const [street, setStreet] = useState("");
+  const [number, setNumber] = useState("");
+  const [complement, setComplement] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    apiClient.getRegions().then((r) => {
-      setRegions(r);
-      setRegionId(r[0]?.id ?? "");
-    });
-  }, []);
 
   const documentDigitCount = documentType === "cpf" ? 11 : 14;
   const documentComplete = onlyDigits(document).length === documentDigitCount;
@@ -41,6 +43,28 @@ export default function CriarContaPage() {
   function handleDocumentTypeChange(type: DocumentType) {
     setDocumentType(type);
     setDocument(""); // formato muda (CPF x CNPJ) — evita máscara inválida de sobra
+  }
+
+  async function handleZipCodeBlur() {
+    const digits = onlyDigits(zipCode);
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    setCepError(null);
+    try {
+      const address = await lookupCep(digits);
+      if (!address) {
+        setCepError("CEP não encontrado.");
+        return;
+      }
+      setStreet(address.street);
+      setNeighborhood(address.neighborhood);
+      setCity(address.city);
+      setState(address.state);
+    } catch {
+      setCepError("Não foi possível buscar o CEP agora — preencha manualmente.");
+    } finally {
+      setCepLoading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -60,7 +84,7 @@ export default function CriarContaPage() {
         document,
         businessName: documentType === "cnpj" ? businessName : undefined,
         phone,
-        regionId,
+        address: { street, number, complement: complement || undefined, neighborhood, city, state, zipCode },
       });
       router.push("/conta");
     } catch (err) {
@@ -105,6 +129,7 @@ export default function CriarContaPage() {
         {documentType === "cnpj" && (
           <Field label="Razão social" value={businessName} onChange={setBusinessName} required />
         )}
+
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">{documentType.toUpperCase()}</label>
           <input
@@ -120,24 +145,45 @@ export default function CriarContaPage() {
             <p className="text-red-600 text-xs mt-1">{documentType.toUpperCase()} inválido.</p>
           )}
         </div>
+
         <Field label="E-mail" type="email" value={email} onChange={setEmail} required />
         <Field label="Telefone" value={phone} onChange={setPhone} required />
         <Field label="Senha" type="password" value={password} onChange={setPassword} required />
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Região de entrega</label>
-          <select
-            value={regionId}
-            onChange={(e) => setRegionId(e.target.value)}
-            required
-            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
-          >
-            {regions.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+        <div className="pt-2 border-t border-slate-100">
+          <p className="text-sm font-semibold text-slate-900 mb-3 pt-2">Endereço de entrega</p>
+
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-slate-700 mb-1">CEP</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              required
+              value={zipCode}
+              onChange={(e) => setZipCode(formatCep(e.target.value))}
+              onBlur={handleZipCodeBlur}
+              placeholder="00000-000"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+            {cepLoading && <p className="text-xs text-slate-400 mt-1">Buscando endereço...</p>}
+            {cepError && <p className="text-xs text-amber-600 mt-1">{cepError}</p>}
+          </div>
+
+          <div className="space-y-3">
+            <Field label="Rua" value={street} onChange={setStreet} required />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Número" value={number} onChange={setNumber} required />
+              <Field label="Complemento" value={complement} onChange={setComplement} />
+            </div>
+            <Field label="Bairro" value={neighborhood} onChange={setNeighborhood} required />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Cidade" value={city} onChange={setCity} required />
+              <Field label="Estado" value={state} onChange={setState} required />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            Sua região de entrega é definida automaticamente pelo bairro — não precisa escolher.
+          </p>
         </div>
 
         {error && <p className="text-red-600 text-sm">{error}</p>}

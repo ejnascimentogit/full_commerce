@@ -5,19 +5,17 @@ import { ProductCard } from "@/components/ProductCard";
 import { VendorShowcase } from "@/components/VendorShowcase";
 
 export default async function HomePage() {
-  const [regions, categories, featuredVendors, allProducts] = await Promise.all([
-    apiClient.getRegions(),
+  const [categories, featuredVendors, allProducts] = await Promise.all([
     apiClient.getCategories(),
     apiClient.getVendors({ featured: true }),
     apiClient.getProducts({ pageSize: 100 }),
   ]);
 
-  const region = regions[0];
   const weeklyOffers = allProducts.items.filter((p) => p.salePrice != null);
 
   return (
     <>
-      <RegionBar region={region} />
+      <RegionBar />
       <Header categories={categories} />
 
       <section className="bg-white border-b border-slate-200">
@@ -29,7 +27,7 @@ export default async function HomePage() {
             <div className="mt-6 grid sm:grid-cols-3 gap-4">
               <Feature icon="🛒" title="Sem pedido mínimo" text="Seu pedido não precisa ser grande para ser importante." />
               <Feature icon="🚚" title="Frete grátis para CNPJ" text="Faça quantos pedidos desejar, o frete é por nossa conta." />
-              <Feature icon="⏱️" title={`Entrega em ${region.estimatedDeliveryHours}h`} text={`Peça até ${region.cutoffTime} e receba amanhã!`} />
+              <Feature icon="⏱️" title="Entrega rápida" text="Prazo exato calculado pelo seu bairro no cadastro." />
             </div>
             <div className="mt-6 flex items-center gap-4">
               <a href="/conta/criar" className="bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-md hover:bg-brand-700">

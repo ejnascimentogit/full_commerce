@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Category, DeliveryRegion } from "@ecommerce/types";
+import type { Category } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { useAuth } from "@/lib/auth-context";
@@ -12,11 +12,9 @@ import Link from "next/link";
 export default function ContaPage() {
   const { customer, loading } = useAuth();
   const router = useRouter();
-  const [regions, setRegions] = useState<DeliveryRegion[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    apiClient.getRegions().then(setRegions);
     apiClient.getCategories().then(setCategories);
   }, []);
 
@@ -30,7 +28,7 @@ export default function ContaPage() {
 
   return (
     <>
-      {regions[0] && <RegionBar region={regions[0]} />}
+      <RegionBar />
       <Header categories={categories} />
 
       <div className="mx-auto max-w-3xl px-4 py-8">
