@@ -1,5 +1,15 @@
 export type DocumentType = "cpf" | "cnpj";
 
+export type AdminRole = "platformAdmin" | "vendorAdmin";
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: AdminRole;
+  vendorId?: string; // presente só para vendorAdmin — escopa o que ele enxerga
+}
+
 export interface Address {
   id: string;
   street: string;

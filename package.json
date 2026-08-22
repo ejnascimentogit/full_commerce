@@ -6,6 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:storefront": "npm run dev -w apps/storefront"
+    "dev:storefront": "npm run dev -w apps/storefront",
+    "dev:admin": "npm run dev -w apps/admin"
   }
 }

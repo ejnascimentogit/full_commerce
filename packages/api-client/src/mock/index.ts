@@ -1,8 +1,28 @@
-import type { ApiClient, CreateOrderInput, Paginated, ProductQuery } from "../types";
-import type { Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
-import { categories, mockCustomer, products, promotions, regions, vendors } from "./data";
-import { advanceOrderStatus, findOrderById, findOrdersByCustomer, nextOrderNumber, saveOrder } from "./orders-store";
+import type {
+  ApiClient,
+  CreateOrderInput,
+  CreateProductInput,
+  Paginated,
+  ProductQuery,
+  RegisterInput,
+  UpdateProductInput,
+} from "../types";
+import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
+import { categories, promotions, regions } from "./data";
+import {
+  advanceOrderStatus as advanceOrderStatusStore,
+  findAllOrders,
+  findOrderById,
+  findOrdersByCustomer,
+  nextOrderNumber,
+  saveOrder,
+} from "./orders-store";
 import { buildOrderItem, calculateOrderTotals } from "../domain";
+import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
+import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
+import { clearAdminSession, findAdminUserById, getAdminSessionUserId, setAdminSessionUserId, verifyAdminPassword } from "./admin-store";
+import { createProduct as createProductStore, findProductById, listProducts, updateProduct as updateProductStore } from "./products-store";
+import { createVendor as createVendorStore, listVendors, updateVendor as updateVendorStore } from "./vendors-store";
 
 const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -19,14 +39,14 @@ export const mockApiClient: ApiClient = {
 
   async getVendors(params): Promise<Vendor[]> {
     await delay();
-    return vendors.filter((v) => v.active && (params?.featured ? v.isFeatured : true));
+    return listVendors().filter((v) => v.active && (params?.featured ? v.isFeatured : true));
   },
 
   async getProducts(params: ProductQuery = {}): Promise<Paginated<Product>> {
     await delay();
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 24;
-    const filtered = products.filter((p) => {
+    const filtered = listProducts().filter((p) => {
       if (params.categoryId && p.categoryId !== params.categoryId) return false;
       if (params.vendorId && p.vendorId !== params.vendorId) return false;
       if (params.q && !p.name.toLowerCase().includes(params.q.toLowerCase())) return false;
@@ -43,7 +63,7 @@ export const mockApiClient: ApiClient = {
 
   async getProduct(id: string): Promise<Product> {
     await delay();
-    const product = products.find((p) => p.id === id);
+    const product = findProductById(id);
     if (!product) throw new Error(`Product not found: ${id}`);
     return product;
   },
@@ -53,19 +73,41 @@ export const mockApiClient: ApiClient = {
     return promotions.filter((p) => p.isFeatured);
   },
 
-  async getCurrentCustomer(): Promise<Customer> {
+  async register(input: RegisterInput): Promise<Customer> {
+    await delay(300);
+    const customer = createCustomer(input);
+    setSessionCustomerId(customer.id);
+    return customer;
+  },
+
+  async login(email: string, password: string): Promise<Customer> {
+    await delay(300);
+    const customer = verifyPassword(email, password);
+    if (!customer) throw new Error("INVALID_CREDENTIALS");
+    setSessionCustomerId(customer.id);
+    return customer;
+  },
+
+  async logout(): Promise<void> {
+    clearSession();
+  },
+
+  async getCurrentCustomer(): Promise<Customer | null> {
     await delay();
-    return mockCustomer;
+    const id = getSessionCustomerId();
+    if (!id) return null;
+    return findCustomerById(id) ?? null;
   },
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     await delay(400);
-    const customer = mockCustomer;
+    const customer = findCustomerById(input.customerId);
+    if (!customer) throw new Error("Cliente não autenticado");
     const address = customer.addresses.find((a) => a.id === input.addressId) ?? customer.addresses[0];
     if (!address) throw new Error("Cliente não tem endereço cadastrado");
 
     const items = input.items.map(({ productId, quantity }) => {
-      const product = products.find((p) => p.id === productId);
+      const product = findProductById(productId);
       if (!product) throw new Error(`Product not found: ${productId}`);
       return buildOrderItem(product, quantity);
     });
@@ -107,9 +149,53 @@ export const mockApiClient: ApiClient = {
 
   async advanceOrderStatus(id: string, status: OrderStatus): Promise<Order> {
     await delay(300);
-    const order = advanceOrderStatus(id, status);
+    const order = advanceOrderStatusStore(id, status);
     if (!order) throw new Error(`Order not found: ${id}`);
     return order;
+  },
+
+  async adminLogin(email: string, password: string): Promise<AdminUser> {
+    await delay(300);
+    const user = verifyAdminPassword(email, password);
+    if (!user) throw new Error("INVALID_CREDENTIALS");
+    setAdminSessionUserId(user.id);
+    return user;
+  },
+
+  async adminLogout(): Promise<void> {
+    clearAdminSession();
+  },
+
+  async getCurrentAdminUser(): Promise<AdminUser | null> {
+    await delay();
+    const id = getAdminSessionUserId();
+    if (!id) return null;
+    return findAdminUserById(id) ?? null;
+  },
+
+  async createProduct(input: CreateProductInput): Promise<Product> {
+    await delay(300);
+    return createProductStore(input);
+  },
+
+  async updateProduct(id: string, patch: UpdateProductInput): Promise<Product> {
+    await delay(300);
+    return updateProductStore(id, patch);
+  },
+
+  async getAdminOrders(params): Promise<Order[]> {
+    await delay();
+    return findAllOrders(params);
+  },
+
+  async createVendor(input: Omit<Vendor, "id">): Promise<Vendor> {
+    await delay(300);
+    return createVendorStore(input);
+  },
+
+  async updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor> {
+    await delay(300);
+    return updateVendorStore(id, patch);
   },
 };
 

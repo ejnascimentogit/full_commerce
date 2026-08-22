@@ -2,7 +2,16 @@ import { mockApiClient } from "./mock";
 import { createRestApiClient } from "./rest";
 import type { ApiClient } from "./types";
 
-export type { ApiClient, CreateOrderInput, CreateOrderItemInput, Paginated, ProductQuery } from "./types";
+export type {
+  ApiClient,
+  CreateOrderInput,
+  CreateOrderItemInput,
+  CreateProductInput,
+  Paginated,
+  ProductQuery,
+  RegisterInput,
+  UpdateProductInput,
+} from "./types";
 export { packageLabels } from "./mock";
 export { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, calculateOrderTotals, calculateShipping, unitPriceOf } from "./domain";
 

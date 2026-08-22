@@ -5,22 +5,19 @@ import Link from "next/link";
 import { apiClient, calculateShipping, packageLabels, unitPriceOf } from "@ecommerce/api-client";
 import type { Product } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
+import { useAuth } from "@/lib/auth-context";
 
 export default function CarrinhoPage() {
   const { lines, setQuantity, removeItem } = useCart();
+  const { customer } = useAuth();
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [loading, setLoading] = useState(true);
-  const [shipping, setShipping] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      Promise.all(lines.map((l) => apiClient.getProduct(l.productId))),
-      apiClient.getCurrentCustomer(),
-    ]).then(([items, customer]) => {
+    Promise.all(lines.map((l) => apiClient.getProduct(l.productId))).then((items) => {
       if (cancelled) return;
       setProducts(Object.fromEntries(items.map((p) => [p.id, p])));
-      setShipping(calculateShipping(customer));
       setLoading(false);
     });
     return () => {
@@ -36,7 +33,8 @@ export default function CarrinhoPage() {
     (sum, { line, product }) => sum + unitPriceOf(product) * line.quantity,
     0,
   );
-  const total = subtotal + shipping;
+  const shipping = customer ? calculateShipping(customer) : null;
+  const total = subtotal + (shipping ?? 0);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -113,11 +111,15 @@ export default function CarrinhoPage() {
               <div className="flex justify-between text-slate-600">
                 <span>Frete</span>
                 <span className={shipping === 0 ? "text-green-600 font-medium" : ""}>
-                  {shipping === 0 ? "Grátis (CNPJ)" : `R$ ${shipping.toFixed(2).replace(".", ",")}`}
+                  {shipping === null
+                    ? "Calculado no checkout"
+                    : shipping === 0
+                      ? "Grátis (CNPJ)"
+                      : `R$ ${shipping.toFixed(2).replace(".", ",")}`}
                 </span>
               </div>
               <div className="flex justify-between font-bold text-slate-900 text-base pt-2 border-t border-slate-200">
-                <span>Total</span>
+                <span>Total {shipping === null && <span className="font-normal text-xs text-slate-400">(+ frete)</span>}</span>
                 <span>R$ {total.toFixed(2).replace(".", ",")}</span>
               </div>
             </div>

@@ -1,18 +1,36 @@
-import Link from "next/link";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
+import type { Category, DeliveryRegion } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
+import { useAuth } from "@/lib/auth-context";
+import Link from "next/link";
 
-export default async function ContaPage() {
-  const [regions, categories, customer] = await Promise.all([
-    apiClient.getRegions(),
-    apiClient.getCategories(),
-    apiClient.getCurrentCustomer(),
-  ]);
+export default function ContaPage() {
+  const { customer, loading } = useAuth();
+  const router = useRouter();
+  const [regions, setRegions] = useState<DeliveryRegion[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    apiClient.getRegions().then(setRegions);
+    apiClient.getCategories().then(setCategories);
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !customer) router.replace("/conta/entrar?redirect=/conta");
+  }, [loading, customer, router]);
+
+  if (loading || !customer) {
+    return <div className="mx-auto max-w-3xl px-4 py-16 text-center text-slate-500">Carregando...</div>;
+  }
 
   return (
     <>
-      <RegionBar region={regions[0]} />
+      {regions[0] && <RegionBar region={regions[0]} />}
       <Header categories={categories} />
 
       <div className="mx-auto max-w-3xl px-4 py-8">
@@ -46,6 +64,7 @@ export default async function ContaPage() {
 
         <section className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
           <h2 className="font-semibold text-slate-900 mb-3">Endereços</h2>
+          {customer.addresses.length === 0 && <p className="text-sm text-slate-500">Nenhum endereço cadastrado ainda.</p>}
           <ul className="space-y-2 text-sm">
             {customer.addresses.map((a) => (
               <li key={a.id} className="text-slate-600">

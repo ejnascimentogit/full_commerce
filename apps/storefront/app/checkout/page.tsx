@@ -3,16 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, unitPriceOf, calculateShipping } from "@ecommerce/api-client";
-import type { Address, Customer, Product } from "@ecommerce/types";
+import type { Address, Product } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
+import { useAuth } from "@/lib/auth-context";
 
 type PaymentMethod = "card" | "pix";
 
 export default function CheckoutPage() {
   const { lines, clear } = useCart();
+  const { customer, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [customer, setCustomer] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [addressId, setAddressId] = useState<string>("");
   const [method, setMethod] = useState<PaymentMethod>("pix");
@@ -21,14 +22,18 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([apiClient.getCurrentCustomer(), Promise.all(lines.map((l) => apiClient.getProduct(l.productId)))]).then(
-      ([c, items]) => {
-        setCustomer(c);
-        setAddressId(c.addresses.find((a) => a.isDefault)?.id ?? c.addresses[0]?.id ?? "");
-        setProducts(Object.fromEntries(items.map((p) => [p.id, p])));
-      },
+    if (!authLoading && !customer) {
+      router.replace("/conta/entrar?redirect=/checkout");
+    }
+  }, [authLoading, customer, router]);
+
+  useEffect(() => {
+    if (!customer) return;
+    setAddressId(customer.addresses.find((a) => a.isDefault)?.id ?? customer.addresses[0]?.id ?? "");
+    Promise.all(lines.map((l) => apiClient.getProduct(l.productId))).then((items) =>
+      setProducts(Object.fromEntries(items.map((p) => [p.id, p]))),
     );
-  }, [lines]);
+  }, [customer, lines]);
 
   if (lines.length === 0) {
     return (

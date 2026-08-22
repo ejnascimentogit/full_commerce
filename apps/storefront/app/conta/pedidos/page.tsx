@@ -2,25 +2,36 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
 import type { Category, DeliveryRegion, Order } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
+import { useAuth } from "@/lib/auth-context";
 
 export default function MeusPedidosPage() {
+  const { customer, loading } = useAuth();
+  const router = useRouter();
   const [regions, setRegions] = useState<DeliveryRegion[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[] | null>(null);
 
   useEffect(() => {
-    Promise.all([apiClient.getRegions(), apiClient.getCategories(), apiClient.getCurrentCustomer()]).then(
-      async ([r, c, customer]) => {
-        setRegions(r);
-        setCategories(c);
-        setOrders(await apiClient.getCustomerOrders(customer.id));
-      },
-    );
+    apiClient.getRegions().then(setRegions);
+    apiClient.getCategories().then(setCategories);
   }, []);
+
+  useEffect(() => {
+    if (!loading && !customer) {
+      router.replace("/conta/entrar?redirect=/conta/pedidos");
+      return;
+    }
+    if (customer) apiClient.getCustomerOrders(customer.id).then(setOrders);
+  }, [loading, customer, router]);
+
+  if (loading || !customer) {
+    return <div className="mx-auto max-w-3xl px-4 py-16 text-center text-slate-500">Carregando...</div>;
+  }
 
   return (
     <>

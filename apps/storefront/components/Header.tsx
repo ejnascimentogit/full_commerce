@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Category } from "@ecommerce/types";
 import { CartBadge } from "./CartBadge";
+import { AccountMenu } from "./AccountMenu";
 
 export function Header({ categories }: { categories: Category[] }) {
   return (
@@ -20,13 +21,7 @@ export function Header({ categories }: { categories: Category[] }) {
         </form>
 
         <div className="flex items-center gap-4 shrink-0">
-          <Link
-            href="/conta"
-            className="bg-white text-brand-700 font-semibold rounded-md px-4 py-2 text-sm text-center leading-tight hover:bg-brand-50"
-          >
-            Cadastre-se
-            <span className="block font-normal text-xs text-slate-500">Ou faça Login</span>
-          </Link>
+          <AccountMenu />
           <CartBadge />
         </div>
       </div>

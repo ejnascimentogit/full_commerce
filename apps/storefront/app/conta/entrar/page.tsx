@@ -1,0 +1,78 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+
+export default function EntrarPage() {
+  const { login } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState("compras@saborecia.com.br");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await login(email, password);
+      router.push(searchParams.get("redirect") ?? "/conta");
+    } catch {
+      setError("E-mail ou senha inválidos.");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-sm px-4 py-16">
+      <h1 className="text-2xl font-bold text-slate-900 mb-1">Entrar</h1>
+      <p className="text-sm text-slate-500 mb-6">
+        Conta demo já cadastrada: <strong>compras@saborecia.com.br</strong> / senha <strong>demo123</strong>
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Senha</label>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </div>
+
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full bg-brand-600 text-white font-semibold rounded-md py-2.5 hover:bg-brand-700 disabled:opacity-50"
+        >
+          {submitting ? "Entrando..." : "Entrar"}
+        </button>
+      </form>
+
+      <p className="text-sm text-slate-500 mt-4">
+        Ainda não tem conta?{" "}
+        <Link href="/conta/criar" className="text-brand-600 font-medium hover:underline">
+          Criar uma conta
+        </Link>
+      </p>
+    </div>
+  );
+}

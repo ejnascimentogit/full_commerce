@@ -1,5 +1,13 @@
-import type { Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
-import type { ApiClient, CreateOrderInput, Paginated, ProductQuery } from "../types";
+import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
+import type {
+  ApiClient,
+  CreateOrderInput,
+  CreateProductInput,
+  Paginated,
+  ProductQuery,
+  RegisterInput,
+  UpdateProductInput,
+} from "../types";
 
 // Implements the same ApiClient interface as mock/, calling the endpoints
 // documented in the ecommerce skill's references/api-contract.md.
@@ -8,9 +16,12 @@ function createRestApiClient(baseUrl: string): ApiClient {
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(`${baseUrl}${path}`, {
       ...init,
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
+    if (res.status === 401) return null as T;
     if (!res.ok) throw new Error(`API error ${res.status} on ${path}`);
+    if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
   }
 
@@ -30,13 +41,35 @@ function createRestApiClient(baseUrl: string): ApiClient {
     },
     getProduct: (id: string) => request<Product>(`/api/products/${id}`),
     getFeaturedPromotions: () => request<Promotion[]>("/api/promotions/active?featured=true"),
-    getCurrentCustomer: () => request<Customer>("/api/customers/me"),
-    createOrder: (input: CreateOrderInput) =>
-      request<Order>("/api/orders", { method: "POST", body: JSON.stringify(input) }),
+
+    register: (input: RegisterInput) => request<Customer>("/api/auth/register", { method: "POST", body: JSON.stringify(input) }),
+    login: (email: string, password: string) =>
+      request<Customer>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+    getCurrentCustomer: () => request<Customer | null>("/api/customers/me"),
+    createOrder: (input: CreateOrderInput) => request<Order>("/api/orders", { method: "POST", body: JSON.stringify(input) }),
     getOrder: (id: string) => request<Order>(`/api/orders/${id}`),
     getCustomerOrders: () => request<Order[]>("/api/orders"),
     advanceOrderStatus: (id: string, status: OrderStatus) =>
       request<Order>(`/api/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+
+    adminLogin: (email: string, password: string) =>
+      request<AdminUser>("/api/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    adminLogout: () => request<void>("/api/admin/auth/logout", { method: "POST" }),
+    getCurrentAdminUser: () => request<AdminUser | null>("/api/admin/auth/me"),
+    createProduct: (input: CreateProductInput) => request<Product>("/api/products", { method: "POST", body: JSON.stringify(input) }),
+    updateProduct: (id: string, patch: UpdateProductInput) =>
+      request<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    getAdminOrders: (params) => {
+      const qs = new URLSearchParams();
+      if (params?.status) qs.set("status", params.status);
+      if (params?.vendorId) qs.set("vendorId", params.vendorId);
+      const query = qs.toString();
+      return request<Order[]>(`/api/admin/orders${query ? `?${query}` : ""}`);
+    },
+    createVendor: (input: Omit<Vendor, "id">) => request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input) }),
+    updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>
+      request<Vendor>(`/api/vendors/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   };
 }
 
