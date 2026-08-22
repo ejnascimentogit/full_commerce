@@ -1,4 +1,4 @@
-import type { StoreSettings } from "@ecommerce/types";
+import type { FooterLink, StoreSettings } from "@ecommerce/types";
 import { placeholderPhoto } from "./placeholder";
 
 const STORAGE_KEY = "ecommerce.mock.settings";
@@ -36,9 +36,26 @@ function seedSettings(): StoreSettings {
     ],
     footer: {
       legalText: "© 2026 · fullcommerce · Preencha em Configurações a razão social, CNPJ e endereço da sua empresa.",
-      socialLinks: {},
+      paymentMethods: ["Cartão de crédito", "PIX", "Boleto"],
+      helpLinks: [],
+      socialLinks: [],
     },
+    freeShippingForCnpj: true,
+    shippingCost: 19.9,
   };
+}
+
+// socialLinks era um objeto fixo ({instagram?, facebook?, ...}) antes de virar
+// lista livre — sem isso, sessões que já tinham salvo redes sociais perderiam
+// esse dado ao carregar a nova versão.
+function migrateSocialLinks(raw: unknown): FooterLink[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    return Object.entries(raw as Record<string, string | undefined>)
+      .filter((entry): entry is [string, string] => Boolean(entry[1]))
+      .map(([key, url]) => ({ id: key, label: key.charAt(0).toUpperCase() + key.slice(1), url }));
+  }
+  return [];
 }
 
 function readSettings(): StoreSettings {
@@ -48,7 +65,14 @@ function readSettings(): StoreSettings {
     try {
       // Merge sobre o seed cobre sessões antigas que salvaram settings antes de
       // campos novos existirem (promotionsEnabled, siteCopy) — sem isso, ficariam undefined.
-      return { ...seedSettings(), ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      const merged: StoreSettings = { ...seedSettings(), ...parsed };
+      merged.footer = {
+        ...seedSettings().footer,
+        ...parsed.footer,
+        socialLinks: migrateSocialLinks(parsed.footer?.socialLinks),
+      };
+      return merged;
     } catch {
       // fall through to reseed
     }

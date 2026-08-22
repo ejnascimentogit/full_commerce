@@ -96,6 +96,8 @@ export interface ApiClient {
   advanceOrderStatus(id: string, status: OrderStatus): Promise<Order>;
 
   // Admin (painel) — platformAdmin enxerga tudo, vendorAdmin só o próprio vendorId
+  /** Autocadastro do dono da loja como platformAdmin — separado das contas demo do seed. */
+  registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser>;
   adminLogin(email: string, password: string): Promise<AdminUser>;
   adminLogout(): Promise<void>;
   getCurrentAdminUser(): Promise<AdminUser | null>;

@@ -29,6 +29,33 @@ function readAll(): StoredAdminUser[] {
   return SEED;
 }
 
+function writeAll(users: StoredAdminUser[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+}
+
+// Cria uma conta platformAdmin de verdade — pensado para o dono da loja
+// substituir/complementar as contas demo. Num backend real isso deve ser
+// bloqueado ou exigir convite depois que já existir um platformAdmin; aqui,
+// como é mock de uma loja de dono único, fica aberto por simplicidade.
+export function createAdminUser(input: { name: string; email: string; password: string }): AdminUser {
+  const users = readAll();
+  if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
+    throw new Error("EMAIL_IN_USE");
+  }
+  const user: StoredAdminUser = {
+    id: `admin-${Date.now()}`,
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    role: "platformAdmin",
+  };
+  users.push(user);
+  writeAll(users);
+  const { password: _password, ...publicUser } = user;
+  return publicUser;
+}
+
 export function verifyAdminPassword(email: string, password: string): AdminUser | undefined {
   const found = readAll().find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
   if (!found) return undefined;

@@ -35,18 +35,21 @@ export function matchRegionByNeighborhood(regions: DeliveryRegion[], neighborhoo
   return regions.find((r) => r.active && r.neighborhoods.some((n) => n.trim().toLowerCase() === target));
 }
 
-export function calculateShipping(customer: Pick<Customer, "documentType">): number {
-  // Regra da skill: frete grátis para CNPJ, cobrado normalmente para CPF.
-  return customer.documentType === "cnpj" ? 0 : 19.9;
+export interface ShippingSettings {
+  /** Regra padrão (herdada do Praso) é `true`. Configurável em Configurações no admin. */
+  freeShippingForCnpj: boolean;
+  shippingCost: number;
 }
 
-export function calculateOrderTotals(
-  items: OrderItem[],
-  customer: Pick<Customer, "documentType">,
-  options?: { discount?: number; freeShippingOverride?: boolean },
-) {
+export function calculateShipping(customer: Pick<Customer, "documentType">, settings: ShippingSettings): number {
+  if (customer.documentType === "cnpj" && settings.freeShippingForCnpj) return 0;
+  return settings.shippingCost;
+}
+
+// `shipping` já vem calculado por quem chama (via calculateShipping, ou 0 se um
+// cupom freeShipping foi aplicado) — calculateOrderTotals só soma, não decide frete.
+export function calculateOrderTotals(items: OrderItem[], shipping: number, options?: { discount?: number }) {
   const subtotal = items.reduce((sum, item) => sum + item.estimatedSubtotal, 0);
-  const shipping = options?.freeShippingOverride ? 0 : calculateShipping(customer);
   const discount = options?.discount ?? 0;
   return { subtotal, discount, shipping, total: Math.max(0, subtotal - discount) + shipping };
 }

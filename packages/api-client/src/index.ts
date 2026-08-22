@@ -29,7 +29,7 @@ export {
   matchRegionByNeighborhood,
   unitPriceOf,
 } from "./domain";
-export type { BrandPalette } from "./domain";
+export type { BrandPalette, ShippingSettings } from "./domain";
 export { formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
 export { lookupCep, formatCep } from "./cep";
 export type { CepAddress } from "./cep";

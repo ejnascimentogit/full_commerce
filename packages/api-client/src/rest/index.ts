@@ -64,6 +64,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
     advanceOrderStatus: (id: string, status: OrderStatus) =>
       request<Order>(`/api/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
 
+    registerAdmin: (input: { name: string; email: string; password: string }) =>
+      request<AdminUser>("/api/admin/auth/register", { method: "POST", body: JSON.stringify(input) }),
     adminLogin: (email: string, password: string) =>
       request<AdminUser>("/api/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
     adminLogout: () => request<void>("/api/admin/auth/logout", { method: "POST" }),

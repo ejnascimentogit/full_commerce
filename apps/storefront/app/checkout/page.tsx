@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, unitPriceOf, calculateShipping, calculatePromotionDiscount } from "@ecommerce/api-client";
-import type { Address, Product, Promotion } from "@ecommerce/types";
+import type { Address, Product, Promotion, StoreSettings } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
@@ -15,6 +15,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const [products, setProducts] = useState<Record<string, Product>>({});
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [addressId, setAddressId] = useState<string>("");
   const [method, setMethod] = useState<PaymentMethod>("pix");
   const [installments, setInstallments] = useState(1);
@@ -35,8 +36,11 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!customer) return;
     setAddressId(customer.addresses.find((a) => a.isDefault)?.id ?? customer.addresses[0]?.id ?? "");
-    Promise.all(lines.map((l) => apiClient.getProduct(l.productId))).then((items) =>
-      setProducts(Object.fromEntries(items.map((p) => [p.id, p]))),
+    Promise.all([Promise.all(lines.map((l) => apiClient.getProduct(l.productId))), apiClient.getStoreSettings()]).then(
+      ([items, s]) => {
+        setProducts(Object.fromEntries(items.map((p) => [p.id, p])));
+        setSettings(s);
+      },
     );
   }, [customer, lines]);
 
@@ -48,7 +52,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!customer) {
+  if (!customer || !settings) {
     return <div className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-500">Carregando...</div>;
   }
 
@@ -57,7 +61,8 @@ export default function CheckoutPage() {
     .filter((l): l is { line: (typeof lines)[number]; product: Product } => Boolean(l.product));
 
   const subtotal = resolvedLines.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity, 0);
-  const baseShipping = calculateShipping(customer);
+  const baseShipping = calculateShipping(customer, settings);
+  const belowMinimum = Boolean(settings.minOrderValue && subtotal < settings.minOrderValue);
   const isFreeShippingCoupon = appliedPromotion?.type === "freeShipping";
   const shipping = isFreeShippingCoupon ? 0 : baseShipping;
   const discount = appliedPromotion
@@ -110,8 +115,13 @@ export default function CheckoutPage() {
       });
       clear();
       router.push(`/pedido/${order.id}`);
-    } catch {
-      setError("Não foi possível confirmar o pedido. Tente novamente.");
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      setError(
+        code === "BELOW_MIN_ORDER_VALUE"
+          ? `O pedido mínimo é R$ ${settings!.minOrderValue!.toFixed(2).replace(".", ",")}.`
+          : "Não foi possível confirmar o pedido. Tente novamente.",
+      );
       setSubmitting(false);
     }
   }
@@ -249,12 +259,18 @@ export default function CheckoutPage() {
         </div>
       </section>
 
+      {belowMinimum && (
+        <p className="text-amber-600 text-sm mb-3 bg-amber-50 rounded-md px-3 py-2">
+          Faltam R$ {(settings.minOrderValue! - subtotal).toFixed(2).replace(".", ",")} para o pedido mínimo de R${" "}
+          {settings.minOrderValue!.toFixed(2).replace(".", ",")}.
+        </p>
+      )}
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
       <button
         type="button"
         onClick={handleConfirm}
-        disabled={submitting || !addressId}
+        disabled={submitting || !addressId || belowMinimum}
         className="w-full bg-brand-600 text-white font-semibold rounded-md py-3 hover:bg-brand-700 disabled:opacity-50"
       >
         {submitting ? "Confirmando..." : "Confirmar pedido"}

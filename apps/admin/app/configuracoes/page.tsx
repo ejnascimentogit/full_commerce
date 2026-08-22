@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Banner, FooterSettings, SiteCopy, StoreSettings } from "@ecommerce/types";
+import type { Banner, FooterLink, FooterSettings, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -25,6 +25,16 @@ export default function ConfiguracoesPage() {
 
   const [footer, setFooter] = useState<FooterSettings | null>(null);
   const [savingFooter, setSavingFooter] = useState(false);
+  const [newPaymentMethod, setNewPaymentMethod] = useState("");
+  const [newHelpLabel, setNewHelpLabel] = useState("");
+  const [newHelpUrl, setNewHelpUrl] = useState("");
+  const [newSocialLabel, setNewSocialLabel] = useState("");
+  const [newSocialUrl, setNewSocialUrl] = useState("");
+
+  const [minOrderValue, setMinOrderValue] = useState("");
+  const [freeShippingForCnpj, setFreeShippingForCnpj] = useState(true);
+  const [shippingCost, setShippingCost] = useState("19.90");
+  const [savingOrderRules, setSavingOrderRules] = useState(false);
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
@@ -36,6 +46,9 @@ export default function ConfiguracoesPage() {
       setBrandColor(s.brandColor);
       setSiteCopy(s.siteCopy);
       setFooter(s.footer);
+      setMinOrderValue(s.minOrderValue?.toString() ?? "");
+      setFreeShippingForCnpj(s.freeShippingForCnpj);
+      setShippingCost(s.shippingCost.toString());
     });
   }
 
@@ -62,6 +75,55 @@ export default function ConfiguracoesPage() {
     setSavingFooter(true);
     await apiClient.updateStoreSettings({ footer });
     setSavingFooter(false);
+    refresh();
+  }
+
+  function addPaymentMethod() {
+    if (!footer || !newPaymentMethod.trim()) return;
+    setFooter({ ...footer, paymentMethods: [...footer.paymentMethods, newPaymentMethod.trim()] });
+    setNewPaymentMethod("");
+  }
+
+  function removePaymentMethod(method: string) {
+    if (!footer) return;
+    setFooter({ ...footer, paymentMethods: footer.paymentMethods.filter((m) => m !== method) });
+  }
+
+  function addHelpLink() {
+    if (!footer || !newHelpLabel.trim() || !newHelpUrl.trim()) return;
+    setFooter({ ...footer, helpLinks: [...footer.helpLinks, { id: `help-${Date.now()}`, label: newHelpLabel.trim(), url: newHelpUrl.trim() }] });
+    setNewHelpLabel("");
+    setNewHelpUrl("");
+  }
+
+  function removeHelpLink(id: string) {
+    if (!footer) return;
+    setFooter({ ...footer, helpLinks: footer.helpLinks.filter((l) => l.id !== id) });
+  }
+
+  function addSocialLink() {
+    if (!footer || !newSocialLabel.trim() || !newSocialUrl.trim()) return;
+    setFooter({
+      ...footer,
+      socialLinks: [...footer.socialLinks, { id: `social-${Date.now()}`, label: newSocialLabel.trim(), url: newSocialUrl.trim() }],
+    });
+    setNewSocialLabel("");
+    setNewSocialUrl("");
+  }
+
+  function removeSocialLink(id: string) {
+    if (!footer) return;
+    setFooter({ ...footer, socialLinks: footer.socialLinks.filter((l) => l.id !== id) });
+  }
+
+  async function handleSaveOrderRules() {
+    setSavingOrderRules(true);
+    await apiClient.updateStoreSettings({
+      minOrderValue: minOrderValue ? Number(minOrderValue) : undefined,
+      freeShippingForCnpj,
+      shippingCost: Number(shippingCost),
+    });
+    setSavingOrderRules(false);
     refresh();
   }
 
@@ -145,6 +207,17 @@ export default function ConfiguracoesPage() {
 
   if (user?.role !== "platformAdmin" || !settings || !siteCopy || !footer) return null;
 
+  const COLOR_PRESETS = [
+    { name: "Azul", value: "#1d4ed8" },
+    { name: "Verde", value: "#16a34a" },
+    { name: "Vermelho", value: "#dc2626" },
+    { name: "Roxo", value: "#7c3aed" },
+    { name: "Laranja", value: "#ea580c" },
+    { name: "Rosa", value: "#db2777" },
+    { name: "Ciano", value: "#0891b2" },
+    { name: "Grafite", value: "#334155" },
+  ];
+
   const sortedBanners = [...settings.banners].sort((a, b) => a.order - b.order);
 
   return (
@@ -156,6 +229,18 @@ export default function ConfiguracoesPage() {
         <p className="text-sm text-slate-500 mb-3">
           Uma cor só — os outros tons (fundo claro, hover, etc.) são derivados automaticamente.
         </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {COLOR_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => setBrandColor(preset.value)}
+              title={preset.name}
+              className={`w-9 h-9 rounded-full border-2 ${brandColor.toLowerCase() === preset.value ? "border-slate-900" : "border-transparent"}`}
+              style={{ backgroundColor: preset.value }}
+            />
+          ))}
+        </div>
         <div className="flex items-center gap-3">
           <input
             type="color"
@@ -398,22 +483,101 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Redes sociais (opcional — só aparece o que for preenchido)</label>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {(["instagram", "facebook", "linkedin", "whatsapp"] as const).map((key) => (
-                <div key={key} className="flex items-center gap-2">
-                  <span className="w-20 text-sm text-slate-500 capitalize">{key}</span>
-                  <input
-                    type="text"
-                    value={footer.socialLinks[key] ?? ""}
-                    onChange={(e) =>
-                      setFooter({ ...footer, socialLinks: { ...footer.socialLinks, [key]: e.target.value || undefined } })
-                    }
-                    placeholder="https://..."
-                    className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm"
-                  />
+            <label className="block text-sm font-medium text-slate-700 mb-2">Formas de pagamento</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {footer.paymentMethods.map((method) => (
+                <span key={method} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                  {method}
+                  <button type="button" onClick={() => removePaymentMethod(method)} className="text-slate-400 hover:text-red-600">
+                    ✕
+                  </button>
+                </span>
+              ))}
+              {footer.paymentMethods.length === 0 && <p className="text-xs text-slate-400">Nenhuma cadastrada.</p>}
+            </div>
+            <div className="flex gap-2 max-w-sm">
+              <input
+                type="text"
+                value={newPaymentMethod}
+                onChange={(e) => setNewPaymentMethod(e.target.value)}
+                placeholder="Ex: Vale Alimentação"
+                className="flex-1 border border-slate-300 rounded-md px-3 py-1.5 text-sm"
+              />
+              <button type="button" onClick={addPaymentMethod} className="text-sm text-brand-600 border border-brand-200 rounded-md px-3 hover:bg-brand-50">
+                Adicionar
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Links de Ajuda (coluna &quot;Ajuda&quot; do rodapé)</label>
+            <div className="space-y-1.5 mb-2">
+              {footer.helpLinks.map((link) => (
+                <div key={link.id} className="flex items-center gap-2 text-sm">
+                  <span className="flex-1 truncate">
+                    {link.label} <span className="text-slate-400">→ {link.url}</span>
+                  </span>
+                  <button type="button" onClick={() => removeHelpLink(link.id)} className="text-slate-400 hover:text-red-600 shrink-0">
+                    ✕
+                  </button>
                 </div>
               ))}
+              {footer.helpLinks.length === 0 && <p className="text-xs text-slate-400">Nenhum cadastrado.</p>}
+            </div>
+            <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+              <input
+                type="text"
+                value={newHelpLabel}
+                onChange={(e) => setNewHelpLabel(e.target.value)}
+                placeholder="Ex: Política de Privacidade"
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm"
+              />
+              <input
+                type="text"
+                value={newHelpUrl}
+                onChange={(e) => setNewHelpUrl(e.target.value)}
+                placeholder="/politica-de-privacidade"
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm"
+              />
+              <button type="button" onClick={addHelpLink} className="text-sm text-brand-600 border border-brand-200 rounded-md px-3 hover:bg-brand-50">
+                Adicionar
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Redes sociais</label>
+            <div className="space-y-1.5 mb-2">
+              {footer.socialLinks.map((link) => (
+                <div key={link.id} className="flex items-center gap-2 text-sm">
+                  <span className="flex-1 truncate">
+                    {link.label} <span className="text-slate-400">→ {link.url}</span>
+                  </span>
+                  <button type="button" onClick={() => removeSocialLink(link.id)} className="text-slate-400 hover:text-red-600 shrink-0">
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {footer.socialLinks.length === 0 && <p className="text-xs text-slate-400">Nenhuma cadastrada.</p>}
+            </div>
+            <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+              <input
+                type="text"
+                value={newSocialLabel}
+                onChange={(e) => setNewSocialLabel(e.target.value)}
+                placeholder="Ex: Instagram"
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm"
+              />
+              <input
+                type="text"
+                value={newSocialUrl}
+                onChange={(e) => setNewSocialUrl(e.target.value)}
+                placeholder="https://instagram.com/..."
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm"
+              />
+              <button type="button" onClick={addSocialLink} className="text-sm text-brand-600 border border-brand-200 rounded-md px-3 hover:bg-brand-50">
+                Adicionar
+              </button>
             </div>
           </div>
 
@@ -424,6 +588,65 @@ export default function ConfiguracoesPage() {
             className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
           >
             {savingFooter ? "Salvando..." : "Salvar rodapé"}
+          </button>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-xl">
+        <h2 className="font-semibold text-slate-900 mb-1">Pedidos e frete</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Por padrão a loja não tem pedido mínimo e o frete é grátis pra CNPJ — os dois são só o ponto de partida,
+          ajuste como quiser.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Pedido mínimo (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={minOrderValue}
+              onChange={(e) => setMinOrderValue(e.target.value)}
+              placeholder="Vazio = sem pedido mínimo"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Frete grátis para CNPJ</p>
+              <p className="text-xs text-slate-500 mt-0.5">Desligado, todo cliente paga o frete abaixo — CNPJ ou não.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFreeShippingForCnpj((v) => !v)}
+              className={`shrink-0 ml-4 relative w-12 h-7 rounded-full transition-colors ${freeShippingForCnpj ? "bg-brand-600" : "bg-slate-300"}`}
+            >
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${freeShippingForCnpj ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+          </div>
+
+          <div className="max-w-xs">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Valor do frete (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={shippingCost}
+              onChange={(e) => setShippingCost(e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Cobrado de clientes CPF sempre, e de CNPJ também se o frete grátis acima estiver desligado.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveOrderRules}
+            disabled={savingOrderRules}
+            className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
+          >
+            {savingOrderRules ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </section>

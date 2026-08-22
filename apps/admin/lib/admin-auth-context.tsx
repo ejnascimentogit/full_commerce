@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 interface AdminAuthContextValue {
   user: AdminUser | null;
   loading: boolean;
+  register: (input: { name: string; email: string; password: string }) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -28,6 +29,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
+      register: async (input) => setUser(await apiClient.registerAdmin(input)),
       login: async (email, password) => setUser(await apiClient.adminLogin(email, password)),
       logout: async () => {
         await apiClient.adminLogout();

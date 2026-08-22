@@ -22,6 +22,15 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | DELETE | `/api/customers/me/addresses/:id` | Remove endereço |
 | POST | `/api/customers/me/push-token` | Registra `pushToken` do dispositivo (app mobile) para notificações de status de pedido |
 
+## Autenticação Admin
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/admin/auth/register` | Autocadastro do dono da loja como `platformAdmin` (`name, email, password`) — num backend real, travar depois que já existir um platformAdmin (convite, não autocadastro livre) |
+| POST | `/api/admin/auth/login` | Login do admin (`email, password`) → `token`, `AdminUser` (`role`, e `vendorId` se `vendorAdmin`) |
+| POST | `/api/admin/auth/logout` | Encerra sessão |
+| GET | `/api/admin/auth/me` | Admin autenticado atual, ou `null` |
+
 ## Produtos, Categorias e Fornecedores (leitura pública, escrita restrita ao admin)
 
 | Método | Rota | Descrição |
@@ -60,7 +69,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/api/orders` | Cria pedido a partir do carrinho (`shippingAddressId, paymentMethod, installments?, couponCode?`) — congela o espelho do pedido; o desconto do cupom é recalculado/revalidado no backend, nunca confia no valor mostrado no checkout |
+| POST | `/api/orders` | Cria pedido a partir do carrinho (`shippingAddressId, paymentMethod, installments?, couponCode?`) — congela o espelho do pedido; o desconto do cupom é recalculado/revalidado no backend, nunca confia no valor mostrado no checkout; rejeita com `BELOW_MIN_ORDER_VALUE` se o subtotal ficar abaixo de `StoreSettings.minOrderValue` |
 | GET | `/api/orders` | *(cliente)* Lista pedidos do cliente autenticado |
 | GET | `/api/orders/:id` | Detalhe do pedido — inclui `items[]` (espelho), `statusHistory[]`, `tracking?` |
 | GET | `/api/orders/:id/status` | Só o status atual + histórico — usado para polling leve no acompanhamento |
@@ -72,7 +81,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/api/payments` | Inicia pagamento de um pedido (`orderId, method: card\|pix, cardToken?, installments?`) — `shipping` já vem `0` do backend se `customer.documentType === "cnpj"` |
+| POST | `/api/payments` | Inicia pagamento de um pedido (`orderId, method: card\|pix, cardToken?, installments?`) — `shipping` já vem calculado pelo backend a partir de `StoreSettings.freeShippingForCnpj`/`shippingCost` |
 | GET | `/api/payments/:id` | Status do pagamento — usado para polling do PIX até `approved` |
 | POST | `/api/payments/webhook` | *(gateway → backend, não é chamado pelo frontend)* Confirmação assíncrona do banco/gateway |
 | GET | `/api/admin/payments` | *(platformAdmin: todos · vendorAdmin: só repasse do próprio fornecedor)* Extrato de pagamentos, filtros `?status=&from=&to=&vendorId=` |
@@ -91,8 +100,8 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/api/products/best-sellers?limit=` | Produtos mais vendidos, calculado a partir dos pedidos (soma de quantidade, exclui `CANCELLED`/`REFUNDED`) — não é curadoria manual |
-| GET | `/api/settings` | Configuração pública da loja (`brandColor, logoUrl?, banners[]`) |
-| PATCH | `/api/admin/settings` | *(platformAdmin)* Atualiza cor de marca, logo (URL) e/ou lista de banners |
+| GET | `/api/settings` | Configuração pública da loja (`brandColor, logoUrl?, banners[], siteCopy, footer, minOrderValue?, freeShippingForCnpj, shippingCost`) |
+| PATCH | `/api/admin/settings` | *(platformAdmin)* Atualiza qualquer campo acima — cor, logo (URL), banners, textos do site, rodapé, pedido mínimo, regra de frete |
 | POST | `/api/admin/settings/logo` | *(platformAdmin)* Upload da logo (multipart), retorna URL |
 
 ## Notas de implementação

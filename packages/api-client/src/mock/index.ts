@@ -31,6 +31,7 @@ import {
   buildOrderItem,
   calculateOrderTotals,
   calculatePromotionDiscount,
+  calculateShipping,
   findPromotionByCoupon,
   getBestSellingProducts,
   isPromotionActive,
@@ -39,7 +40,14 @@ import {
 import { isValidDocument } from "../documents";
 import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
-import { clearAdminSession, findAdminUserById, getAdminSessionUserId, setAdminSessionUserId, verifyAdminPassword } from "./admin-store";
+import {
+  clearAdminSession,
+  createAdminUser,
+  findAdminUserById,
+  getAdminSessionUserId,
+  setAdminSessionUserId,
+  verifyAdminPassword,
+} from "./admin-store";
 import { createProduct as createProductStore, findProductById, listProducts, updateProduct as updateProductStore } from "./products-store";
 import { resizeImageToDataUrl } from "./image";
 import { createVendor as createVendorStore, listVendors, updateVendor as updateVendorStore } from "./vendors-store";
@@ -153,17 +161,22 @@ export const mockApiClient: ApiClient = {
     const items = products.map(({ product, quantity }) => buildOrderItem(product, quantity));
     const subtotal = items.reduce((sum, item) => sum + item.estimatedSubtotal, 0);
 
+    const settings = getSettings();
+    if (settings.minOrderValue && subtotal < settings.minOrderValue) {
+      throw new Error("BELOW_MIN_ORDER_VALUE");
+    }
+
     // Cupom: revalidado aqui mesmo que já tenha sido pré-visto no checkout — nunca
     // confia só no valor calculado no cliente.
     let discount = 0;
-    let freeShippingOverride = false;
+    let shipping = calculateShipping(customer, settings);
     let appliedPromotion: Promotion | undefined;
-    if (input.couponCode && getSettings().promotionsEnabled) {
+    if (input.couponCode && settings.promotionsEnabled) {
       const promotion = findPromotionByCoupon(listPromotions(), input.couponCode);
       if (promotion) {
         appliedPromotion = promotion;
         if (promotion.type === "freeShipping") {
-          freeShippingOverride = true;
+          shipping = 0;
         } else {
           discount = calculatePromotionDiscount(
             promotion,
@@ -174,7 +187,7 @@ export const mockApiClient: ApiClient = {
       }
     }
 
-    const totals = calculateOrderTotals(items, customer, { discount, freeShippingOverride });
+    const totals = calculateOrderTotals(items, shipping, { discount });
     const now = new Date().toISOString();
 
     const order: Order = {
@@ -216,6 +229,13 @@ export const mockApiClient: ApiClient = {
     const order = advanceOrderStatusStore(id, status);
     if (!order) throw new Error(`Order not found: ${id}`);
     return order;
+  },
+
+  async registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser> {
+    await delay(300);
+    const user = createAdminUser(input);
+    setAdminSessionUserId(user.id);
+    return user;
   },
 
   async adminLogin(email: string, password: string): Promise<AdminUser> {

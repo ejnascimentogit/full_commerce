@@ -210,17 +210,23 @@ export interface SiteCopy {
   featureBullets: SiteFeatureBullet[];
 }
 
+export interface FooterLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
 export interface FooterSettings {
   /** Linha de rodapé com razão social/CNPJ/endereço — texto livre, o admin escreve como quiser. */
   legalText: string;
   supportEmail?: string;
   supportPhone?: string;
-  socialLinks: {
-    instagram?: string;
-    facebook?: string;
-    linkedin?: string;
-    whatsapp?: string;
-  };
+  /** Lista livre — o admin cadastra quantas formas de pagamento quiser (ex: "Cartão de crédito", "PIX", "Boleto"). */
+  paymentMethods: string[];
+  /** Coluna "Ajuda" do rodapé (ex: Política de Entrega → /politica-de-entrega). */
+  helpLinks: FooterLink[];
+  /** Uma rede social por linha — não fica preso a uma lista fixa de plataformas. */
+  socialLinks: FooterLink[];
 }
 
 export interface StoreSettings {
@@ -234,4 +240,10 @@ export interface StoreSettings {
   /** Textos editáveis da home — dá autonomia pro admin trocar nome/frases sem depender de deploy. */
   siteCopy: SiteCopy;
   footer: FooterSettings;
+  /** undefined/0 = sem pedido mínimo (regra padrão herdada do modelo Praso). Se definido, checkout bloqueia carrinho abaixo do valor. */
+  minOrderValue?: number;
+  /** Regra padrão herdada do Praso é `true`. Desligado, todo cliente paga `shippingCost`, CNPJ ou não. */
+  freeShippingForCnpj: boolean;
+  /** Frete cobrado quando não é grátis (CPF, ou CNPJ com freeShippingForCnpj desligado). */
+  shippingCost: number;
 }

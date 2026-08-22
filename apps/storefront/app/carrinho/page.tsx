@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient, calculateShipping, packageLabels, unitPriceOf } from "@ecommerce/api-client";
-import type { Product } from "@ecommerce/types";
+import type { Product, StoreSettings } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
@@ -11,15 +11,19 @@ export default function CarrinhoPage() {
   const { lines, setQuantity, removeItem } = useCart();
   const { customer } = useAuth();
   const [products, setProducts] = useState<Record<string, Product>>({});
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all(lines.map((l) => apiClient.getProduct(l.productId))).then((items) => {
-      if (cancelled) return;
-      setProducts(Object.fromEntries(items.map((p) => [p.id, p])));
-      setLoading(false);
-    });
+    Promise.all([Promise.all(lines.map((l) => apiClient.getProduct(l.productId))), apiClient.getStoreSettings()]).then(
+      ([items, s]) => {
+        if (cancelled) return;
+        setProducts(Object.fromEntries(items.map((p) => [p.id, p])));
+        setSettings(s);
+        setLoading(false);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -33,8 +37,10 @@ export default function CarrinhoPage() {
     (sum, { line, product }) => sum + unitPriceOf(product) * line.quantity,
     0,
   );
-  const shipping = customer ? calculateShipping(customer) : null;
+  const shipping = customer && settings ? calculateShipping(customer, settings) : null;
   const total = subtotal + (shipping ?? 0);
+  const minOrderValue = settings?.minOrderValue;
+  const belowMinimum = Boolean(minOrderValue && subtotal < minOrderValue);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -114,7 +120,7 @@ export default function CarrinhoPage() {
                   {shipping === null
                     ? "Calculado no checkout"
                     : shipping === 0
-                      ? "Grátis (CNPJ)"
+                      ? "Grátis"
                       : `R$ ${shipping.toFixed(2).replace(".", ",")}`}
                 </span>
               </div>
@@ -123,12 +129,26 @@ export default function CarrinhoPage() {
                 <span>R$ {total.toFixed(2).replace(".", ",")}</span>
               </div>
             </div>
-            <Link
-              href="/checkout"
-              className="block text-center bg-brand-600 text-white font-semibold rounded-md py-2.5 hover:bg-brand-700"
-            >
-              Finalizar compra
-            </Link>
+
+            {belowMinimum && minOrderValue && (
+              <p className="text-amber-600 text-xs bg-amber-50 rounded-md px-3 py-2">
+                Faltam R$ {(minOrderValue - subtotal).toFixed(2).replace(".", ",")} para o pedido mínimo de R${" "}
+                {minOrderValue.toFixed(2).replace(".", ",")}.
+              </p>
+            )}
+
+            {belowMinimum ? (
+              <button type="button" disabled className="block w-full text-center bg-slate-200 text-slate-400 font-semibold rounded-md py-2.5 cursor-not-allowed">
+                Finalizar compra
+              </button>
+            ) : (
+              <Link
+                href="/checkout"
+                className="block text-center bg-brand-600 text-white font-semibold rounded-md py-2.5 hover:bg-brand-700"
+              >
+                Finalizar compra
+              </Link>
+            )}
           </aside>
         </div>
       )}

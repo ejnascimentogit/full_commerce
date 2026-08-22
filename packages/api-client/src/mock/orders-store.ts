@@ -19,8 +19,10 @@ const SEQUENCE_KEY = "ecommerce.mock.orderSequence";
 
 function buildSeedOrders(): Order[] {
   const address = mockCustomer.addresses[0];
-  const totals1 = calculateOrderTotals([buildOrderItem(products[1], 5), buildOrderItem(products[6], 2)], mockCustomer);
-  const totals2 = calculateOrderTotals([buildOrderItem(products[0], 3)], mockCustomer);
+  // mockCustomer é CNPJ e a regra padrão de frete grátis está ligada — pedidos
+  // seed não dependem de StoreSettings ao vivo, então o frete é fixo em 0 aqui.
+  const totals1 = calculateOrderTotals([buildOrderItem(products[1], 5), buildOrderItem(products[6], 2)], 0);
+  const totals2 = calculateOrderTotals([buildOrderItem(products[0], 3)], 0);
   const now = Date.now();
   const daysAgo = (d: number) => new Date(now - d * 86_400_000).toISOString();
 
