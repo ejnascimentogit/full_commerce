@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Category } from "@ecommerce/types";
+import { CartBadge } from "./CartBadge";
 
 export function Header({ categories }: { categories: Category[] }) {
   return (
@@ -9,9 +10,10 @@ export function Header({ categories }: { categories: Category[] }) {
           full<span className="text-brand-100">commerce</span>
         </Link>
 
-        <form className="flex-1 max-w-2xl" role="search">
+        <form action="/catalogo" method="get" className="flex-1 max-w-2xl" role="search">
           <input
             type="search"
+            name="q"
             placeholder="Pesquisar produtos..."
             className="w-full rounded-md px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
@@ -25,9 +27,7 @@ export function Header({ categories }: { categories: Category[] }) {
             Cadastre-se
             <span className="block font-normal text-xs text-slate-500">Ou faça Login</span>
           </Link>
-          <Link href="/carrinho" aria-label="Carrinho" className="text-2xl">
-            🛒
-          </Link>
+          <CartBadge />
         </div>
       </div>
 

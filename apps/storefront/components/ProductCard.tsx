@@ -1,9 +1,17 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
 import type { Product } from "@ecommerce/types";
 import { packageLabels } from "@ecommerce/api-client";
+import { useCart } from "@/lib/cart-context";
 
 const unitSuffix: Record<Product["unitType"], string> = { un: "un", kg: "kg", cx: "cx" };
 
 export function ProductCard({ product }: { product: Product }) {
+  const { addItem } = useCart();
+  const [justAdded, setJustAdded] = useState(false);
+
   const hasDiscount = product.salePrice != null && product.salePrice < product.basePrice;
   const displayPrice = product.salePrice ?? product.basePrice;
   const discountPct = hasDiscount
@@ -11,21 +19,31 @@ export function ProductCard({ product }: { product: Product }) {
     : 0;
   const packageLabel = packageLabels[product.id];
 
+  function handleAdd() {
+    addItem(product.id);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1200);
+  }
+
   return (
     <div className="relative bg-white rounded-lg border border-slate-200 hover:shadow-md transition-shadow flex flex-col">
       <div className="relative aspect-square">
-        {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholders, no benefit from next/image optimization */}
-        <img src={product.photos[0]} alt={product.name} className="w-full h-full object-cover rounded-t-lg" />
+        <Link href={`/produto/${product.id}`} className="block w-full h-full">
+          {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholders, no benefit from next/image optimization */}
+          <img src={product.photos[0]} alt={product.name} className="w-full h-full object-cover rounded-t-lg" />
+        </Link>
         {packageLabel && (
           <span className="absolute top-2 left-2 bg-white/90 text-[11px] font-medium px-1.5 py-0.5 rounded">
             {packageLabel}
           </span>
         )}
         <button
+          type="button"
+          onClick={handleAdd}
           aria-label={`Adicionar ${product.name} ao carrinho`}
-          className="absolute bottom-2 right-2 bg-brand-600 text-white w-9 h-9 rounded-full text-lg leading-none hover:bg-brand-700"
+          className={`absolute bottom-2 right-2 w-9 h-9 rounded-full text-lg leading-none text-white transition-colors ${justAdded ? "bg-green-600" : "bg-brand-600 hover:bg-brand-700"}`}
         >
-          +
+          {justAdded ? "✓" : "+"}
         </button>
       </div>
 
@@ -44,7 +62,9 @@ export function ProductCard({ product }: { product: Product }) {
           R$ {displayPrice.toFixed(2).replace(".", ",")}
           <span className="text-sm font-normal text-slate-500">/{unitSuffix[product.unitType]}</span>
         </p>
-        <p className="text-sm text-slate-600 line-clamp-2">{product.name}</p>
+        <Link href={`/produto/${product.id}`} className="text-sm text-slate-600 line-clamp-2 hover:text-brand-600">
+          {product.name}
+        </Link>
       </div>
     </div>
   );

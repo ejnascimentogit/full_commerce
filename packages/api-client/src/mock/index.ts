@@ -1,6 +1,8 @@
-import type { ApiClient, Paginated, ProductQuery } from "../types";
-import type { Category, DeliveryRegion, Product, Promotion, Vendor } from "@ecommerce/types";
-import { categories, products, promotions, regions, vendors } from "./data";
+import type { ApiClient, CreateOrderInput, Paginated, ProductQuery } from "../types";
+import type { Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, Vendor } from "@ecommerce/types";
+import { categories, mockCustomer, products, promotions, regions, vendors } from "./data";
+import { advanceOrderStatus, findOrderById, findOrdersByCustomer, nextOrderNumber, saveOrder } from "./orders-store";
+import { buildOrderItem, calculateOrderTotals } from "../domain";
 
 const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -49,6 +51,65 @@ export const mockApiClient: ApiClient = {
   async getFeaturedPromotions(): Promise<Promotion[]> {
     await delay();
     return promotions.filter((p) => p.isFeatured);
+  },
+
+  async getCurrentCustomer(): Promise<Customer> {
+    await delay();
+    return mockCustomer;
+  },
+
+  async createOrder(input: CreateOrderInput): Promise<Order> {
+    await delay(400);
+    const customer = mockCustomer;
+    const address = customer.addresses.find((a) => a.id === input.addressId) ?? customer.addresses[0];
+    if (!address) throw new Error("Cliente não tem endereço cadastrado");
+
+    const items = input.items.map(({ productId, quantity }) => {
+      const product = products.find((p) => p.id === productId);
+      if (!product) throw new Error(`Product not found: ${productId}`);
+      return buildOrderItem(product, quantity);
+    });
+
+    const totals = calculateOrderTotals(items, customer);
+    const now = new Date().toISOString();
+
+    const order: Order = {
+      id: `order-${Date.now()}`,
+      orderNumber: nextOrderNumber(),
+      customerId: customer.id,
+      items,
+      shippingAddress: address,
+      regionId: customer.regionId,
+      paymentMethod: input.paymentMethod,
+      ...totals,
+      status: "PAID",
+      statusHistory: [
+        { status: "PENDING", changedAt: now },
+        { status: "PAID", changedAt: now },
+      ],
+      createdAt: now,
+    };
+
+    return saveOrder(order);
+  },
+
+  async getOrder(id: string): Promise<Order> {
+    await delay();
+    const order = findOrderById(id);
+    if (!order) throw new Error(`Order not found: ${id}`);
+    return order;
+  },
+
+  async getCustomerOrders(customerId: string): Promise<Order[]> {
+    await delay();
+    return findOrdersByCustomer(customerId);
+  },
+
+  async advanceOrderStatus(id: string, status: OrderStatus): Promise<Order> {
+    await delay(300);
+    const order = advanceOrderStatus(id, status);
+    if (!order) throw new Error(`Order not found: ${id}`);
+    return order;
   },
 };
 

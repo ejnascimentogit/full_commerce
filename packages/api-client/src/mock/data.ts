@@ -1,4 +1,4 @@
-import type { Category, DeliveryRegion, Product, Promotion, Vendor } from "@ecommerce/types";
+import type { Category, Customer, DeliveryRegion, Product, Promotion, Vendor } from "@ecommerce/types";
 import { placeholderPhoto } from "./placeholder";
 
 export const regions: DeliveryRegion[] = [
@@ -75,6 +75,35 @@ export const products: Product[] = seed.map((s) => ({
 // Package label ("750g", "CAIXA 10un", "Aprox. 2.5kg") isn't part of the shared Product
 // type (it's presentation, not domain data) — keep it here, keyed by product id.
 export const packageLabels: Record<string, string> = Object.fromEntries(seed.map((s) => [s.id, s.label]));
+
+// Sem tela de login de verdade ainda (isso é trabalho de backend/auth) — este é o
+// cliente "logado" fixo usado em todo o modo mock, já como CNPJ para exercitar a
+// regra de frete grátis definida na skill.
+export const mockCustomer: Customer = {
+  id: "customer-mock-1",
+  name: "Restaurante Sabor & Cia",
+  email: "compras@saborecia.com.br",
+  documentType: "cnpj",
+  document: "45.678.901/0001-04",
+  businessName: "Sabor & Cia Alimentação Ltda",
+  phone: "(81) 99876-5432",
+  regionId: "reg-recife",
+  createdAt: "2026-01-10T00:00:00Z",
+  status: "active",
+  addresses: [
+    {
+      id: "addr-1",
+      street: "Rua das Palmeiras",
+      number: "245",
+      complement: "Fundos",
+      neighborhood: "Boa Viagem",
+      city: "Recife",
+      state: "PE",
+      zipCode: "51020-000",
+      isDefault: true,
+    },
+  ],
+};
 
 export const promotions: Promotion[] = [
   {

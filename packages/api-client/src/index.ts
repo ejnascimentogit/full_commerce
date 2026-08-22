@@ -2,8 +2,9 @@ import { mockApiClient } from "./mock";
 import { createRestApiClient } from "./rest";
 import type { ApiClient } from "./types";
 
-export type { ApiClient, Paginated, ProductQuery } from "./types";
+export type { ApiClient, CreateOrderInput, CreateOrderItemInput, Paginated, ProductQuery } from "./types";
 export { packageLabels } from "./mock";
+export { ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, calculateOrderTotals, calculateShipping, unitPriceOf } from "./domain";
 
 // The single place that decides mock vs. real backend. Everything else in the
 // three apps imports `apiClient` from here and never touches mock/ or rest/ directly.
