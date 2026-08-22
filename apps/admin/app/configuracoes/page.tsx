@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Banner, SiteCopy, StoreSettings } from "@ecommerce/types";
+import type { Banner, FooterSettings, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -23,6 +23,9 @@ export default function ConfiguracoesPage() {
   const [siteCopy, setSiteCopy] = useState<SiteCopy | null>(null);
   const [savingCopy, setSavingCopy] = useState(false);
 
+  const [footer, setFooter] = useState<FooterSettings | null>(null);
+  const [savingFooter, setSavingFooter] = useState(false);
+
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
   }, [user, router]);
@@ -32,6 +35,7 @@ export default function ConfiguracoesPage() {
       setSettings(s);
       setBrandColor(s.brandColor);
       setSiteCopy(s.siteCopy);
+      setFooter(s.footer);
     });
   }
 
@@ -50,6 +54,14 @@ export default function ConfiguracoesPage() {
     setSavingCopy(true);
     await apiClient.updateStoreSettings({ siteCopy });
     setSavingCopy(false);
+    refresh();
+  }
+
+  async function handleSaveFooter() {
+    if (!footer) return;
+    setSavingFooter(true);
+    await apiClient.updateStoreSettings({ footer });
+    setSavingFooter(false);
     refresh();
   }
 
@@ -131,7 +143,7 @@ export default function ConfiguracoesPage() {
     refresh();
   }
 
-  if (user?.role !== "platformAdmin" || !settings || !siteCopy) return null;
+  if (user?.role !== "platformAdmin" || !settings || !siteCopy || !footer) return null;
 
   const sortedBanners = [...settings.banners].sort((a, b) => a.order - b.order);
 
@@ -342,6 +354,76 @@ export default function ConfiguracoesPage() {
             className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
           >
             {savingCopy ? "Salvando..." : "Salvar textos"}
+          </button>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
+        <h2 className="font-semibold text-slate-900 mb-1">Rodapé</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Razão social/CNPJ/endereço, contato de suporte e redes sociais exibidos no rodapé da loja.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Texto legal (razão social, CNPJ, endereço)</label>
+            <textarea
+              value={footer.legalText}
+              onChange={(e) => setFooter({ ...footer, legalText: e.target.value })}
+              rows={2}
+              placeholder="© 2026 · Sua Empresa Ltda · CNPJ 00.000.000/0001-00 · Rua Exemplo, 123 — Recife/PE"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">E-mail de suporte</label>
+              <input
+                type="email"
+                value={footer.supportEmail ?? ""}
+                onChange={(e) => setFooter({ ...footer, supportEmail: e.target.value || undefined })}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Telefone de suporte</label>
+              <input
+                type="text"
+                value={footer.supportPhone ?? ""}
+                onChange={(e) => setFooter({ ...footer, supportPhone: e.target.value || undefined })}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Redes sociais (opcional — só aparece o que for preenchido)</label>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {(["instagram", "facebook", "linkedin", "whatsapp"] as const).map((key) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="w-20 text-sm text-slate-500 capitalize">{key}</span>
+                  <input
+                    type="text"
+                    value={footer.socialLinks[key] ?? ""}
+                    onChange={(e) =>
+                      setFooter({ ...footer, socialLinks: { ...footer.socialLinks, [key]: e.target.value || undefined } })
+                    }
+                    placeholder="https://..."
+                    className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveFooter}
+            disabled={savingFooter}
+            className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
+          >
+            {savingFooter ? "Salvando..." : "Salvar rodapé"}
           </button>
         </div>
       </section>

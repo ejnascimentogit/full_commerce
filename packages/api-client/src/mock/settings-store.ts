@@ -34,6 +34,10 @@ function seedSettings(): StoreSettings {
         active: true,
       },
     ],
+    footer: {
+      legalText: "© 2026 · fullcommerce · Preencha em Configurações a razão social, CNPJ e endereço da sua empresa.",
+      socialLinks: {},
+    },
   };
 }
 

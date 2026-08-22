@@ -210,6 +210,19 @@ export interface SiteCopy {
   featureBullets: SiteFeatureBullet[];
 }
 
+export interface FooterSettings {
+  /** Linha de rodapé com razão social/CNPJ/endereço — texto livre, o admin escreve como quiser. */
+  legalText: string;
+  supportEmail?: string;
+  supportPhone?: string;
+  socialLinks: {
+    instagram?: string;
+    facebook?: string;
+    linkedin?: string;
+    whatsapp?: string;
+  };
+}
+
 export interface StoreSettings {
   /** Cor base da marca (hex, ex: "#1d4ed8") — o front deriva os demais tons (50/100/500/700) a partir dela. */
   brandColor: string;
@@ -220,4 +233,5 @@ export interface StoreSettings {
   promotionsEnabled: boolean;
   /** Textos editáveis da home — dá autonomia pro admin trocar nome/frases sem depender de deploy. */
   siteCopy: SiteCopy;
+  footer: FooterSettings;
 }
