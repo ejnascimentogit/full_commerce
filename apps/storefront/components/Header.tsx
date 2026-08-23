@@ -1,16 +1,30 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Category } from "@ecommerce/types";
 import { CartBadge } from "./CartBadge";
 import { AccountMenu } from "./AccountMenu";
 import { LogoLink } from "./LogoLink";
 
 export function Header({ categories }: { categories: Category[] }) {
+  const router = useRouter();
+
+  function handleSearch(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const q = new FormData(e.currentTarget).get("q");
+    // router.push em vez de submit nativo do form — um <form action> normal
+    // recarrega a página inteira, o que reseta a cor de marca (e qualquer outro
+    // estado só carregado via JS) para o padrão até o ThemeInjector rodar de novo.
+    router.push(q ? `/catalogo?q=${encodeURIComponent(String(q))}` : "/catalogo");
+  }
+
   return (
     <header className="bg-brand-600 text-white">
       <div className="mx-auto max-w-7xl px-4 py-4 flex items-center gap-6">
         <LogoLink />
 
-        <form action="/catalogo" method="get" className="flex-1 max-w-2xl" role="search">
+        <form onSubmit={handleSearch} className="flex-1 max-w-2xl" role="search">
           <input
             type="search"
             name="q"
