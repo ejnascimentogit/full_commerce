@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { apiClient, packageLabels } from "@ecommerce/api-client";
 import type { Category, Product, Vendor } from "@ecommerce/types";
 import { Header } from "@/components/Header";
@@ -14,6 +14,7 @@ const unitSuffix: Record<string, string> = { un: "un", kg: "kg", cx: "cx" };
 // localStorage, só existem no navegador.
 export default function ProdutoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [product, setProduct] = useState<Product | null>(null);
@@ -43,6 +44,16 @@ export default function ProdutoPage({ params }: { params: Promise<{ id: string }
     <>
       <RegionBar />
       <Header categories={categories} />
+
+      <div className="mx-auto max-w-5xl px-4 pt-6">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="text-brand-600 font-medium text-sm hover:underline"
+        >
+          ← Voltar
+        </button>
+      </div>
 
       <div className="mx-auto max-w-5xl px-4 py-8 grid md:grid-cols-2 gap-10">
         <div className="bg-white rounded-lg border border-slate-200 aspect-square">
