@@ -6,18 +6,19 @@ E-commerce B2B por atacado (inspirado no modelo do [Praso](https://praso.com.br)
 
 ## Estado atual (importante)
 
-Os apps publicados (loja e admin) ainda rodam em **modo mock**: os dados vivem em `localStorage` do navegador, simulando uma API através de `packages/api-client`. Isso permite navegar, comprar, e usar o admin de ponta a ponta hoje.
+**Os apps publicados (loja e admin) já rodam com o backend real** — banco de dados de verdade, não mais mock. `NEXT_PUBLIC_API_MODE=rest` está configurado nas duas Workers do Cloudflare.
 
-**Limitação relevante do modo mock:** cada navegador/dispositivo tem seu próprio `localStorage`, isolado dos demais — uma conta criada no celular não existe no computador, e um produto criado no admin não aparece na loja se forem origens diferentes (`apps/storefront` porta 3000 x `apps/admin` porta 3001). Isso deixa de ser um problema assim que o modo `rest` (abaixo) for ativado nos apps publicados.
+- **Autenticação**: Supabase Auth (senha com hash de verdade) para clientes e admins
+- **Banco**: Postgres, schema `ecommerce` do projeto Supabase `admfullcontrolefinanceiro` (separado do schema `public`, que é do financeiro)
+- **Arquivos**: Supabase Storage para fotos de produto e logo
+- **API**: Supabase Edge Function (`supabase/functions/api/index.ts`) implementando o contrato de [`api-contract.md`](.claude/skills/ecommerce/references/api-contract.md) — catálogo, autenticação, pedidos, orçamentos, gestão do admin
+- **URL da API**: `https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1`
 
-**O backend real já existe e já foi testado**, mas ainda não está ligado aos apps publicados:
-- Supabase Auth (senha com hash de verdade, sem texto puro em lugar nenhum) para clientes e admins
-- Banco Postgres no schema `ecommerce` do projeto `admfullcontrolefinanceiro` (separado do financeiro)
-- Supabase Storage para fotos de produto e logo
-- Backend HTTP como Supabase Edge Function (`supabase/functions/api/index.ts`), implementando o contrato de [`api-contract.md`](.claude/skills/ecommerce/references/api-contract.md) — catálogo, pedidos, orçamentos, e toda a gestão do admin
-- URL: `https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1` (endpoints em `/api/...`)
+Testado de ponta a ponta na interface real (cadastro de cliente, login automático, persistência no banco) em 2026-08-23.
 
-Para ativar de verdade, falta só: definir `NEXT_PUBLIC_API_MODE=rest` e `NEXT_PUBLIC_API_BASE_URL=https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1` nas variáveis de build do Cloudflare (loja e admin) e reimplantar — nenhuma tela precisa mudar, pois tudo depende só da interface `ApiClient`. Isso **zera os dados de teste atuais** (contas/pedidos mock não migram para o banco real), por isso ainda não foi ativado sem confirmação.
+**Catálogo vazio por enquanto**: como o banco real começou do zero, não há produtos/categorias/fornecedores cadastrados ainda — os que apareciam antes eram só dados de exemplo do modo mock (que continua existindo em `packages/api-client/src/mock`, usado só em desenvolvimento local se `NEXT_PUBLIC_API_MODE` não estiver definido). Cadastre produtos pelo admin para a loja mostrar algo.
+
+**Modo mock (para desenvolvimento local)**: rodando localmente sem definir `NEXT_PUBLIC_API_MODE=rest`, os apps voltam a usar `localStorage` — útil para testar sem depender de internet/Supabase. Nesse modo, cada navegador/dispositivo tem seu próprio `localStorage` isolado (uma conta criada no celular não aparece no computador).
 
 ## Estrutura do repositório
 
@@ -52,19 +53,16 @@ Observability (Logs + Traces) ativado nos dois Workers para acompanhar erros em 
 
 ## Contas de acesso
 
-**Admin** (`http://localhost:3001`) — crie a sua em **"Criar conta de administrador"** na tela de login, ou use as contas demo:
+**Nos sites publicados** (backend real) — não existem contas prontas: crie a sua em **"Criar conta de administrador"** (admin) ou **"Criar uma conta"** (loja). Os dados ficam salvos de verdade no Supabase, acessíveis de qualquer navegador/dispositivo.
 
-| Papel | E-mail | Senha |
+**Rodando local em modo mock** (sem `NEXT_PUBLIC_API_MODE=rest`) — contas demo disponíveis:
+
+| App | E-mail | Senha |
 |---|---|---|
-| Plataforma (acesso total) | `admin@plataforma.com` | `admin123` |
-| Fornecedor (Seara) | `fornecedor@seara.com` | `vendor123` |
-| Fornecedor (Brilux) | `fornecedor@brilux.com` | `vendor123` |
-
-**Loja** (`http://localhost:3000`) — crie sua conta em "Criar uma conta", ou use a conta demo:
-
-| E-mail | Senha |
-|---|---|
-| `compras@saborecia.com.br` | `demo123` |
+| Admin — Plataforma | `admin@plataforma.com` | `admin123` |
+| Admin — Fornecedor (Seara) | `fornecedor@seara.com` | `vendor123` |
+| Admin — Fornecedor (Brilux) | `fornecedor@brilux.com` | `vendor123` |
+| Loja | `compras@saborecia.com.br` | `demo123` |
 
 ## O que já está pronto
 
@@ -101,7 +99,8 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 - [x] Deploy do painel admin no Cloudflare
 - [x] Criar o schema `ecommerce` no Supabase do projeto `admfullcontrolefinanceiro` (separado do schema `public` do financeiro) — tabelas espelhando `packages/types`, RLS ativado sem políticas (só a Edge Function, via service_role, acessa)
 - [x] Construir o backend real (Supabase Edge Function, testado: cadastro, login, catálogo, pedidos)
-- [ ] Ativar o modo `rest` nos apps publicados (trocar variáveis de ambiente no Cloudflare) — decisão pendente porque zera os dados de teste atuais
+- [x] Ativar o modo `rest` nos apps publicados — loja e admin já falam com o banco real em produção
+- [ ] Cadastrar produtos/categorias/fornecedores reais pelo admin (catálogo do banco real está vazio, começou do zero)
 - [ ] Telas de orçamento ("peça um orçamento sem compromisso") na loja e no admin — backend já pronto (`/api/quotes`, `/api/admin/quotes`), falta só a interface
 - [ ] Carrossel de rolagem para a vitrine "Ofertas da Semana" (hoje é grid)
 - [ ] App mobile (React Native) — o domínio (`packages/types`, `packages/api-client`) já foi desenhado para ser reaproveitado
