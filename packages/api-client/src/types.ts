@@ -111,6 +111,8 @@ export interface ApiClient {
   updateProduct(id: string, patch: UpdateProductInput): Promise<Product>;
   /** Todos os produtos (qualquer status), pro admin gerenciar — diferente de getProducts, que só traz "active" pro catálogo público. Escopo (platformAdmin: todos · vendorAdmin: só o próprio) é resolvido pelo backend a partir do token, não por parâmetro. */
   getAdminProducts(): Promise<Product[]>;
+  /** Produto pra edição no admin — diferente de getProduct, não mistura o preço com Promoções de campanha (o admin precisa ver/editar o valor real gravado). */
+  getAdminProduct(id: string): Promise<Product>;
   /** Mock: resize/encode do lado do cliente. Real: POST /api/products/:id/photos (multipart) — precisa do produto já existir. */
   uploadProductPhoto(productId: string | null, file: File): Promise<string>;
   getAdminOrders(params?: { status?: OrderStatus; vendorId?: string }): Promise<Order[]>;

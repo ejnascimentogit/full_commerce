@@ -291,6 +291,13 @@ export const mockApiClient: ApiClient = {
     return admin?.role === "vendorAdmin" ? all.filter((p) => p.vendorId === admin.vendorId) : all;
   },
 
+  async getAdminProduct(id): Promise<Product> {
+    await delay();
+    const product = findProductById(id);
+    if (!product) throw new Error("NOT_FOUND");
+    return product;
+  },
+
   async updateProduct(id: string, patch: UpdateProductInput): Promise<Product> {
     await delay(300);
     return updateProductStore(id, patch);

@@ -13,7 +13,7 @@ export default function EditarProdutoPage({ params }: { params: Promise<{ id: st
   const [vendors, setVendors] = useState<Vendor[]>([]);
 
   useEffect(() => {
-    apiClient.getProduct(id).then(setProduct);
+    apiClient.getAdminProduct(id).then(setProduct);
     apiClient.getCategories().then(setCategories);
     apiClient.getVendors().then(setVendors);
   }, [id]);

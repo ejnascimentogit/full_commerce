@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Category, Product, UnitType, Vendor } from "@ecommerce/types";
+import type { Category, Product, Promotion, UnitType, Vendor } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, isPromotionActive } from "@ecommerce/api-client";
 
 interface ProductFormProps {
   product?: Product;
@@ -41,6 +41,27 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activePromotion, setActivePromotion] = useState<Promotion | null>(null);
+
+  // Promoções de campanha (tela Promoções) mudam o preço mostrado na loja sem
+  // mexer no cadastro do produto — aqui só avisa se alguma está valendo pra
+  // esse produto agora, pra não confundir com o campo "Preço promocional"
+  // abaixo (que é o valor gravado direto no produto).
+  useEffect(() => {
+    if (!product) return;
+    apiClient.getAdminPromotions().then((promotions) => {
+      const match = promotions.find((promo) => {
+        if (!isPromotionActive(promo) || promo.couponCode) return false;
+        if (promo.type !== "percentage" && promo.type !== "fixed") return false;
+        const { productIds, categoryIds, vendorId: ruleVendorId } = promo.rules;
+        if (categoryIds?.length && !categoryIds.includes(product.categoryId)) return false;
+        if (ruleVendorId && product.vendorId !== ruleVendorId) return false;
+        if (productIds?.length && !productIds.includes(product.id)) return false;
+        return true;
+      });
+      setActivePromotion(match ?? null);
+    });
+  }, [product]);
 
   async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -80,7 +101,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         photos,
         unitType,
         basePrice: Number(basePrice),
-        salePrice: salePrice ? Number(salePrice) : undefined,
+        salePrice: salePrice && Number(salePrice) > 0 ? Number(salePrice) : undefined,
         boxQuantity: unitType === "cx" ? Number(boxQuantity) : undefined,
         isVariableWeight,
         avgWeight: isVariableWeight ? Number(avgWeight) : undefined,
@@ -208,10 +229,23 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         <Field label="Estoque" value={stock} onChange={setStock} type="number" required />
       </div>
 
+      {activePromotion && (
+        <p className="text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-md px-3 py-2 flex items-center gap-1.5">
+          🏷️ Este produto está com uma <strong>Promoção</strong> ativa (
+          {activePromotion.type === "percentage" ? `${activePromotion.value}% off` : `R$ ${activePromotion.value.toFixed(2)} off`}
+          {activePromotion.endsAt && `, até ${new Date(activePromotion.endsAt).toLocaleDateString("pt-BR")}`}) — o preço na loja já sai
+          com esse desconto, independente do que estiver no campo &quot;Preço promocional&quot; abaixo.
+        </p>
+      )}
+
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Preço de tabela (R$)" value={basePrice} onChange={setBasePrice} type="number" required />
         <Field label="Preço promocional (R$)" value={salePrice} onChange={setSalePrice} type="number" />
       </div>
+      <p className="text-xs text-slate-400 -mt-3">
+        Esse campo é o preço promocional gravado direto no cadastro — diferente de uma Promoção de campanha (tela Promoções), que se
+        aplica automaticamente sem mudar esse valor.
+      </p>
 
       <div>
         <label className="flex items-center gap-2 text-sm text-slate-700">

@@ -180,7 +180,7 @@ function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown
     photos: p.photos ?? [],
     unitType: p.unit_type,
     basePrice: Number(p.base_price),
-    salePrice: promoPrice ?? (p.sale_price != null ? Number(p.sale_price) : undefined),
+    salePrice: promoPrice ?? (p.sale_price != null && Number(p.sale_price) > 0 ? Number(p.sale_price) : undefined),
     promotionActive: promoPrice != null,
     boxQuantity: p.box_quantity ?? undefined,
     isVariableWeight: p.is_variable_weight,
@@ -283,7 +283,7 @@ function mapQuote(q: Record<string, unknown>, items: Record<string, unknown>[]) 
 // ---------- Domain (portado de packages/api-client/src/domain.ts) ----------
 
 function unitPriceOf(p: Record<string, unknown>): number {
-  return p.sale_price != null ? Number(p.sale_price) : Number(p.base_price);
+  return p.sale_price != null && Number(p.sale_price) > 0 ? Number(p.sale_price) : Number(p.base_price);
 }
 
 function buildOrderItem(p: Record<string, unknown>, quantity: number, autoPromotions: Record<string, unknown>[] = []) {
@@ -833,7 +833,7 @@ app.post("/products", async (c) => {
       photos: input.photos ?? [],
       unit_type: input.unitType,
       base_price: input.basePrice,
-      sale_price: input.salePrice ?? null,
+      sale_price: input.salePrice && input.salePrice > 0 ? input.salePrice : null,
       box_quantity: input.boxQuantity ?? null,
       is_variable_weight: input.isVariableWeight ?? false,
       avg_weight: input.avgWeight ?? null,
@@ -878,6 +878,7 @@ app.patch("/products/:id", async (c) => {
   };
   for (const [k, v] of Object.entries(patch)) if (map[k]) row[map[k]] = v;
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
+  if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
 
   const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -903,6 +904,19 @@ app.get("/admin/products", async (c) => {
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json((data ?? []).map((p) => mapProduct(p)));
+});
+
+// Sem aplicar bestPromoPrice de propósito: o admin precisa ver/editar o
+// preço promocional de verdade que está gravado no produto, não o preço já
+// misturado com uma Promoção de campanha (isso é só pra exibição pública).
+app.get("/admin/products/:id", async (c) => {
+  const admin = await requireAdmin(c);
+  const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).maybeSingle();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  if (!product) throw new ApiError(404, "NOT_FOUND");
+  if (admin.role === "vendorAdmin" && product.vendor_id !== admin.vendor_id) throw new ApiError(403, "FORBIDDEN");
+  const { data: variants } = await eco().from("product_variants").select("*").eq("product_id", product.id);
+  return c.json(mapProduct(product, variants ?? []));
 });
 
 // ---------- Admin: fornecedores ----------

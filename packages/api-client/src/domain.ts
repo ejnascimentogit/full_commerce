@@ -6,7 +6,7 @@ import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, Product, 
 // one place instead of being reimplemented per platform.
 
 export function unitPriceOf(product: Product): number {
-  return product.salePrice ?? product.basePrice;
+  return product.salePrice && product.salePrice > 0 ? product.salePrice : product.basePrice;
 }
 
 export function buildOrderItem(product: Product, quantity: number): OrderItem {

@@ -154,6 +154,7 @@ function createRestApiClient(baseUrl: string): ApiClient {
     createProduct: (input: CreateProductInput) =>
       request<Product>("/api/products", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     getAdminProducts: () => request<Product[]>("/api/admin/products", { tokenKey: ADMIN_TOKEN_KEY }),
+    getAdminProduct: (id) => request<Product>(`/api/admin/products/${id}`, { tokenKey: ADMIN_TOKEN_KEY }),
     updateProduct: (id: string, patch: UpdateProductInput) =>
       request<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     uploadProductPhoto: async (productId: string | null, file: File) => {
