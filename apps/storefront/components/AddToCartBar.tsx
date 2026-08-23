@@ -9,6 +9,14 @@ export function AddToCartBar({ product }: { product: Product }) {
   const { addItem } = useCart();
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
+  const [justAdded, setJustAdded] = useState(false);
+
+  function handleAdd() {
+    addItem(product.id, quantity);
+    setQuantity(1);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1200);
+  }
 
   return (
     <div className="flex items-center gap-3">
@@ -33,10 +41,10 @@ export function AddToCartBar({ product }: { product: Product }) {
       </div>
       <button
         type="button"
-        onClick={() => addItem(product.id, quantity)}
-        className="flex-1 bg-brand-600 text-white font-semibold rounded-md py-2.5 hover:bg-brand-700"
+        onClick={handleAdd}
+        className={`flex-1 text-white font-semibold rounded-md py-2.5 transition-colors ${justAdded ? "bg-green-600" : "bg-brand-600 hover:bg-brand-700"}`}
       >
-        Adicionar ao carrinho
+        {justAdded ? "✓ Adicionado" : "Adicionar ao carrinho"}
       </button>
       <button
         type="button"
@@ -44,7 +52,7 @@ export function AddToCartBar({ product }: { product: Product }) {
           addItem(product.id, quantity);
           router.push("/carrinho");
         }}
-        className="flex-1 bg-slate-900 text-white font-semibold rounded-md py-2.5 hover:bg-slate-800"
+        className="flex-1 bg-brand-700 text-white font-semibold rounded-md py-2.5 hover:opacity-90"
       >
         Comprar agora
       </button>
