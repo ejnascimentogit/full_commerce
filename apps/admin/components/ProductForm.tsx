@@ -25,6 +25,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [name, setName] = useState(product?.name ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
   const [sku, setSku] = useState(product?.sku ?? "");
+  const [customerReferenceCode, setCustomerReferenceCode] = useState(product?.customerReferenceCode ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? "");
   const [vendorId, setVendorId] = useState(product?.vendorId ?? (user?.role === "vendorAdmin" ? user.vendorId! : vendors[0]?.id ?? ""));
   const [unitType, setUnitType] = useState<UnitType>(product?.unitType ?? "un");
@@ -74,6 +75,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         name,
         description,
         sku,
+        customerReferenceCode: customerReferenceCode || undefined,
         categoryId,
         photos,
         unitType,
@@ -104,8 +106,14 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
     <form onSubmit={handleSubmit} className="space-y-5 max-w-2xl">
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Nome" value={name} onChange={setName} required />
-        <Field label="SKU" value={sku} onChange={setSku} required />
+        <Field label="SKU (código do produto)" value={sku} onChange={setSku} required />
       </div>
+
+      <Field
+        label="Código de referência do cliente (opcional)"
+        value={customerReferenceCode}
+        onChange={setCustomerReferenceCode}
+      />
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>

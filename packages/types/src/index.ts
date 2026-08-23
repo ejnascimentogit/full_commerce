@@ -33,6 +33,10 @@ export interface Customer {
   addresses: Address[];
   /** Resolvido automaticamente pelo bairro do endereço (ver DeliveryRegion.neighborhoods) — nunca escolhido pelo cliente. Ausente = fora de toda zona cadastrada, aguardando roteirização do admin. */
   regionId?: string;
+  /** Código interno da loja para este cliente (gerado automaticamente no cadastro, ex: "CLI-1001"). */
+  code?: string;
+  /** Código que o próprio cliente usa para nos identificar no sistema dele — texto livre, opcional. */
+  referenceCode?: string;
   createdAt: string;
   status: "active" | "inactive";
 }
@@ -55,6 +59,10 @@ export interface Vendor {
   description?: string;
   active: boolean;
   isFeatured: boolean;
+  /** Código interno da loja para este fornecedor — digitado pelo admin, opcional. */
+  code?: string;
+  /** Código que o próprio fornecedor usa para se identificar no sistema dele — texto livre, opcional. */
+  referenceCode?: string;
 }
 
 export interface Category {
@@ -81,6 +89,8 @@ export interface Product {
   name: string;
   description: string;
   sku: string;
+  /** Código que o cliente já usa para esse produto no sistema dele — texto livre, opcional. */
+  customerReferenceCode?: string;
   categoryId: string;
   brand?: string;
   photos: string[];

@@ -60,6 +60,7 @@ export function createCustomer(input: CreateCustomerInput): Customer {
   const customer: StoredCustomer = {
     ...rest,
     id: `customer-${Date.now()}`,
+    code: `CLI-${1001 + customers.length}`,
     addresses: [{ ...address, id: `addr-${Date.now()}`, isDefault: true }],
     createdAt: new Date().toISOString(),
     status: "active",

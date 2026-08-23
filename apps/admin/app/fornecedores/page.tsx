@@ -14,6 +14,8 @@ export default function FornecedoresPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [code, setCode] = useState("");
+  const [referenceCode, setReferenceCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -29,9 +31,18 @@ export default function FornecedoresPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await apiClient.createVendor({ name, cnpj, active: true, isFeatured: false });
+    await apiClient.createVendor({
+      name,
+      cnpj,
+      active: true,
+      isFeatured: false,
+      code: code || undefined,
+      referenceCode: referenceCode || undefined,
+    });
     setName("");
     setCnpj("");
+    setCode("");
+    setReferenceCode("");
     setShowForm(false);
     setSubmitting(false);
     refresh();
@@ -63,14 +74,36 @@ export default function FornecedoresPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-lg p-5 mb-6 flex gap-3 items-end max-w-xl">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
-            <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+        <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
+              <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">CNPJ</label>
+              <input required value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-slate-700 mb-1">CNPJ</label>
-            <input required value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Código do fornecedor (opcional)</label>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Nosso código para esse fornecedor"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Código de referência (opcional)</label>
+              <input
+                value={referenceCode}
+                onChange={(e) => setReferenceCode(e.target.value)}
+                placeholder="Código que ele usa pra nos identificar"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
           </div>
           <button type="submit" disabled={submitting} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
             Salvar
@@ -83,6 +116,7 @@ export default function FornecedoresPage() {
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-2.5">Nome</th>
+              <th className="text-left px-4 py-2.5">Código</th>
               <th className="text-left px-4 py-2.5">CNPJ</th>
               <th className="text-left px-4 py-2.5">Status</th>
               <th className="text-left px-4 py-2.5">Destaque na home</th>
@@ -92,6 +126,7 @@ export default function FornecedoresPage() {
             {vendors.map((v) => (
               <tr key={v.id}>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{v.name}</td>
+                <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{v.code ?? "—"}</td>
                 <td className="px-4 py-2.5 text-slate-500">{v.cnpj}</td>
                 <td className="px-4 py-2.5">
                   <button

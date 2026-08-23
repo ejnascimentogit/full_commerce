@@ -19,6 +19,7 @@ export default function CriarContaPage() {
   const [document, setDocument] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
+  const [referenceCode, setReferenceCode] = useState("");
 
   const [zipCode, setZipCode] = useState("");
   const [street, setStreet] = useState("");
@@ -86,6 +87,7 @@ export default function CriarContaPage() {
         businessName: documentType === "cnpj" ? businessName : undefined,
         phone,
         address: { street, number, complement: complement || undefined, neighborhood, city, state, zipCode },
+        referenceCode: referenceCode || undefined,
       });
       router.push("/conta");
     } catch (err) {
@@ -149,6 +151,7 @@ export default function CriarContaPage() {
 
         <Field label="E-mail" type="email" value={email} onChange={setEmail} required />
         <Field label="Telefone" value={phone} onChange={setPhone} required />
+        <Field label="Código que você usa pra gente (opcional)" value={referenceCode} onChange={setReferenceCode} />
         <PasswordField label="Senha" value={password} onChange={setPassword} required minLength={6} />
 
         <div className="pt-2 border-t border-slate-100">

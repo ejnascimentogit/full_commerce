@@ -122,6 +122,8 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
     phone: c.phone,
     addresses: addresses.map(mapAddress),
     regionId: c.region_id ?? undefined,
+    code: c.code ?? undefined,
+    referenceCode: c.reference_code ?? undefined,
     createdAt: c.created_at,
     status: c.status,
   };
@@ -140,6 +142,8 @@ function mapVendor(v: Record<string, unknown>) {
     description: v.description ?? undefined,
     active: v.active,
     isFeatured: v.is_featured,
+    code: v.code ?? undefined,
+    referenceCode: v.reference_code ?? undefined,
   };
 }
 
@@ -169,6 +173,7 @@ function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown
     name: p.name,
     description: p.description,
     sku: p.sku,
+    customerReferenceCode: p.customer_reference_code ?? undefined,
     categoryId: p.category_id,
     brand: p.brand ?? undefined,
     photos: p.photos ?? [],
@@ -461,7 +466,7 @@ app.get("/promotions/coupon/:code", async (c) => {
 
 app.post("/auth/register", async (c) => {
   const body = await c.req.json();
-  const { name, email, password, documentType, document, businessName, phone, address } = body;
+  const { name, email, password, documentType, document, businessName, phone, address, referenceCode } = body;
   const isValidDoc = documentType === "cpf" ? isValidCPF(document) : isValidCNPJ(document);
   if (!isValidDoc) throw new ApiError(422, "INVALID_DOCUMENT");
 
@@ -470,6 +475,7 @@ app.post("/auth/register", async (c) => {
 
   const { data: regions } = await eco().from("delivery_regions").select("*");
   const region = matchRegionByNeighborhood(regions ?? [], address.neighborhood);
+  const { data: codeRow } = await eco().rpc("next_customer_code");
 
   const { data: customer, error: insertError } = await eco()
     .from("customers")
@@ -482,6 +488,8 @@ app.post("/auth/register", async (c) => {
       business_name: businessName ?? null,
       phone,
       region_id: region?.id ?? null,
+      code: codeRow,
+      reference_code: referenceCode ?? null,
       status: "active",
     })
     .select("*")
@@ -759,6 +767,7 @@ app.post("/products", async (c) => {
       name: input.name,
       description: input.description ?? "",
       sku: input.sku,
+      customer_reference_code: input.customerReferenceCode ?? null,
       brand: input.brand ?? null,
       photos: input.photos ?? [],
       unit_type: input.unitType,
@@ -791,6 +800,7 @@ app.patch("/products/:id", async (c) => {
     name: "name",
     description: "description",
     sku: "sku",
+    customerReferenceCode: "customer_reference_code",
     brand: "brand",
     photos: "photos",
     unitType: "unit_type",
@@ -837,6 +847,8 @@ app.post("/vendors", async (c) => {
       description: input.description ?? null,
       active: input.active ?? true,
       is_featured: input.isFeatured ?? false,
+      code: input.code ?? null,
+      reference_code: input.referenceCode ?? null,
     })
     .select("*")
     .single();
@@ -854,6 +866,8 @@ app.patch("/vendors/:id", async (c) => {
   if ("description" in patch) row.description = patch.description;
   if ("active" in patch) row.active = patch.active;
   if ("isFeatured" in patch) row.is_featured = patch.isFeatured;
+  if ("code" in patch) row.code = patch.code;
+  if ("referenceCode" in patch) row.reference_code = patch.referenceCode;
   const { data, error } = await eco().from("vendors").update(row).eq("id", c.req.param("id")).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapVendor(data));

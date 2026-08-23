@@ -42,6 +42,10 @@ export default function ContaPage() {
               <dd className="text-slate-900 font-medium">{customer.name}</dd>
             </div>
             <div>
+              <dt className="text-slate-500">Seu código</dt>
+              <dd className="text-slate-900 font-medium font-mono">{customer.code ?? "—"}</dd>
+            </div>
+            <div>
               <dt className="text-slate-500">Razão social</dt>
               <dd className="text-slate-900 font-medium">{customer.businessName ?? "—"}</dd>
             </div>

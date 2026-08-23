@@ -62,6 +62,8 @@ export interface RegisterInput {
   phone: string;
   /** Vira o primeiro endereço (padrão) do cliente. regionId é resolvido automaticamente pelo bairro — não é escolhido no cadastro. */
   address: RegisterAddressInput;
+  /** Código que o próprio cliente usa para nos identificar no sistema dele — opcional, digitado por ele no cadastro. */
+  referenceCode?: string;
 }
 
 export type CreateProductInput = Omit<Product, "id">;

@@ -34,7 +34,9 @@ export default function ProdutosPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
+              <th className="text-left px-4 py-2.5">Foto</th>
               <th className="text-left px-4 py-2.5">Produto</th>
+              <th className="text-left px-4 py-2.5">Código</th>
               <th className="text-left px-4 py-2.5">Categoria</th>
               {user?.role === "platformAdmin" && <th className="text-left px-4 py-2.5">Fornecedor</th>}
               <th className="text-right px-4 py-2.5">Preço</th>
@@ -46,7 +48,12 @@ export default function ProdutosPage() {
           <tbody className="divide-y divide-slate-100">
             {products.map((p) => (
               <tr key={p.id}>
+                <td className="px-4 py-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- pode ser data-URI de placeholder ou URL do Storage */}
+                  <img src={p.photos[0]} alt={p.name} className="w-10 h-10 rounded object-cover border border-slate-200" />
+                </td>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{p.name}</td>
+                <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{p.sku}</td>
                 <td className="px-4 py-2.5 text-slate-500">{categories.find((c) => c.id === p.categoryId)?.name ?? "—"}</td>
                 {user?.role === "platformAdmin" && (
                   <td className="px-4 py-2.5 text-slate-500">{vendors.find((v) => v.id === p.vendorId)?.name ?? "—"}</td>
