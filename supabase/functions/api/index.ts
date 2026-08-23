@@ -1030,6 +1030,16 @@ app.get("/admin/orders", async (c) => {
   return c.json(results);
 });
 
+app.get("/admin/orders/:id", async (c) => {
+  const admin = await requireAdmin(c);
+  const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).maybeSingle();
+  if (!order) throw new ApiError(404, "NOT_FOUND");
+  const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  if (admin.role === "vendorAdmin" && !(items ?? []).some((i) => i.vendor_id === admin.vendor_id)) throw new ApiError(403, "FORBIDDEN");
+  const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
+  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? []));
+});
+
 app.patch("/orders/:id/status", async (c) => {
   await requireAdmin(c);
   const { status } = await c.req.json();

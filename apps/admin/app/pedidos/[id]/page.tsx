@@ -13,7 +13,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
   const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
-    apiClient.getOrder(id).then(setOrder);
+    apiClient.getAdminOrder(id).then(setOrder);
   }, [id]);
 
   if (!order) {

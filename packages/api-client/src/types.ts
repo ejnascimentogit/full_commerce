@@ -114,6 +114,8 @@ export interface ApiClient {
   /** Mock: resize/encode do lado do cliente. Real: POST /api/products/:id/photos (multipart) — precisa do produto já existir. */
   uploadProductPhoto(productId: string | null, file: File): Promise<string>;
   getAdminOrders(params?: { status?: OrderStatus; vendorId?: string }): Promise<Order[]>;
+  /** Detalhe de um pedido pelo admin — diferente de getOrder, que é escopado ao cliente logado na loja. */
+  getAdminOrder(id: string): Promise<Order>;
   /** Lista todos os clientes cadastrados — só platformAdmin. */
   getAdminCustomers(): Promise<Customer[]>;
   /** Editar cadastro de cliente (nome, telefone, região, cód. de referência, status) — só platformAdmin. */

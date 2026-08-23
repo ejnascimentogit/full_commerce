@@ -306,6 +306,13 @@ export const mockApiClient: ApiClient = {
     return findAllOrders(params);
   },
 
+  async getAdminOrder(id): Promise<Order> {
+    await delay();
+    const order = findOrderById(id);
+    if (!order) throw new Error("NOT_FOUND");
+    return order;
+  },
+
   async getAdminCustomers(): Promise<Customer[]> {
     await delay();
     return listCustomers();

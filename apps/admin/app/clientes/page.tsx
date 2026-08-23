@@ -151,8 +151,37 @@ function EditCustomerModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="font-semibold text-slate-900 mb-4">Editar cliente</h2>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-md p-3 mb-4 text-sm space-y-2">
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">E-mail</span>
+            <span className="text-slate-900 text-right">{customer.email}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Tipo</span>
+            <span className="text-slate-900">{customer.documentType === "cnpj" ? "Pessoa jurídica" : "Pessoa física"}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">{customer.documentType === "cnpj" ? "CNPJ" : "CPF"}</span>
+            <span className="text-slate-900 font-mono">{customer.document}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 block mb-1">Endereço{customer.addresses.length > 1 ? "s" : ""}</span>
+            {customer.addresses.length === 0 && <p className="text-slate-400 text-xs">Nenhum endereço cadastrado.</p>}
+            <ul className="space-y-1">
+              {customer.addresses.map((a) => (
+                <li key={a.id} className="text-slate-900 text-xs">
+                  {a.street}, {a.number}
+                  {a.complement && ` - ${a.complement}`} — {a.neighborhood}, {a.city}/{a.state} — {a.zipCode}
+                  {a.isDefault && <span className="ml-1 text-brand-600 font-medium">(padrão)</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>

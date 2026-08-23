@@ -168,6 +168,9 @@ function createRestApiClient(baseUrl: string): ApiClient {
       const query = qs.toString();
       return request<Order[]>(`/api/admin/orders${query ? `?${query}` : ""}`, { tokenKey: ADMIN_TOKEN_KEY });
     },
+    getAdminOrder: (id) => {
+      return request<Order>(`/api/admin/orders/${id}`, { tokenKey: ADMIN_TOKEN_KEY });
+    },
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
     updateCustomer: (id, patch) =>
       request<Customer>(`/api/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
