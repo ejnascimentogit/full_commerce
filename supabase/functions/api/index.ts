@@ -166,7 +166,8 @@ function mapVariant(v: Record<string, unknown>) {
   return { id: v.id, sku: v.sku, name: v.name, stock: v.stock, priceOverride: v.price_override ?? undefined };
 }
 
-function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown>[] = []) {
+function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown>[] = [], autoPromotions: Record<string, unknown>[] = []) {
+  const promoPrice = bestPromoPrice(p, autoPromotions);
   return {
     id: p.id,
     vendorId: p.vendor_id,
@@ -179,7 +180,7 @@ function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown
     photos: p.photos ?? [],
     unitType: p.unit_type,
     basePrice: Number(p.base_price),
-    salePrice: p.sale_price != null ? Number(p.sale_price) : undefined,
+    salePrice: promoPrice ?? (p.sale_price != null ? Number(p.sale_price) : undefined),
     boxQuantity: p.box_quantity ?? undefined,
     isVariableWeight: p.is_variable_weight,
     avgWeight: p.avg_weight != null ? Number(p.avg_weight) : undefined,
@@ -284,8 +285,8 @@ function unitPriceOf(p: Record<string, unknown>): number {
   return p.sale_price != null ? Number(p.sale_price) : Number(p.base_price);
 }
 
-function buildOrderItem(p: Record<string, unknown>, quantity: number) {
-  const unitPrice = unitPriceOf(p);
+function buildOrderItem(p: Record<string, unknown>, quantity: number, autoPromotions: Record<string, unknown>[] = []) {
+  const unitPrice = bestPromoPrice(p, autoPromotions) ?? unitPriceOf(p);
   const estimatedSubtotal = p.is_variable_weight ? unitPrice * Number(p.avg_weight ?? 1) * quantity : unitPrice * quantity;
   return {
     product_id: p.id,
@@ -353,6 +354,33 @@ function calculatePromotionDiscount(
   return 0;
 }
 
+// Promoções sem código de cupom são "automáticas": aplicam sozinhas, sem o
+// cliente digitar nada — tanto no preço mostrado no catálogo quanto no total
+// do pedido. Promoções com couponCode continuam exigindo que o cliente
+// digite o código no checkout (ver calculatePromotionDiscount).
+function activeAutoPromotions(promotions: Record<string, unknown>[]): Record<string, unknown>[] {
+  return promotions.filter(
+    (p) => isPromotionActive(p) && !p.coupon_code && (p.type === "percentage" || p.type === "fixed"),
+  );
+}
+
+function bestPromoPrice(product: Record<string, unknown>, autoPromotions: Record<string, unknown>[]): number | null {
+  const base = unitPriceOf(product);
+  let best: number | null = null;
+  for (const promo of autoPromotions) {
+    const categoryIds = (promo.category_ids as string[]) ?? [];
+    const productIds = (promo.product_ids as string[]) ?? [];
+    if (categoryIds.length && !categoryIds.includes(product.category_id as string)) continue;
+    if (promo.vendor_id && product.vendor_id !== promo.vendor_id) continue;
+    if (productIds.length && !productIds.includes(product.id as string)) continue;
+    const discounted = promo.type === "percentage" ? base * (1 - Number(promo.value) / 100) : Math.max(0, base - Number(promo.value));
+    if (best === null || discounted < best) best = discounted;
+  }
+  if (best === null) return null;
+  const rounded = Math.round(best * 100) / 100;
+  return rounded < base ? rounded : null;
+}
+
 function isValidCPF(value: string): boolean {
   const cpf = value.replace(/\D/g, "");
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -414,6 +442,11 @@ app.get("/vendors", async (c) => {
   return c.json((data ?? []).map(mapVendor));
 });
 
+async function getActiveAutoPromotions(): Promise<Record<string, unknown>[]> {
+  const { data } = await eco().from("promotions").select("*");
+  return activeAutoPromotions(data ?? []);
+}
+
 app.get("/products", async (c) => {
   const categoryId = c.req.query("categoryId");
   const vendorId = c.req.query("vendorId");
@@ -425,9 +458,9 @@ app.get("/products", async (c) => {
   if (vendorId) query = query.eq("vendor_id", vendorId);
   if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
   const from = (page - 1) * pageSize;
-  const { data, error, count } = await query.range(from, from + pageSize - 1);
+  const [{ data, error, count }, autoPromotions] = await Promise.all([query.range(from, from + pageSize - 1), getActiveAutoPromotions()]);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json({ items: (data ?? []).map((p) => mapProduct(p)), total: count ?? 0, page, pageSize });
+  return c.json({ items: (data ?? []).map((p) => mapProduct(p, [], autoPromotions)), total: count ?? 0, page, pageSize });
 });
 
 app.get("/products/best-sellers", async (c) => {
@@ -441,17 +474,23 @@ app.get("/products/best-sellers", async (c) => {
   for (const i of items ?? []) totals.set(i.product_id as string, (totals.get(i.product_id as string) ?? 0) + Number(i.quantity));
   const topIds = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
   if (topIds.length === 0) return c.json([]);
-  const { data: products } = await eco().from("products").select("*").in("id", topIds).eq("status", "active");
+  const [{ data: products }, autoPromotions] = await Promise.all([
+    eco().from("products").select("*").in("id", topIds).eq("status", "active"),
+    getActiveAutoPromotions(),
+  ]);
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
-  return c.json(topIds.map((id) => byId.get(id)).filter(Boolean).map((p) => mapProduct(p!)));
+  return c.json(topIds.map((id) => byId.get(id)).filter(Boolean).map((p) => mapProduct(p!, [], autoPromotions)));
 });
 
 app.get("/products/:id", async (c) => {
   const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).maybeSingle();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   if (!product) throw new ApiError(404, "NOT_FOUND");
-  const { data: variants } = await eco().from("product_variants").select("*").eq("product_id", product.id);
-  return c.json(mapProduct(product, variants ?? []));
+  const [{ data: variants }, autoPromotions] = await Promise.all([
+    eco().from("product_variants").select("*").eq("product_id", product.id),
+    getActiveAutoPromotions(),
+  ]);
+  return c.json(mapProduct(product, variants ?? [], autoPromotions));
 });
 
 app.get("/settings", async (c) => {
@@ -579,13 +618,16 @@ app.post("/orders", async (c) => {
   if (!address) throw new ApiError(422, "ADDRESS_NOT_FOUND");
 
   const productIds = input.items.map((i: { productId: string }) => i.productId);
-  const { data: products } = await eco().from("products").select("*").in("id", productIds);
+  const [{ data: products }, autoPromotions] = await Promise.all([
+    eco().from("products").select("*").in("id", productIds),
+    getActiveAutoPromotions(),
+  ]);
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
 
   const items = input.items.map((i: { productId: string; quantity: number }) => {
     const product = productById.get(i.productId);
     if (!product) throw new ApiError(422, "PRODUCT_NOT_FOUND");
-    return buildOrderItem(product, i.quantity);
+    return buildOrderItem(product, i.quantity, autoPromotions);
   });
   const subtotal = items.reduce((sum: number, i: { estimated_subtotal: number }) => sum + i.estimated_subtotal, 0);
 
