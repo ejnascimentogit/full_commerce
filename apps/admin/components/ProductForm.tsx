@@ -243,9 +243,18 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
-      <button type="submit" disabled={submitting} className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 hover:bg-brand-700 disabled:opacity-50">
-        {submitting ? "Salvando..." : "Salvar produto"}
-      </button>
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={submitting} className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 hover:bg-brand-700 disabled:opacity-50">
+          {submitting ? "Salvando..." : "Salvar produto"}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/produtos")}
+          className="text-slate-600 font-medium px-5 py-2.5 rounded-md hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+      </div>
     </form>
   );
 }
