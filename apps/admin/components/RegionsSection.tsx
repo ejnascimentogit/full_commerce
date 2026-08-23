@@ -62,7 +62,7 @@ export function RegionsSection() {
   return (
     <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
       <div className="flex items-center justify-between mb-1">
-        <h2 className="font-semibold text-slate-900">Roteirização</h2>
+        <h2 className="font-semibold text-slate-900">Rota</h2>
         <button
           type="button"
           onClick={() => setShowForm((s) => !s)}
