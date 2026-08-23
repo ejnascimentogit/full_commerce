@@ -3,7 +3,9 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
-import type { Order, OrderStatus } from "@ecommerce/types";
+import type { Category, Order } from "@ecommerce/types";
+import { Header } from "@/components/Header";
+import { RegionBar } from "@/components/RegionBar";
 
 const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
   card: "Cartão de crédito",
@@ -14,38 +16,48 @@ const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
 export default function PedidoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [order, setOrder] = useState<Order | null>(null);
-  const [advancing, setAdvancing] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     apiClient.getOrder(id).then(setOrder);
   }, [id]);
 
+  useEffect(() => {
+    apiClient.getCategories().then(setCategories);
+  }, []);
+
   if (!order) {
-    return <div className="mx-auto max-w-3xl px-4 py-16 text-center text-slate-500">Carregando pedido...</div>;
+    return (
+      <>
+        <RegionBar />
+        <Header categories={categories} />
+        <div className="mx-auto max-w-3xl px-4 py-16 text-center text-slate-500">Carregando pedido...</div>
+      </>
+    );
   }
 
   const currentStepIndex = ORDER_STATUS_FLOW.indexOf(order.status);
   const isTerminalIssue = order.status === "CANCELLED" || order.status === "REFUNDED";
 
-  async function advance() {
-    const next = ORDER_STATUS_FLOW[currentStepIndex + 1];
-    if (!next) return;
-    setAdvancing(true);
-    const updated = await apiClient.advanceOrderStatus(id, next);
-    setOrder(updated);
-    setAdvancing(false);
-  }
-
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <>
+      <RegionBar />
+      <Header categories={categories} />
+
+      <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Pedido {order.orderNumber}</h1>
           <p className="text-sm text-slate-500">Feito em {new Date(order.createdAt).toLocaleDateString("pt-BR")}</p>
         </div>
-        <Link href="/conta/pedidos" className="text-sm text-brand-600 hover:underline">
-          Meus pedidos
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/conta/pedidos" className="text-sm text-brand-600 hover:underline">
+            Meus pedidos
+          </Link>
+          <Link href="/catalogo" className="text-sm text-brand-600 hover:underline">
+            ← Voltar para a loja
+          </Link>
+        </div>
       </div>
 
       {!isTerminalIssue && (
@@ -68,17 +80,6 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
               );
             })}
           </ol>
-
-          {currentStepIndex < ORDER_STATUS_FLOW.length - 1 && (
-            <button
-              type="button"
-              onClick={advance}
-              disabled={advancing}
-              className="mt-5 text-sm text-brand-600 border border-brand-200 rounded-md px-3 py-1.5 hover:bg-brand-50 disabled:opacity-50"
-            >
-              {advancing ? "Avançando..." : `[Demo] Simular: ${ORDER_STATUS_LABEL[ORDER_STATUS_FLOW[currentStepIndex + 1]]}`}
-            </button>
-          )}
         </section>
       )}
 
@@ -142,6 +143,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
           <p className="text-slate-600">{paymentMethodLabel[order.paymentMethod]}</p>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

@@ -74,6 +74,11 @@ export default function ProdutoPage({ params }: { params: Promise<{ id: string }
                 {packageLabel}
               </span>
             )}
+            {product.promotionActive && (
+              <span className="bg-purple-600 text-white text-xs font-semibold px-2 py-1 rounded flex items-center gap-1">
+                🏷️ Promoção
+              </span>
+            )}
             {product.isVariableWeight && (
               <span className="text-xs text-slate-500">Peso aproximado — valor final ajustado no fornecimento</span>
             )}
@@ -81,9 +86,16 @@ export default function ProdutoPage({ params }: { params: Promise<{ id: string }
 
           <div className="mt-4">
             {hasDiscount && (
-              <p className="text-slate-400 line-through text-sm">
-                R$ {product.basePrice.toFixed(2).replace(".", ",")}
-              </p>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-xs font-semibold px-1.5 py-0.5 rounded ${product.promotionActive ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"}`}
+                >
+                  {Math.round((1 - product.salePrice! / product.basePrice) * 100)}% OFF
+                </span>
+                <p className="text-slate-400 line-through text-sm">
+                  R$ {product.basePrice.toFixed(2).replace(".", ",")}
+                </p>
+              </div>
             )}
             <p className="text-3xl font-extrabold text-slate-900">
               R$ {displayPrice.toFixed(2).replace(".", ",")}

@@ -46,6 +46,11 @@ export function ProductCard({ product }: { product: Product }) {
             {packageLabel}
           </span>
         )}
+        {product.promotionActive && (
+          <span className="absolute top-2 right-2 bg-purple-600 text-white text-[11px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
+            🏷️ Promoção
+          </span>
+        )}
         <button
           type="button"
           onClick={handleAdd}
@@ -59,7 +64,9 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="p-3 flex flex-col gap-1 flex-1">
         {hasDiscount && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="bg-green-100 text-green-700 font-semibold px-1.5 py-0.5 rounded">
+            <span
+              className={`font-semibold px-1.5 py-0.5 rounded ${product.promotionActive ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"}`}
+            >
               {discountPct}% OFF
             </span>
             <span className="text-slate-400 line-through">

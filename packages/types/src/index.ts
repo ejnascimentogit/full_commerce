@@ -97,6 +97,8 @@ export interface Product {
   unitType: UnitType;
   basePrice: number;
   salePrice?: number;
+  /** true = salePrice veio de uma Promoção ativa (Promoções no admin); false/ausente = preço promocional digitado direto no cadastro do produto. Só pra diferenciar visualmente no catálogo. */
+  promotionActive?: boolean;
   boxQuantity?: number;
   isVariableWeight: boolean;
   avgWeight?: number;

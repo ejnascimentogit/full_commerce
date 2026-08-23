@@ -181,6 +181,7 @@ function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown
     unitType: p.unit_type,
     basePrice: Number(p.base_price),
     salePrice: promoPrice ?? (p.sale_price != null ? Number(p.sale_price) : undefined),
+    promotionActive: promoPrice != null,
     boxQuantity: p.box_quantity ?? undefined,
     isVariableWeight: p.is_variable_weight,
     avgWeight: p.avg_weight != null ? Number(p.avg_weight) : undefined,
