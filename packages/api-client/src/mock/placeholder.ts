@@ -13,5 +13,10 @@ export function placeholderPhoto(seed: string, label: string): string {
     <rect width="400" height="400" fill="${color}"/>
     <text x="50%" y="50%" font-family="sans-serif" font-size="120" fill="white" fill-opacity="0.9" text-anchor="middle" dominant-baseline="central">${initials}</text>
   </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  // btoa só aceita code points < 256 — nomes com acento (ex: "Água") quebram
+  // isso direto. Codifica em UTF-8 primeiro para o base64 decodificar certo
+  // no navegador (senão o SVG falha em renderizar, silenciosamente).
+  const utf8Bytes = new TextEncoder().encode(svg);
+  const binary = Array.from(utf8Bytes, (b) => String.fromCharCode(b)).join("");
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
 }
