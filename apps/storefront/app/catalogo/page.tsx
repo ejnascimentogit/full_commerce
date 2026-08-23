@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { apiClient } from "@ecommerce/api-client";
 import type { Category, Product, Vendor } from "@ecommerce/types";
 import { Header } from "@/components/Header";
@@ -56,22 +57,22 @@ function CatalogoContent() {
             <h2 className="font-semibold text-sm text-slate-900 mb-2">Departamentos</h2>
             <ul className="space-y-1 text-sm">
               <li>
-                <a
+                <Link
                   href="/catalogo"
-                  className={`block px-2 py-1 rounded ${!activeCategory ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+                  className={`block px-2 py-1 rounded transition-colors ${!activeCategory ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-brand-50 hover:text-brand-700"}`}
                 >
                   Todos
-                </a>
+                </Link>
               </li>
               {categories.map((c) => (
                 <li key={c.id}>
-                  <a
+                  <Link
                     href={`/catalogo?categoria=${c.slug}`}
-                    className={`block px-2 py-1 rounded ${activeCategory?.id === c.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+                    className={`block px-2 py-1 rounded transition-colors ${activeCategory?.id === c.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-brand-50 hover:text-brand-700"}`}
                   >
                     {c.icon ? `${c.icon} ` : ""}
                     {c.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -82,12 +83,12 @@ function CatalogoContent() {
             <ul className="space-y-1 text-sm">
               {vendors.map((v) => (
                 <li key={v.id}>
-                  <a
+                  <Link
                     href={`/catalogo?fornecedor=${v.id}`}
-                    className={`block px-2 py-1 rounded ${fornecedor === v.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-slate-100"}`}
+                    className={`block px-2 py-1 rounded transition-colors ${fornecedor === v.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-brand-50 hover:text-brand-700"}`}
                   >
                     {v.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
