@@ -267,14 +267,24 @@ export default function CheckoutPage() {
       )}
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
-      <button
-        type="button"
-        onClick={handleConfirm}
-        disabled={submitting || !addressId || belowMinimum}
-        className="w-full bg-brand-600 text-white font-semibold rounded-md py-3 hover:bg-brand-700 disabled:opacity-50"
-      >
-        {submitting ? "Confirmando..." : "Confirmar pedido"}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={submitting || !addressId || belowMinimum}
+          className="flex-1 bg-brand-600 text-white font-semibold rounded-md py-3 hover:bg-brand-700 disabled:opacity-50"
+        >
+          {submitting ? "Confirmando..." : "Confirmar pedido"}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/carrinho")}
+          disabled={submitting}
+          className="text-slate-600 font-medium px-5 py-3 rounded-md hover:bg-slate-100 disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }
