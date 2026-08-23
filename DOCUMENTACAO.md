@@ -100,7 +100,7 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 - [x] Criar o schema `ecommerce` no Supabase do projeto `admfullcontrolefinanceiro` (separado do schema `public` do financeiro) — tabelas espelhando `packages/types`, RLS ativado sem políticas (só a Edge Function, via service_role, acessa)
 - [x] Construir o backend real (Supabase Edge Function, testado: cadastro, login, catálogo, pedidos)
 - [x] Ativar o modo `rest` nos apps publicados — loja e admin já falam com o banco real em produção
-- [ ] Cadastrar produtos/categorias/fornecedores reais pelo admin (catálogo do banco real está vazio, começou do zero)
+- [x] Cadastrar produtos/categorias/fornecedores reais pelo admin (catálogo com produtos reais, fornecedores e zonas de entrega cadastrados)
 - [ ] Telas de orçamento ("peça um orçamento sem compromisso") na loja e no admin — backend já pronto (`/api/quotes`, `/api/admin/quotes`), falta só a interface
 - [ ] Carrossel de rolagem para a vitrine "Ofertas da Semana" (hoje é grid)
 - [ ] App mobile (React Native) — o domínio (`packages/types`, `packages/api-client`) já foi desenhado para ser reaproveitado
