@@ -73,12 +73,6 @@ export default function LoginPage() {
             Criar conta de administrador
           </Link>
         </p>
-
-        <div className="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
-          <p className="font-medium text-slate-600">Contas demo:</p>
-          <p>Plataforma: admin@plataforma.com / admin123</p>
-          <p>Fornecedor: fornecedor@seara.com / vendor123</p>
-        </div>
       </div>
     </div>
   );

@@ -17,7 +17,7 @@ function EntrarForm() {
   const { login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("compras@saborecia.com.br");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -37,10 +37,7 @@ function EntrarForm() {
 
   return (
     <div className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">Entrar</h1>
-      <p className="text-sm text-slate-500 mb-6">
-        Conta demo já cadastrada: <strong>compras@saborecia.com.br</strong> / senha <strong>demo123</strong>
-      </p>
+      <h1 className="text-2xl font-bold text-slate-900 mb-6">Entrar</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
