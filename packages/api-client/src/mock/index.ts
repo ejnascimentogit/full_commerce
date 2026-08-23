@@ -78,7 +78,10 @@ export const mockApiClient: ApiClient = {
     const filtered = listProducts().filter((p) => {
       if (params.categoryId && p.categoryId !== params.categoryId) return false;
       if (params.vendorId && p.vendorId !== params.vendorId) return false;
-      if (params.q && !p.name.toLowerCase().includes(params.q.toLowerCase())) return false;
+      if (params.q) {
+        const q = params.q.toLowerCase();
+        if (!p.name.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false;
+      }
       return true;
     });
     const start = (page - 1) * pageSize;

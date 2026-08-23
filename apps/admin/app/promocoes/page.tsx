@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiClient } from "@ecommerce/api-client";
-import type { Category, Promotion, PromotionType } from "@ecommerce/types";
+import type { Category, Product, Promotion, PromotionType, Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -32,21 +32,48 @@ export default function PromocoesPage() {
   const [maxUses, setMaxUses] = useState("");
   const [minOrderValue, setMinOrderValue] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [vendorId, setVendorId] = useState("");
+  const [productQuery, setProductQuery] = useState("");
+  const [productResults, setProductResults] = useState<Product[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   function refresh() {
     if (!user) return;
-    const vendorId = user.role === "vendorAdmin" ? user.vendorId : undefined;
-    apiClient.getAdminPromotions({ vendorId }).then(setPromotions);
+    const filterVendorId = user.role === "vendorAdmin" ? user.vendorId : undefined;
+    apiClient.getAdminPromotions({ vendorId: filterVendorId }).then(setPromotions);
   }
 
   useEffect(refresh, [user]);
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
-  }, []);
+    if (user?.role === "platformAdmin") apiClient.getVendors({ includeInactive: true }).then(setVendors);
+  }, [user]);
+
+  useEffect(() => {
+    if (!productQuery.trim()) {
+      setProductResults([]);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      apiClient.getProducts({ q: productQuery, pageSize: 8 }).then((r) => setProductResults(r.items));
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [productQuery]);
 
   function toggleCategory(id: string) {
     setCategoryIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  }
+
+  function addProduct(product: Product) {
+    setSelectedProducts((prev) => (prev.some((p) => p.id === product.id) ? prev : [...prev, product]));
+    setProductQuery("");
+    setProductResults([]);
+  }
+
+  function removeProduct(id: string) {
+    setSelectedProducts((prev) => prev.filter((p) => p.id !== id));
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -63,7 +90,8 @@ export default function PromocoesPage() {
       rules: {
         minOrderValue: minOrderValue ? Number(minOrderValue) : undefined,
         categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
-        vendorId: user?.role === "vendorAdmin" ? user.vendorId : undefined,
+        productIds: selectedProducts.length > 0 ? selectedProducts.map((p) => p.id) : undefined,
+        vendorId: user?.role === "vendorAdmin" ? user.vendorId : vendorId || undefined,
       },
     });
     setShowForm(false);
@@ -76,6 +104,8 @@ export default function PromocoesPage() {
     setMaxUses("");
     setMinOrderValue("");
     setCategoryIds([]);
+    setVendorId("");
+    setSelectedProducts([]);
     setSubmitting(false);
     refresh();
   }
@@ -191,6 +221,46 @@ export default function PromocoesPage() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Restringir a produtos específicos (opcional)</label>
+            <div className="relative">
+              <input
+                value={productQuery}
+                onChange={(e) => setProductQuery(e.target.value)}
+                placeholder="Buscar por nome ou código do produto (SKU)"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+              {productResults.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-md shadow-sm max-h-48 overflow-y-auto">
+                  {productResults.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => addProduct(p)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between gap-2"
+                    >
+                      <span>{p.name}</span>
+                      <span className="text-xs text-slate-400 font-mono">{p.sku}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedProducts.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {selectedProducts.map((p) => (
+                  <span key={p.id} className="text-xs px-2.5 py-1 rounded-full bg-brand-50 border border-brand-300 text-brand-700 flex items-center gap-1.5">
+                    {p.name}
+                    <button type="button" onClick={() => removeProduct(p.id)} className="text-brand-500 hover:text-brand-800">
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-slate-400 mt-1">Nenhum selecionado = não restringe por produto.</p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Restringir a categorias (opcional)</label>
             <div className="flex flex-wrap gap-2">
               {categories.map((c) => (
@@ -206,6 +276,20 @@ export default function PromocoesPage() {
             </div>
             <p className="text-xs text-slate-400 mt-1">Nenhuma marcada = aplica em todas as categorias.</p>
           </div>
+
+          {user?.role === "platformAdmin" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Restringir a um fornecedor (opcional)</label>
+              <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                <option value="">Todos os fornecedores</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} />

@@ -402,7 +402,7 @@ app.get("/products", async (c) => {
   let query = eco().from("products").select("*", { count: "exact" }).eq("status", "active");
   if (categoryId) query = query.eq("category_id", categoryId);
   if (vendorId) query = query.eq("vendor_id", vendorId);
-  if (q) query = query.ilike("name", `%${q}%`);
+  if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
   const from = (page - 1) * pageSize;
   const { data, error, count } = await query.range(from, from + pageSize - 1);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
