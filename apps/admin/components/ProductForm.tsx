@@ -121,7 +121,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         <label className="block text-sm font-medium text-slate-700 mb-2">Fotos</label>
         <div className="flex flex-wrap gap-3">
           {photos.map((url, index) => (
-            <div key={url + index} className="relative w-24 h-24 rounded-md overflow-hidden border border-slate-200 group">
+            <div key={url + index} className="relative w-24 h-24 rounded-md overflow-hidden border border-slate-200">
               {/* eslint-disable-next-line @next/next/no-img-element -- local/data-URI mock photos */}
               <img src={url} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
               {index === 0 && (
@@ -129,22 +129,22 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
                   Capa
                 </span>
               )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <div className="absolute bottom-1 right-1 flex items-center gap-1">
                 {index !== 0 && (
                   <button
                     type="button"
                     onClick={() => makeCover(index)}
                     title="Tornar capa"
-                    className="text-white text-xs bg-white/20 rounded px-1.5 py-0.5 hover:bg-white/30"
+                    className="text-white text-xs bg-black/60 rounded px-1.5 py-0.5 hover:bg-black/80"
                   >
-                    ★
+                    ★ Capa
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => removePhoto(index)}
                   title="Remover"
-                  className="text-white text-xs bg-white/20 rounded px-1.5 py-0.5 hover:bg-white/30"
+                  className="text-white text-xs bg-black/60 rounded px-1.5 py-0.5 hover:bg-black/80"
                 >
                   ✕
                 </button>
