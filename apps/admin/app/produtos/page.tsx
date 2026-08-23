@@ -1,25 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@ecommerce/api-client";
 import type { Category, Product, Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
+type StatusFilter = "all" | Product["status"];
+type PhotoFilter = "all" | "with" | "without";
+
+function hasRealPhoto(product: Product): boolean {
+  return product.photos.some((url) => !url.startsWith("data:"));
+}
+
 export default function ProdutosPage() {
   const { user } = useAdminAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [photoFilter, setPhotoFilter] = useState<PhotoFilter>("all");
+  const [vendorFilter, setVendorFilter] = useState("");
 
   useEffect(() => {
     if (!user) return;
-    const vendorId = user.role === "vendorAdmin" ? user.vendorId : undefined;
-    apiClient.getProducts({ vendorId, pageSize: 200 }).then((r) => setProducts(r.items));
+    apiClient.getAdminProducts().then(setProducts);
     apiClient.getCategories().then(setCategories);
-    apiClient.getVendors().then(setVendors);
+    apiClient.getVendors({ includeInactive: true }).then(setVendors);
   }, [user]);
+
+  const filtered = useMemo(() => {
+    return products.filter((p) => {
+      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (photoFilter === "with" && !hasRealPhoto(p)) return false;
+      if (photoFilter === "without" && hasRealPhoto(p)) return false;
+      if (vendorFilter && p.vendorId !== vendorFilter) return false;
+      return true;
+    });
+  }, [products, statusFilter, photoFilter, vendorFilter]);
+
+  const STATUS_LABEL: Record<StatusFilter, string> = { all: "Todos", active: "Ativo", inactive: "Inativo", draft: "Rascunho" };
 
   return (
     <AdminShell>
@@ -28,6 +49,73 @@ export default function ProdutosPage() {
         <Link href="/produtos/novo" className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700">
           + Novo produto
         </Link>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4 mb-4">
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-1.5">Status</p>
+          <div className="flex gap-1.5">
+            {(Object.keys(STATUS_LABEL) as StatusFilter[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`text-xs px-2.5 py-1.5 rounded-full border ${statusFilter === s ? "bg-brand-50 border-brand-300 text-brand-700" : "border-slate-200 text-slate-600"}`}
+              >
+                {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-1.5">Foto</p>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPhotoFilter("all")}
+              className={`text-xs px-2.5 py-1.5 rounded-full border ${photoFilter === "all" ? "bg-brand-50 border-brand-300 text-brand-700" : "border-slate-200 text-slate-600"}`}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhotoFilter("with")}
+              className={`text-xs px-2.5 py-1.5 rounded-full border ${photoFilter === "with" ? "bg-brand-50 border-brand-300 text-brand-700" : "border-slate-200 text-slate-600"}`}
+            >
+              Com foto
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhotoFilter("without")}
+              className={`text-xs px-2.5 py-1.5 rounded-full border ${photoFilter === "without" ? "bg-brand-50 border-brand-300 text-brand-700" : "border-slate-200 text-slate-600"}`}
+            >
+              Sem foto
+            </button>
+          </div>
+        </div>
+
+        {user?.role === "platformAdmin" && (
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1.5">Fornecedor</p>
+            <select
+              value={vendorFilter}
+              onChange={(e) => setVendorFilter(e.target.value)}
+              className="border border-slate-300 rounded-md px-2.5 py-1.5 text-xs"
+            >
+              <option value="">Todos</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <p className="text-xs text-slate-400 pb-1.5">
+          {filtered.length} de {products.length} produtos
+        </p>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -46,7 +134,7 @@ export default function ProdutosPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {products.map((p) => (
+            {filtered.map((p) => (
               <tr key={p.id}>
                 <td className="px-4 py-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element -- pode ser data-URI de placeholder ou URL do Storage */}
@@ -74,7 +162,7 @@ export default function ProdutosPage() {
             ))}
           </tbody>
         </table>
-        {products.length === 0 && <p className="text-sm text-slate-500 p-6 text-center">Nenhum produto cadastrado.</p>}
+        {filtered.length === 0 && <p className="text-sm text-slate-500 p-6 text-center">Nenhum produto encontrado com esses filtros.</p>}
       </div>
     </AdminShell>
   );

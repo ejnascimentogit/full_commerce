@@ -833,6 +833,15 @@ app.post("/products/:id/photos", async (c) => {
   return c.json({ url: data.publicUrl });
 });
 
+app.get("/admin/products", async (c) => {
+  const admin = await requireAdmin(c);
+  let query = eco().from("products").select("*").order("name");
+  if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
+  const { data, error } = await query;
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map((p) => mapProduct(p)));
+});
+
 // ---------- Admin: fornecedores ----------
 
 app.post("/vendors", async (c) => {
@@ -905,6 +914,21 @@ app.patch("/regions/:id", async (c) => {
   const { data, error } = await eco().from("delivery_regions").update(row).eq("id", c.req.param("id")).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapRegion(data));
+});
+
+// ---------- Admin: clientes ----------
+
+app.get("/admin/customers", async (c) => {
+  await requireAdmin(c);
+  const { data: customers, error } = await eco().from("customers").select("*").order("created_at", { ascending: false });
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  const results = await Promise.all(
+    (customers ?? []).map(async (cust) => {
+      const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", cust.id);
+      return mapCustomer(cust, addresses ?? []);
+    }),
+  );
+  return c.json(results);
 });
 
 // ---------- Admin: pedidos e orçamentos ----------

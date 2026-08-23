@@ -109,9 +109,13 @@ export interface ApiClient {
   getCurrentAdminUser(): Promise<AdminUser | null>;
   createProduct(input: CreateProductInput): Promise<Product>;
   updateProduct(id: string, patch: UpdateProductInput): Promise<Product>;
+  /** Todos os produtos (qualquer status), pro admin gerenciar — diferente de getProducts, que só traz "active" pro catálogo público. Escopo (platformAdmin: todos · vendorAdmin: só o próprio) é resolvido pelo backend a partir do token, não por parâmetro. */
+  getAdminProducts(): Promise<Product[]>;
   /** Mock: resize/encode do lado do cliente. Real: POST /api/products/:id/photos (multipart) — precisa do produto já existir. */
   uploadProductPhoto(productId: string | null, file: File): Promise<string>;
   getAdminOrders(params?: { status?: OrderStatus; vendorId?: string }): Promise<Order[]>;
+  /** Lista todos os clientes cadastrados — só platformAdmin. */
+  getAdminCustomers(): Promise<Customer[]>;
   createVendor(input: Omit<Vendor, "id">): Promise<Vendor>;
   updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor>;
   /** Roteirização: cria/edita uma zona de entrega e os bairros que ela cobre. */

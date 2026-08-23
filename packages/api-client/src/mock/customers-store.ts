@@ -39,6 +39,10 @@ export function findByEmail(email: string): StoredCustomer | undefined {
   return readAll().find((c) => c.email.toLowerCase() === email.toLowerCase());
 }
 
+export function listAll(): Customer[] {
+  return readAll().map(({ password: _password, ...customer }) => customer);
+}
+
 export function findById(id: string): Customer | undefined {
   const found = readAll().find((c) => c.id === id);
   if (!found) return undefined;

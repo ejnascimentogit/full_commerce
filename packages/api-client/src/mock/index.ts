@@ -38,7 +38,13 @@ import {
   matchRegionByNeighborhood,
 } from "../domain";
 import { isValidDocument } from "../documents";
-import { createCustomer, findById as findCustomerById, resetPassword as resetPasswordStore, verifyPassword } from "./customers-store";
+import {
+  createCustomer,
+  findById as findCustomerById,
+  listAll as listCustomers,
+  resetPassword as resetPasswordStore,
+  verifyPassword,
+} from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
 import {
   clearAdminSession,
@@ -276,6 +282,14 @@ export const mockApiClient: ApiClient = {
     return createProductStore(input);
   },
 
+  async getAdminProducts(): Promise<Product[]> {
+    await delay();
+    const adminId = getAdminSessionUserId();
+    const admin = adminId ? findAdminUserById(adminId) : null;
+    const all = listProducts();
+    return admin?.role === "vendorAdmin" ? all.filter((p) => p.vendorId === admin.vendorId) : all;
+  },
+
   async updateProduct(id: string, patch: UpdateProductInput): Promise<Product> {
     await delay(300);
     return updateProductStore(id, patch);
@@ -289,6 +303,11 @@ export const mockApiClient: ApiClient = {
   async getAdminOrders(params): Promise<Order[]> {
     await delay();
     return findAllOrders(params);
+  },
+
+  async getAdminCustomers(): Promise<Customer[]> {
+    await delay();
+    return listCustomers();
   },
 
   async createVendor(input: Omit<Vendor, "id">): Promise<Vendor> {

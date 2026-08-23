@@ -153,6 +153,7 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getCurrentAdminUser: () => request<AdminUser | null>("/api/admin/auth/me", { tokenKey: ADMIN_TOKEN_KEY }),
     createProduct: (input: CreateProductInput) =>
       request<Product>("/api/products", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    getAdminProducts: () => request<Product[]>("/api/admin/products", { tokenKey: ADMIN_TOKEN_KEY }),
     updateProduct: (id: string, patch: UpdateProductInput) =>
       request<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     uploadProductPhoto: async (productId: string | null, file: File) => {
@@ -167,6 +168,7 @@ function createRestApiClient(baseUrl: string): ApiClient {
       const query = qs.toString();
       return request<Order[]>(`/api/admin/orders${query ? `?${query}` : ""}`, { tokenKey: ADMIN_TOKEN_KEY });
     },
+    getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
     createVendor: (input: Omit<Vendor, "id">) =>
       request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>
