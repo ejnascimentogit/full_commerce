@@ -44,7 +44,12 @@ export default function CarrinhoPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">Meu carrinho</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">Meu carrinho</h1>
+        <Link href="/catalogo" className="text-brand-600 font-medium text-sm hover:underline">
+          ← Voltar para a loja
+        </Link>
+      </div>
 
       {!loading && lines.length === 0 && (
         <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
