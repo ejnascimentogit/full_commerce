@@ -27,7 +27,7 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <div className="relative bg-white rounded-lg border border-slate-200 hover:shadow-md transition-shadow flex flex-col">
-      <div className="relative aspect-square">
+      <div className="relative aspect-square min-h-0 overflow-hidden shrink-0">
         <Link href={`/produto/${product.id}`} className="block w-full h-full">
           {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholders, no benefit from next/image optimization */}
           <img src={product.photos[0]} alt={product.name} className="w-full h-full object-cover rounded-t-lg" />

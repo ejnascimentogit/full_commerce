@@ -56,7 +56,7 @@ export default function ProdutoPage({ params }: { params: Promise<{ id: string }
       </div>
 
       <div className="mx-auto max-w-5xl px-4 py-8 grid md:grid-cols-2 gap-10">
-        <div className="bg-white rounded-lg border border-slate-200 aspect-square">
+        <div className="bg-white rounded-lg border border-slate-200 aspect-square min-h-0 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholder */}
           <img src={product.photos[0]} alt={product.name} className="w-full h-full object-cover rounded-lg" />
         </div>
