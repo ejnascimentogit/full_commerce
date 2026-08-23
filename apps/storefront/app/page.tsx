@@ -8,11 +8,13 @@ import { RegionBar } from "@/components/RegionBar";
 import { ProductCard } from "@/components/ProductCard";
 import { VendorShowcase } from "@/components/VendorShowcase";
 import { BannerCarousel } from "@/components/BannerCarousel";
+import { useAuth } from "@/lib/auth-context";
 
 // Client component: os dados (produtos/vitrines/config) vêm do mock em
 // localStorage, que só existe no navegador — uma page Server Component nunca
 // veria criações/edições feitas no admin. Ver nota em orders-store.ts.
 export default function HomePage() {
+  const { customer } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredVendors, setFeaturedVendors] = useState<Vendor[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -46,14 +48,16 @@ export default function HomePage() {
                 <Feature key={f.title} icon={f.icon} title={f.title} text={f.text} />
               ))}
             </div>
-            <div className="mt-6 flex items-center gap-4">
-              <a href="/conta/criar" className="bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-md hover:bg-brand-700">
-                Criar uma conta
-              </a>
-              <a href="/conta/entrar" className="font-semibold text-brand-600 hover:underline">
-                Entrar
-              </a>
-            </div>
+            {!customer && (
+              <div className="mt-6 flex items-center gap-4">
+                <a href="/conta/criar" className="bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-md hover:bg-brand-700">
+                  Criar uma conta
+                </a>
+                <a href="/conta/entrar" className="font-semibold text-brand-600 hover:underline">
+                  Entrar
+                </a>
+              </div>
+            )}
           </div>
           {settings && <BannerCarousel banners={settings.banners} />}
         </div>
