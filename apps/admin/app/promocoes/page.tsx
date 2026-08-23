@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiClient } from "@ecommerce/api-client";
 import type { Category, Product, Promotion, PromotionType, Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 const TYPE_LABEL: Record<PromotionType, string> = {
@@ -22,6 +23,7 @@ export default function PromocoesPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [type, setType] = useState<PromotionType>("percentage");
   const [value, setValue] = useState("10");
@@ -76,10 +78,46 @@ export default function PromocoesPage() {
     setSelectedProducts((prev) => prev.filter((p) => p.id !== id));
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  function resetForm() {
+    setEditingId(null);
+    setType("percentage");
+    setValue("10");
+    setCouponCode("");
+    setIsFeatured(true);
+    setStartsAt("");
+    setEndsAt("");
+    setMaxUses("");
+    setMinOrderValue("");
+    setCategoryIds([]);
+    setVendorId("");
+    setSelectedProducts([]);
+    setProductQuery("");
+    setProductResults([]);
+  }
+
+  async function startEdit(promotion: Promotion) {
+    setEditingId(promotion.id);
+    setType(promotion.type);
+    setValue(String(promotion.value));
+    setCouponCode(promotion.couponCode ?? "");
+    setIsFeatured(promotion.isFeatured);
+    setStartsAt(toLocalInput(promotion.startsAt));
+    setEndsAt(toLocalInput(promotion.endsAt));
+    setMaxUses(promotion.maxUses ? String(promotion.maxUses) : "");
+    setMinOrderValue(promotion.rules.minOrderValue ? String(promotion.rules.minOrderValue) : "");
+    setCategoryIds(promotion.rules.categoryIds ?? []);
+    setVendorId(promotion.rules.vendorId ?? "");
+    setProductQuery("");
+    setProductResults([]);
+    const productIds = promotion.rules.productIds ?? [];
+    setSelectedProducts(productIds.length > 0 ? await Promise.all(productIds.map((id) => apiClient.getProduct(id))) : []);
+    setShowForm(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await apiClient.createPromotion({
+    const payload = {
       type,
       value: Number(value),
       couponCode: couponCode || undefined,
@@ -93,19 +131,14 @@ export default function PromocoesPage() {
         productIds: selectedProducts.length > 0 ? selectedProducts.map((p) => p.id) : undefined,
         vendorId: user?.role === "vendorAdmin" ? user.vendorId : vendorId || undefined,
       },
-    });
+    };
+    if (editingId) {
+      await apiClient.updatePromotion(editingId, payload);
+    } else {
+      await apiClient.createPromotion(payload);
+    }
     setShowForm(false);
-    setType("percentage");
-    setValue("10");
-    setCouponCode("");
-    setIsFeatured(true);
-    setStartsAt("");
-    setEndsAt("");
-    setMaxUses("");
-    setMinOrderValue("");
-    setCategoryIds([]);
-    setVendorId("");
-    setSelectedProducts([]);
+    resetForm();
     setSubmitting(false);
     refresh();
   }
@@ -128,7 +161,15 @@ export default function PromocoesPage() {
         <h1 className="text-2xl font-bold text-slate-900">Promoções</h1>
         <button
           type="button"
-          onClick={() => setShowForm((s) => !s)}
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              resetForm();
+            } else {
+              resetForm();
+              setShowForm(true);
+            }
+          }}
           className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700"
         >
           {showForm ? "Cancelar" : "+ Nova promoção"}
@@ -136,7 +177,8 @@ export default function PromocoesPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl space-y-4">
+          {editingId && <p className="text-sm font-medium text-brand-700 bg-brand-50 rounded-md px-3 py-2">Editando promoção existente</p>}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
@@ -200,7 +242,10 @@ export default function PromocoesPage() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Valor mínimo do pedido (opcional)</label>
+              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1">
+                Valor mínimo do pedido (opcional)
+                <InfoTooltip text="A promoção só aplica desconto se o subtotal do carrinho for maior ou igual a esse valor. Abaixo disso, não desconta nada (não bloqueia a compra). Vazio = sem mínimo." />
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -210,7 +255,10 @@ export default function PromocoesPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Limite de usos (opcional)</label>
+              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1">
+                Limite de usos (opcional)
+                <InfoTooltip text="Quantas vezes essa promoção pode ser usada no total, somando todos os clientes. Ao atingir o número, ela para de valer sozinha, mesmo dentro do prazo. Vazio = uso ilimitado." />
+              </label>
               <input
                 type="number"
                 value={maxUses}
@@ -297,7 +345,7 @@ export default function PromocoesPage() {
           </label>
 
           <button type="submit" disabled={submitting} className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 hover:bg-brand-700 disabled:opacity-50">
-            {submitting ? "Salvando..." : "Criar promoção"}
+            {submitting ? "Salvando..." : editingId ? "Salvar alterações" : "Criar promoção"}
           </button>
         </form>
       )}
@@ -345,7 +393,10 @@ export default function PromocoesPage() {
                       {active ? "Ativa" : "Encerrada"}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <button type="button" onClick={() => startEdit(p)} className="text-brand-600 hover:underline text-xs mr-3">
+                      Editar
+                    </button>
                     {active && (
                       <button type="button" onClick={() => endNow(p)} className="text-red-600 hover:underline text-xs">
                         Encerrar agora
