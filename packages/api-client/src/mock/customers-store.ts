@@ -76,3 +76,12 @@ export function verifyPassword(email: string, password: string): Customer | unde
   const { password: _password, ...customer } = found;
   return customer;
 }
+
+export function resetPassword(email: string, newPassword: string): boolean {
+  const customers = readAll();
+  const index = customers.findIndex((c) => c.email.toLowerCase() === email.toLowerCase());
+  if (index === -1) return false;
+  customers[index] = { ...customers[index], password: newPassword };
+  writeAll(customers);
+  return true;
+}

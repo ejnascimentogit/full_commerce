@@ -9,6 +9,7 @@ interface AdminAuthContextValue {
   loading: boolean;
   register: (input: { name: string; email: string; password: string }) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -31,6 +32,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       loading,
       register: async (input) => setUser(await apiClient.registerAdmin(input)),
       login: async (email, password) => setUser(await apiClient.adminLogin(email, password)),
+      resetPassword: async (email, newPassword) => apiClient.resetAdminPassword(email, newPassword),
       logout: async () => {
         await apiClient.adminLogout();
         setUser(null);

@@ -13,6 +13,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 |---|---|---|
 | POST | `/api/auth/register` | Cadastro de cliente (`name, email, password, documentType, document, businessName?, phone, address: { street, number, complement?, neighborhood, city, state, zipCode }`) — backend resolve `regionId` casando `address.neighborhood` contra `DeliveryRegion.neighborhoods` |
 | POST | `/api/auth/login` | Login (`email, password`) → retorna `token`, `customer` |
+| POST | `/api/auth/reset-password` | Redefine senha (`email, newPassword`) — no mock não há verificação por e-mail (troca direto se o e-mail existir); backend real deve exigir um token enviado por e-mail antes de aceitar |
 | POST | `/api/auth/refresh` | Renova token |
 | GET | `/api/customers/me` | Dados do cliente autenticado |
 | PATCH | `/api/customers/me` | Atualiza dados cadastrais |
@@ -28,6 +29,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 |---|---|---|
 | POST | `/api/admin/auth/register` | Autocadastro do dono da loja como `platformAdmin` (`name, email, password`) — num backend real, travar depois que já existir um platformAdmin (convite, não autocadastro livre) |
 | POST | `/api/admin/auth/login` | Login do admin (`email, password`) → `token`, `AdminUser` (`role`, e `vendorId` se `vendorAdmin`) |
+| POST | `/api/admin/auth/reset-password` | Redefine senha do admin (`email, newPassword`) — mesma ressalva de `/api/auth/reset-password` |
 | POST | `/api/admin/auth/logout` | Encerra sessão |
 | GET | `/api/admin/auth/me` | Admin autenticado atual, ou `null` |
 

@@ -40,10 +40,7 @@ export function RegionBar() {
       <div className="bg-amber-600 text-white text-sm">
         <div className="mx-auto max-w-7xl px-4 py-2 flex items-center gap-1.5">
           <span aria-hidden>📍</span>
-          <span>
-            Ainda não atendemos {customer.addresses[0]?.neighborhood ?? "sua região"} — sua conta já está pronta,
-            avisamos assim que a entrega for liberada por aí.
-          </span>
+          <span>Ainda não entregamos em {customer.addresses[0]?.neighborhood ?? "sua região"}.</span>
         </div>
       </div>
     );

@@ -56,6 +56,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
     register: (input: RegisterInput) => request<Customer>("/api/auth/register", { method: "POST", body: JSON.stringify(input) }),
     login: (email: string, password: string) =>
       request<Customer>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    resetPassword: (email: string, newPassword: string) =>
+      request<void>("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ email, newPassword }) }),
     logout: () => request<void>("/api/auth/logout", { method: "POST" }),
     getCurrentCustomer: () => request<Customer | null>("/api/customers/me"),
     createOrder: (input: CreateOrderInput) => request<Order>("/api/orders", { method: "POST", body: JSON.stringify(input) }),
@@ -68,6 +70,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<AdminUser>("/api/admin/auth/register", { method: "POST", body: JSON.stringify(input) }),
     adminLogin: (email: string, password: string) =>
       request<AdminUser>("/api/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    resetAdminPassword: (email: string, newPassword: string) =>
+      request<void>("/api/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ email, newPassword }) }),
     adminLogout: () => request<void>("/api/admin/auth/logout", { method: "POST" }),
     getCurrentAdminUser: () => request<AdminUser | null>("/api/admin/auth/me"),
     createProduct: (input: CreateProductInput) => request<Product>("/api/products", { method: "POST", body: JSON.stringify(input) }),

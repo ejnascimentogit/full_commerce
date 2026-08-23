@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { PasswordField } from "@/components/PasswordField";
 
 export default function EntrarPage() {
   return (
@@ -50,16 +51,13 @@ function EntrarForm() {
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Senha</label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
-          />
-        </div>
+        <PasswordField label="Senha" value={password} onChange={setPassword} required />
+
+        <p className="text-right -mt-2">
+          <Link href="/conta/esqueci-senha" className="text-xs text-brand-600 font-medium hover:underline">
+            Esqueci minha senha
+          </Link>
+        </p>
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
 

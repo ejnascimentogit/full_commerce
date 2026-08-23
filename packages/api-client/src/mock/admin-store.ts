@@ -63,6 +63,15 @@ export function verifyAdminPassword(email: string, password: string): AdminUser 
   return user;
 }
 
+export function resetAdminPassword(email: string, newPassword: string): boolean {
+  const users = readAll();
+  const index = users.findIndex((u) => u.email.toLowerCase() === email.toLowerCase());
+  if (index === -1) return false;
+  users[index] = { ...users[index], password: newPassword };
+  writeAll(users);
+  return true;
+}
+
 export function findAdminUserById(id: string): AdminUser | undefined {
   const found = readAll().find((u) => u.id === id);
   if (!found) return undefined;

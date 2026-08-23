@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatCep, formatDocument, isValidDocument, lookupCep, onlyDigits } from "@ecommerce/api-client";
 import type { DocumentType } from "@ecommerce/types";
 import { useAuth } from "@/lib/auth-context";
+import { PasswordField } from "@/components/PasswordField";
 
 export default function CriarContaPage() {
   const { register } = useAuth();
@@ -148,7 +149,7 @@ export default function CriarContaPage() {
 
         <Field label="E-mail" type="email" value={email} onChange={setEmail} required />
         <Field label="Telefone" value={phone} onChange={setPhone} required />
-        <Field label="Senha" type="password" value={password} onChange={setPassword} required />
+        <PasswordField label="Senha" value={password} onChange={setPassword} required minLength={6} />
 
         <div className="pt-2 border-t border-slate-100">
           <p className="text-sm font-semibold text-slate-900 mb-3 pt-2">Endereço de entrega</p>

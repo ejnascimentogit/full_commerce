@@ -38,13 +38,14 @@ import {
   matchRegionByNeighborhood,
 } from "../domain";
 import { isValidDocument } from "../documents";
-import { createCustomer, findById as findCustomerById, verifyPassword } from "./customers-store";
+import { createCustomer, findById as findCustomerById, resetPassword as resetPasswordStore, verifyPassword } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
 import {
   clearAdminSession,
   createAdminUser,
   findAdminUserById,
   getAdminSessionUserId,
+  resetAdminPassword as resetAdminPasswordStore,
   setAdminSessionUserId,
   verifyAdminPassword,
 } from "./admin-store";
@@ -133,6 +134,11 @@ export const mockApiClient: ApiClient = {
     if (!customer) throw new Error("INVALID_CREDENTIALS");
     setSessionCustomerId(customer.id);
     return customer;
+  },
+
+  async resetPassword(email: string, newPassword: string): Promise<void> {
+    await delay(300);
+    if (!resetPasswordStore(email, newPassword)) throw new Error("EMAIL_NOT_FOUND");
   },
 
   async logout(): Promise<void> {
@@ -244,6 +250,11 @@ export const mockApiClient: ApiClient = {
     if (!user) throw new Error("INVALID_CREDENTIALS");
     setAdminSessionUserId(user.id);
     return user;
+  },
+
+  async resetAdminPassword(email: string, newPassword: string): Promise<void> {
+    await delay(300);
+    if (!resetAdminPasswordStore(email, newPassword)) throw new Error("EMAIL_NOT_FOUND");
   },
 
   async adminLogout(): Promise<void> {

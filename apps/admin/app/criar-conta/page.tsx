@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAdminAuth } from "@/lib/admin-auth-context";
+import { PasswordField } from "@/components/PasswordField";
 
 export default function CriarContaAdminPage() {
   const { register } = useAdminAuth();
@@ -56,17 +57,7 @@ export default function CriarContaAdminPage() {
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Senha</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
-            />
-          </div>
+          <PasswordField label="Senha" value={password} onChange={setPassword} required minLength={6} />
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
