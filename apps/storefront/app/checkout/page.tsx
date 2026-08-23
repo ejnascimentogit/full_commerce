@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, unitPriceOf, calculateShipping, calculatePromotionDiscount } from "@ecommerce/api-client";
-import type { Address, Product, Promotion, StoreSettings } from "@ecommerce/types";
+import type { Address, Category, Product, Promotion, StoreSettings } from "@ecommerce/types";
+import { Header } from "@/components/Header";
+import { RegionBar } from "@/components/RegionBar";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
@@ -14,6 +16,7 @@ export default function CheckoutPage() {
   const { customer, loading: authLoading } = useAuth();
   const router = useRouter();
 
+  const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [addressId, setAddressId] = useState<string>("");
@@ -34,6 +37,10 @@ export default function CheckoutPage() {
   }, [authLoading, customer, router]);
 
   useEffect(() => {
+    apiClient.getCategories().then(setCategories);
+  }, []);
+
+  useEffect(() => {
     if (!customer) return;
     setAddressId(customer.addresses.find((a) => a.isDefault)?.id ?? customer.addresses[0]?.id ?? "");
     Promise.all([Promise.all(lines.map((l) => apiClient.getProduct(l.productId))), apiClient.getStoreSettings()]).then(
@@ -46,14 +53,24 @@ export default function CheckoutPage() {
 
   if (lines.length === 0) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <p className="text-slate-600">Seu carrinho está vazio.</p>
-      </div>
+      <>
+        <RegionBar />
+        <Header categories={categories} />
+        <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+          <p className="text-slate-600">Seu carrinho está vazio.</p>
+        </div>
+      </>
     );
   }
 
   if (!customer || !settings) {
-    return <div className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-500">Carregando...</div>;
+    return (
+      <>
+        <RegionBar />
+        <Header categories={categories} />
+        <div className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-500">Carregando...</div>
+      </>
+    );
   }
 
   const resolvedLines = lines
@@ -127,7 +144,11 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <>
+      <RegionBar />
+      <Header categories={categories} />
+
+      <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Finalizar compra</h1>
 
       <section className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
@@ -285,6 +306,7 @@ export default function CheckoutPage() {
           Cancelar
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

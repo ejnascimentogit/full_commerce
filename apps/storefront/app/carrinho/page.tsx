@@ -3,16 +3,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient, calculateShipping, packageLabels, unitPriceOf } from "@ecommerce/api-client";
-import type { Product, StoreSettings } from "@ecommerce/types";
+import type { Category, Product, StoreSettings } from "@ecommerce/types";
+import { Header } from "@/components/Header";
+import { RegionBar } from "@/components/RegionBar";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
 export default function CarrinhoPage() {
   const { lines, setQuantity, removeItem } = useCart();
   const { customer } = useAuth();
+  const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiClient.getCategories().then(setCategories);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,9 +50,18 @@ export default function CarrinhoPage() {
   const belowMinimum = Boolean(minOrderValue && subtotal < minOrderValue);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <>
+      <RegionBar />
+      <Header categories={categories} />
+
+      <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Meu carrinho</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-slate-900">Meu carrinho</h1>
+          <Link href="/carrinhos" className="text-brand-600 font-medium text-sm hover:underline">
+            ← Meus carrinhos
+          </Link>
+        </div>
         <Link href="/catalogo" className="text-brand-600 font-medium text-sm hover:underline">
           ← Voltar para a loja
         </Link>
@@ -157,6 +173,7 @@ export default function CarrinhoPage() {
           </aside>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

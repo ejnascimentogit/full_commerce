@@ -7,7 +7,7 @@ import type { Product } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
 
 export function CartBadge() {
-  const { lines, itemCount } = useCart();
+  const { lines, itemCount, pendingCarts } = useCart();
   const [products, setProducts] = useState<Record<string, Product>>({});
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function CartBadge() {
   }, 0);
 
   return (
-    <Link href="/carrinho" aria-label="Carrinho" className="relative flex items-center gap-2">
+    <Link href="/carrinhos" aria-label="Carrinho" className="relative flex items-center gap-2">
       <span className="text-2xl leading-none">🛒</span>
       {itemCount > 0 && (
         <>
@@ -34,6 +34,12 @@ export function CartBadge() {
           </span>
           <span className="text-sm font-semibold text-white">R$ {total.toFixed(2).replace(".", ",")}</span>
         </>
+      )}
+      {itemCount === 0 && pendingCarts.length > 0 && (
+        <span
+          className="absolute -top-1 -left-1 bg-amber-400 rounded-full w-3 h-3 border-2 border-brand-600"
+          title={`${pendingCarts.length} carrinho(s) pendente(s)`}
+        />
       )}
     </Link>
   );
