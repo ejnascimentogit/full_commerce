@@ -26,7 +26,7 @@ export function ProductCard({ product }: { product: Product }) {
   }
 
   return (
-    <div className="relative bg-white rounded-lg border border-slate-200 hover:border-brand-400 hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col">
+    <div className="relative bg-white rounded-lg border border-slate-200 hover:border-brand-500 hover:shadow-lg hover:shadow-brand-500/25 hover:-translate-y-0.5 transition-all flex flex-col">
       <div className="relative aspect-square min-h-0 overflow-hidden shrink-0 bg-white">
         <Link href={`/produto/${product.id}`} className="block w-full h-full">
           {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholders, no benefit from next/image optimization */}
