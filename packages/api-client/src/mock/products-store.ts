@@ -42,7 +42,7 @@ export function createProduct(input: Omit<Product, "id">): Product {
   return product;
 }
 
-export function updateProduct(id: string, patch: Partial<Omit<Product, "id" | "vendorId">>): Product {
+export function updateProduct(id: string, patch: Partial<Omit<Product, "id">>): Product {
   const products = readAll();
   const index = products.findIndex((p) => p.id === id);
   if (index === -1) throw new Error(`Product not found: ${id}`);

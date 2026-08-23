@@ -305,6 +305,22 @@ function matchRegionByNeighborhood(regions: Record<string, unknown>[], neighborh
   return regions.find((r) => r.active && (r.neighborhoods as string[]).some((n) => n.trim().toLowerCase() === target));
 }
 
+// A região só é resolvida uma vez, no cadastro. Se o admin cria a zona de entrega
+// DEPOIS que o cliente já existia, o cliente ficaria "fora de zona" pra sempre sem
+// isso — então toda vez que carregamos o cliente, tentamos casar de novo com o
+// bairro do endereço padrão e persistimos se achar.
+async function resolveCustomerRegion(customer: Record<string, unknown>) {
+  if (customer.region_id) return customer;
+  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", customer.id);
+  const defaultAddress = (addresses ?? []).find((a) => a.is_default) ?? addresses?.[0];
+  if (!defaultAddress) return customer;
+  const { data: regions } = await eco().from("delivery_regions").select("*");
+  const region = matchRegionByNeighborhood(regions ?? [], defaultAddress.neighborhood as string);
+  if (!region) return customer;
+  const { data: updated } = await eco().from("customers").update({ region_id: region.id }).eq("id", customer.id).select("*").single();
+  return updated ?? customer;
+}
+
 function calculateShipping(documentType: string, settings: Record<string, unknown>): number {
   if (documentType === "cnpj" && settings.free_shipping_for_cnpj) return 0;
   return Number(settings.shipping_cost);
@@ -527,8 +543,9 @@ app.post("/auth/login", async (c) => {
   const { data: user } = await db().auth.getUser(token);
   const { data: customer } = await eco().from("customers").select("*").eq("auth_user_id", user.user!.id).maybeSingle();
   if (!customer) throw new ApiError(401, "INVALID_CREDENTIALS");
-  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", customer.id);
-  return c.json({ token, customer: mapCustomer(customer, addresses ?? []) });
+  const resolved = await resolveCustomerRegion(customer);
+  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", resolved.id);
+  return c.json({ token, customer: mapCustomer(resolved, addresses ?? []) });
 });
 
 app.post("/auth/reset-password", async (c) => {
@@ -547,8 +564,9 @@ app.get("/customers/me", async (c) => {
   if (!user) return c.json(null);
   const { data: customer } = await eco().from("customers").select("*").eq("auth_user_id", user.id).maybeSingle();
   if (!customer) return c.json(null);
-  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", customer.id);
-  return c.json(mapCustomer(customer, addresses ?? []));
+  const resolved = await resolveCustomerRegion(customer);
+  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", resolved.id);
+  return c.json(mapCustomer(resolved, addresses ?? []));
 });
 
 // ---------- Pedidos (cliente) ----------
@@ -796,6 +814,7 @@ app.patch("/products/:id", async (c) => {
 
   const row: Record<string, unknown> = {};
   const map: Record<string, string> = {
+    vendorId: "vendor_id",
     categoryId: "category_id",
     name: "name",
     description: "description",
@@ -815,6 +834,7 @@ app.patch("/products/:id", async (c) => {
     weight: "weight",
   };
   for (const [k, v] of Object.entries(patch)) if (map[k]) row[map[k]] = v;
+  if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
 
   const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -929,6 +949,22 @@ app.get("/admin/customers", async (c) => {
     }),
   );
   return c.json(results);
+});
+
+app.patch("/admin/customers/:id", async (c) => {
+  await requireAdmin(c);
+  const patch = await c.req.json();
+  const row: Record<string, unknown> = {};
+  if ("name" in patch) row.name = patch.name;
+  if ("phone" in patch) row.phone = patch.phone;
+  if ("businessName" in patch) row.business_name = patch.businessName;
+  if ("regionId" in patch) row.region_id = patch.regionId;
+  if ("referenceCode" in patch) row.reference_code = patch.referenceCode;
+  if ("status" in patch) row.status = patch.status;
+  const { data: customer, error } = await eco().from("customers").update(row).eq("id", c.req.param("id")).select("*").single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", customer.id);
+  return c.json(mapCustomer(customer, addresses ?? []));
 });
 
 // ---------- Admin: pedidos e orçamentos ----------

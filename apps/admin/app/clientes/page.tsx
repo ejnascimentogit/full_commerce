@@ -13,13 +13,18 @@ export default function ClientesPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [regions, setRegions] = useState<DeliveryRegion[]>([]);
   const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<Customer | null>(null);
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
   }, [user, router]);
 
-  useEffect(() => {
+  function refresh() {
     apiClient.getAdminCustomers().then(setCustomers);
+  }
+
+  useEffect(() => {
+    refresh();
     apiClient.getRegions({ includeInactive: true }).then(setRegions);
   }, []);
 
@@ -61,6 +66,7 @@ export default function ClientesPage() {
               <th className="text-left px-4 py-2.5">Região</th>
               <th className="text-left px-4 py-2.5">Cód. referência</th>
               <th className="text-left px-4 py-2.5">Status</th>
+              <th className="text-left px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -83,12 +89,133 @@ export default function ClientesPage() {
                     {c.status === "active" ? "Ativo" : "Inativo"}
                   </span>
                 </td>
+                <td className="px-4 py-2.5">
+                  <button type="button" onClick={() => setEditing(c)} className="text-brand-600 hover:underline text-xs font-medium">
+                    Editar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         {filtered.length === 0 && <p className="text-sm text-slate-500 p-6 text-center">Nenhum cliente encontrado.</p>}
       </div>
+
+      {editing && (
+        <EditCustomerModal
+          customer={editing}
+          regions={regions}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            refresh();
+          }}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+function EditCustomerModal({
+  customer,
+  regions,
+  onClose,
+  onSaved,
+}: {
+  customer: Customer;
+  regions: DeliveryRegion[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(customer.name);
+  const [businessName, setBusinessName] = useState(customer.businessName ?? "");
+  const [phone, setPhone] = useState(customer.phone);
+  const [regionId, setRegionId] = useState(customer.regionId ?? "");
+  const [referenceCode, setReferenceCode] = useState(customer.referenceCode ?? "");
+  const [status, setStatus] = useState(customer.status);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await apiClient.updateCustomer(customer.id, {
+      name,
+      businessName: businessName || undefined,
+      phone,
+      regionId: regionId || undefined,
+      referenceCode: referenceCode || undefined,
+      status,
+    });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <h2 className="font-semibold text-slate-900 mb-4">Editar cliente</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+          </div>
+          {customer.documentType === "cnpj" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Razão social</label>
+              <input
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Região de entrega</label>
+            <select value={regionId} onChange={(e) => setRegionId(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+              <option value="">Fora de zona</option>
+              {regions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Normalmente é resolvida sozinha pelo bairro do endereço — só troque aqui se precisar corrigir manualmente.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Código de referência</label>
+            <input
+              value={referenceCode}
+              onChange={(e) => setReferenceCode(e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value as Customer["status"])} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button type="button" onClick={onClose} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-md">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

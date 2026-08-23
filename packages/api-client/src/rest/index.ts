@@ -169,6 +169,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
       return request<Order[]>(`/api/admin/orders${query ? `?${query}` : ""}`, { tokenKey: ADMIN_TOKEN_KEY });
     },
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
+    updateCustomer: (id, patch) =>
+      request<Customer>(`/api/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     createVendor: (input: Omit<Vendor, "id">) =>
       request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>

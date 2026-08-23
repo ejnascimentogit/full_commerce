@@ -13,7 +13,6 @@ const NAV = [
   { href: "/promocoes", label: "Promoções", icon: "🏷️" },
   { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true },
-  { href: "/regioes", label: "Roteirização", icon: "🗺️", platformOnly: true },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
 ];
 

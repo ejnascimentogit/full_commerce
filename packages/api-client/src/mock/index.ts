@@ -43,6 +43,7 @@ import {
   findById as findCustomerById,
   listAll as listCustomers,
   resetPassword as resetPasswordStore,
+  updateCustomer as updateCustomerStore,
   verifyPassword,
 } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
@@ -308,6 +309,11 @@ export const mockApiClient: ApiClient = {
   async getAdminCustomers(): Promise<Customer[]> {
     await delay();
     return listCustomers();
+  },
+
+  async updateCustomer(id, patch): Promise<Customer> {
+    await delay(300);
+    return updateCustomerStore(id, patch);
   },
 
   async createVendor(input: Omit<Vendor, "id">): Promise<Vendor> {

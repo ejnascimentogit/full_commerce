@@ -91,7 +91,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
       };
 
       if (product) {
-        await apiClient.updateProduct(product.id, payload);
+        await apiClient.updateProduct(product.id, { ...payload, vendorId });
       } else {
         await apiClient.createProduct({ ...payload, vendorId });
       }
@@ -179,7 +179,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
             ))}
           </select>
         </div>
-        {user?.role === "platformAdmin" && !product && (
+        {user?.role === "platformAdmin" && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Fornecedor</label>
             <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">

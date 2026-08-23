@@ -75,6 +75,16 @@ export function createCustomer(input: CreateCustomerInput): Customer {
   return publicCustomer;
 }
 
+export function updateCustomer(id: string, patch: Partial<Omit<Customer, "id">>): Customer {
+  const customers = readAll();
+  const index = customers.findIndex((c) => c.id === id);
+  if (index === -1) throw new Error(`Customer not found: ${id}`);
+  customers[index] = { ...customers[index], ...patch };
+  writeAll(customers);
+  const { password: _password, ...customer } = customers[index];
+  return customer;
+}
+
 export function verifyPassword(email: string, password: string): Customer | undefined {
   const found = findByEmail(email);
   if (!found || found.password !== password) return undefined;

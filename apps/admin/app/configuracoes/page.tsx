@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
 import type { Banner, FooterLink, FooterSettings, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
+import { RegionsSection } from "@/components/RegionsSection";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 export default function ConfiguracoesPage() {
@@ -650,6 +651,8 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
       </section>
+
+      <RegionsSection />
     </AdminShell>
   );
 }
