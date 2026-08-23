@@ -53,6 +53,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
       const match = promotions.find((promo) => {
         if (!isPromotionActive(promo) || promo.couponCode) return false;
         if (promo.type !== "percentage" && promo.type !== "fixed") return false;
+        if (promo.value <= 0) return false; // sem valor, não muda preço nenhum — não vale a pena avisar
         const { productIds, categoryIds, vendorId: ruleVendorId } = promo.rules;
         if (categoryIds?.length && !categoryIds.includes(product.categoryId)) return false;
         if (ruleVendorId && product.vendorId !== ruleVendorId) return false;
