@@ -1,17 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import type { Product } from "@ecommerce/types";
 import { useCart } from "@/lib/cart-context";
+import { useAuth } from "@/lib/auth-context";
 
 export function AddToCartBar({ product }: { product: Product }) {
   const { addItem } = useCart();
+  const { customer } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
 
+  function requireLogin(): boolean {
+    if (customer) return true;
+    router.push(`/conta/entrar?redirect=${encodeURIComponent(pathname)}`);
+    return false;
+  }
+
   function handleAdd() {
+    if (!requireLogin()) return;
     addItem(product.id, quantity);
     setQuantity(1);
     setJustAdded(true);
@@ -49,6 +59,7 @@ export function AddToCartBar({ product }: { product: Product }) {
       <button
         type="button"
         onClick={() => {
+          if (!requireLogin()) return;
           addItem(product.id, quantity);
           router.push("/carrinho");
         }}

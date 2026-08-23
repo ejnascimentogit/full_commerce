@@ -1,15 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import type { Product } from "@ecommerce/types";
 import { packageLabels } from "@ecommerce/api-client";
 import { useCart } from "@/lib/cart-context";
+import { useAuth } from "@/lib/auth-context";
 
 const unitSuffix: Record<Product["unitType"], string> = { un: "un", kg: "kg", cx: "cx" };
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
+  const { customer } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [justAdded, setJustAdded] = useState(false);
 
   const hasDiscount = product.salePrice != null && product.salePrice < product.basePrice;
@@ -20,6 +25,10 @@ export function ProductCard({ product }: { product: Product }) {
   const packageLabel = packageLabels[product.id];
 
   function handleAdd() {
+    if (!customer) {
+      router.push(`/conta/entrar?redirect=${encodeURIComponent(pathname)}`);
+      return;
+    }
     addItem(product.id);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1200);

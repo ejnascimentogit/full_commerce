@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useAuth } from "./auth-context";
 
 export interface CartLine {
   productId: string;
@@ -23,8 +24,10 @@ const STORAGE_KEY = "ecommerce.cart";
 // so it survives a refresh. When the real API's POST /api/cart/items exists, this
 // provider is the only place that needs to start calling it instead of setState.
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { customer, loading: authLoading } = useAuth();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const previousCustomerId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -41,6 +44,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated) localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
   }, [lines, hydrated]);
+
+  // O carrinho é do cliente logado — se ele sai (logout), o carrinho esvazia
+  // junto. `undefined` marca "ainda não observamos o estado inicial", pra não
+  // disparar uma limpeza falsa assim que a página carrega.
+  useEffect(() => {
+    if (authLoading) return;
+    const currentId = customer?.id ?? null;
+    if (previousCustomerId.current !== undefined && previousCustomerId.current !== null && currentId === null) {
+      setLines([]);
+    }
+    previousCustomerId.current = currentId;
+  }, [customer, authLoading]);
 
   const value = useMemo<CartContextValue>(
     () => ({
