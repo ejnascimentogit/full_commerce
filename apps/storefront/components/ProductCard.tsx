@@ -27,10 +27,10 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <div className="relative bg-white rounded-lg border border-slate-200 hover:shadow-md transition-shadow flex flex-col">
-      <div className="relative aspect-square min-h-0 overflow-hidden shrink-0">
+      <div className="relative aspect-square min-h-0 overflow-hidden shrink-0 bg-white">
         <Link href={`/produto/${product.id}`} className="block w-full h-full">
           {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholders, no benefit from next/image optimization */}
-          <img src={product.photos[0]} alt={product.name} className="w-full h-full object-cover rounded-t-lg" />
+          <img src={product.photos[0]} alt={product.name} className="w-full h-full object-contain p-2 rounded-t-lg" />
         </Link>
         {packageLabel && (
           <span className="absolute top-2 left-2 bg-white/90 text-[11px] font-medium px-1.5 py-0.5 rounded">

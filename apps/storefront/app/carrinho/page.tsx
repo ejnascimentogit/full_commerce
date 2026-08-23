@@ -66,7 +66,7 @@ export default function CarrinhoPage() {
             {resolvedLines.map(({ line, product }) => (
               <div key={product.id} className="bg-white border border-slate-200 rounded-lg p-3 flex gap-3 items-center">
                 {/* eslint-disable-next-line @next/next/no-img-element -- local data-URI placeholder */}
-                <img src={product.photos[0]} alt={product.name} className="w-20 h-20 object-cover rounded-md shrink-0" />
+                <img src={product.photos[0]} alt={product.name} className="w-20 h-20 object-contain p-1 rounded-md shrink-0 bg-white border border-slate-100" />
                 <div className="flex-1 min-w-0">
                   <Link href={`/produto/${product.id}`} className="font-medium text-slate-900 hover:text-brand-600 line-clamp-2">
                     {product.name}
