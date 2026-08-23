@@ -1,6 +1,8 @@
 # Contrato de API REST — E-commerce
 
-Especificação que `packages/api-client/rest` implementa e que o backend do usuário (construído separadamente) deve seguir para plugar sem retrabalho no storefront, no app mobile e no admin. Formato de payload: JSON, `camelCase`. Autenticação: `Authorization: Bearer <token>` (JWT ou equivalente — o backend decide o mecanismo, o cliente HTTP só precisa de um lugar para guardar/anexar o token).
+Especificação que `packages/api-client/rest` implementa e que o backend deve seguir para plugar sem retrabalho no storefront, no app mobile e no admin. Formato de payload: JSON, `camelCase`. Autenticação: `Authorization: Bearer <token>` — o token vem de `Supabase Auth` (retornado por login/registro como `{ token, customer }` ou `{ token, adminUser }`), guardado em `localStorage` pelo `rest/index.ts` e anexado nas chamadas autenticadas. Não usa cookies (loja, admin e a function ficam em domínios diferentes).
+
+**Status:** o backend real já está implementado e publicado como Supabase Edge Function (`supabase/functions/api/index.ts`, projeto `admfullcontrolefinanceiro`, schema `ecommerce`), cobrindo autenticação, catálogo, pedidos, orçamentos e toda a gestão do admin abaixo. URL base: `https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1` (os caminhos já começam com `/api/...`). Endpoints de **carrinho server-side, pagamento (cartão/PIX) e push token** ainda são só a especificação aspiracional — não implementados; o carrinho hoje é local (`lib/cart-context.tsx`) e o checkout chama `/api/orders` direto.
 
 Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 ```json
@@ -53,8 +55,8 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | POST | `/api/vendors` | *(platformAdmin)* Cadastra fornecedor |
 | PATCH | `/api/vendors/:id` | *(platformAdmin)* Atualiza fornecedor (ativo, destaque) |
 | GET | `/api/regions?includeInactive=` | Lista zonas de entrega (só ativas por padrão; `includeInactive=true` para o admin gerenciar todas) |
-| POST | `/api/admin/regions` | *(platformAdmin)* Cria zona de entrega (roteirização): `name, cutoffTime, estimatedDeliveryHours, neighborhoods[]` |
-| PATCH | `/api/admin/regions/:id` | *(platformAdmin)* Edita zona — inclui adicionar/remover bairros de `neighborhoods[]` |
+| POST | `/api/regions` | *(platformAdmin)* Cria zona de entrega (roteirização): `name, cutoffTime, estimatedDeliveryHours, neighborhoods[]` |
+| PATCH | `/api/regions/:id` | *(platformAdmin)* Edita zona — inclui adicionar/remover bairros de `neighborhoods[]` |
 
 ## Carrinho
 
@@ -78,6 +80,17 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 | PATCH | `/api/orders/:id/status` | *(platformAdmin)* Avança status (`PREPARING`, `OUT_FOR_DELIVERY`, `DELIVERED`, `CANCELLED`) — dispara push se aplicável. Só a plataforma muda status de entrega, pois é quem entrega fisicamente (mesmo com produto vindo de vários fornecedores) |
 | PATCH | `/api/orders/:id/items/:itemId/weight` | *(vendorAdmin, só dono do item)* Registra peso real de item `isVariableWeight`, recalcula `finalSubtotal` |
 | GET | `/api/admin/orders` | *(platformAdmin: todos · vendorAdmin: filtrado por `vendorId` do token)* Lista pedidos, com filtro `?status=&vendorId=` — alimenta o painel de entregas |
+
+## Orçamentos (sem compromisso de compra)
+
+Fluxo paralelo ao pedido: o cliente pede um orçamento (sem pagar na hora), o admin responde com um valor, o cliente decide depois. Ainda sem tela no storefront/admin — endpoints já existem no backend, prontos para quando a UI for construída.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/quotes` | *(cliente)* Cria pedido de orçamento (`items: {productId, quantity}[], note?`) |
+| GET | `/api/quotes` | *(cliente)* Lista os próprios orçamentos |
+| GET | `/api/admin/quotes` | *(platformAdmin)* Lista todos os orçamentos pendentes/respondidos |
+| PATCH | `/api/admin/quotes/:id` | *(platformAdmin)* Responde (`status: "quoted", quotedTotal, responseNote?`) ou recusa (`status: "rejected"`) |
 
 ## Pagamento
 

@@ -6,9 +6,18 @@ E-commerce B2B por atacado (inspirado no modelo do [Praso](https://praso.com.br)
 
 ## Estado atual (importante)
 
-O projeto está em **modo mock**: não há banco de dados nem backend reais ainda — os dados vivem em `localStorage` do navegador, simulando uma API através de `packages/api-client`. Isso permite navegar, comprar, e usar o admin de ponta a ponta hoje, sem esperar o backend. Quando o banco/backend real (Supabase ou outro) estiver pronto, troca-se `NEXT_PUBLIC_API_MODE=mock` por `rest` e a aplicação passa a falar com a API real — nenhum componente de tela precisa mudar, pois tudo depende só da interface `ApiClient`.
+Os apps publicados (loja e admin) ainda rodam em **modo mock**: os dados vivem em `localStorage` do navegador, simulando uma API através de `packages/api-client`. Isso permite navegar, comprar, e usar o admin de ponta a ponta hoje.
 
-**Limitação relevante do modo mock:** `apps/storefront` (porta 3000) e `apps/admin` (porta 3001) rodam em origens diferentes, então o `localStorage` de um **não é visto** pelo outro. Um produto criado no admin não aparece automaticamente na loja enquanto estiverem em portas/domínios diferentes — isso deixa de ser um problema assim que o backend real for compartilhado entre os dois.
+**Limitação relevante do modo mock:** cada navegador/dispositivo tem seu próprio `localStorage`, isolado dos demais — uma conta criada no celular não existe no computador, e um produto criado no admin não aparece na loja se forem origens diferentes (`apps/storefront` porta 3000 x `apps/admin` porta 3001). Isso deixa de ser um problema assim que o modo `rest` (abaixo) for ativado nos apps publicados.
+
+**O backend real já existe e já foi testado**, mas ainda não está ligado aos apps publicados:
+- Supabase Auth (senha com hash de verdade, sem texto puro em lugar nenhum) para clientes e admins
+- Banco Postgres no schema `ecommerce` do projeto `admfullcontrolefinanceiro` (separado do financeiro)
+- Supabase Storage para fotos de produto e logo
+- Backend HTTP como Supabase Edge Function (`supabase/functions/api/index.ts`), implementando o contrato de [`api-contract.md`](.claude/skills/ecommerce/references/api-contract.md) — catálogo, pedidos, orçamentos, e toda a gestão do admin
+- URL: `https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1` (endpoints em `/api/...`)
+
+Para ativar de verdade, falta só: definir `NEXT_PUBLIC_API_MODE=rest` e `NEXT_PUBLIC_API_BASE_URL=https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1` nas variáveis de build do Cloudflare (loja e admin) e reimplantar — nenhuma tela precisa mudar, pois tudo depende só da interface `ApiClient`. Isso **zera os dados de teste atuais** (contas/pedidos mock não migram para o banco real), por isso ainda não foi ativado sem confirmação.
 
 ## Estrutura do repositório
 
@@ -90,9 +99,11 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 
 - [x] Migrar o código para o repositório `full_commerce`
 - [x] Deploy do painel admin no Cloudflare
-- [x] Criar o schema `ecommerce` no Supabase do projeto `admfullcontrolefinanceiro` (separado do schema `public` do financeiro) — 14 tabelas espelhando `packages/types`, RLS ativado sem políticas ainda
+- [x] Criar o schema `ecommerce` no Supabase do projeto `admfullcontrolefinanceiro` (separado do schema `public` do financeiro) — tabelas espelhando `packages/types`, RLS ativado sem políticas (só a Edge Function, via service_role, acessa)
+- [x] Construir o backend real (Supabase Edge Function, testado: cadastro, login, catálogo, pedidos)
+- [ ] Ativar o modo `rest` nos apps publicados (trocar variáveis de ambiente no Cloudflare) — decisão pendente porque zera os dados de teste atuais
+- [ ] Telas de orçamento ("peça um orçamento sem compromisso") na loja e no admin — backend já pronto (`/api/quotes`, `/api/admin/quotes`), falta só a interface
 - [ ] Carrossel de rolagem para a vitrine "Ofertas da Semana" (hoje é grid)
-- [ ] Construir o backend real (rotas de `api-contract.md`) sobre o schema `ecommerce` do Supabase e trocar `NEXT_PUBLIC_API_MODE` para `rest`
 - [ ] App mobile (React Native) — o domínio (`packages/types`, `packages/api-client`) já foi desenhado para ser reaproveitado
 - [ ] Cadastro/login de fornecedor (`vendorAdmin`) pelo próprio admin — hoje só existe via seed
 - [ ] Extrato de pagamento e integração real com gateway (cartão/PIX) — o fluxo de checkout já está pronto para plugar

@@ -11,19 +11,62 @@ import type {
   UpdateProductInput,
 } from "../types";
 
-// Implements the same ApiClient interface as mock/, calling the endpoints
-// documented in the ecommerce skill's references/api-contract.md.
-// Swap in via NEXT_PUBLIC_API_MODE=rest — no UI code needs to change.
+const CUSTOMER_TOKEN_KEY = "ecommerce.rest.customerToken";
+const ADMIN_TOKEN_KEY = "ecommerce.rest.adminToken";
+
+// Implementa a mesma interface ApiClient do mock/, chamando o backend real
+// (Supabase Edge Function) documentado em references/api-contract.md.
+// Autenticação por token: login/registro retornam {token, ...}; guardamos esse
+// token em localStorage e mandamos "Authorization: Bearer <token>" nas chamadas
+// autenticadas — não usamos cookies porque loja/admin/função ficam em domínios
+// diferentes (cross-site cookies exigiriam SameSite=None e trariam mais atrito).
 function createRestApiClient(baseUrl: string): ApiClient {
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  function getToken(key: string): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(key);
+  }
+  function setToken(key: string, token: string): void {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(key, token);
+  }
+  function clearToken(key: string): void {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(key);
+  }
+
+  async function request<T>(path: string, init?: RequestInit & { tokenKey?: string }): Promise<T> {
+    const { tokenKey, ...rest } = init ?? {};
+    const token = tokenKey ? getToken(tokenKey) : null;
     const res = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...rest.headers,
+      },
     });
     if (res.status === 401) return null as T;
-    if (!res.ok) throw new Error(`API error ${res.status} on ${path}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error?.code ?? `API error ${res.status} on ${path}`);
+    }
     if (res.status === 204) return undefined as T;
+    return res.json() as Promise<T>;
+  }
+
+  async function upload<T>(path: string, file: File, tokenKey: string): Promise<T> {
+    const form = new FormData();
+    form.append("file", file);
+    const token = getToken(tokenKey);
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error?.code ?? `API error ${res.status} on ${path}`);
+    }
     return res.json() as Promise<T>;
   }
 
@@ -53,37 +96,68 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getStoreSettings: () => request<StoreSettings>("/api/settings"),
     getPromotionByCoupon: (code: string) => request<Promotion | null>(`/api/promotions/coupon/${encodeURIComponent(code)}`),
 
-    register: (input: RegisterInput) => request<Customer>("/api/auth/register", { method: "POST", body: JSON.stringify(input) }),
-    login: (email: string, password: string) =>
-      request<Customer>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    register: async (input: RegisterInput) => {
+      const { token, customer } = await request<{ token: string; customer: Customer }>("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setToken(CUSTOMER_TOKEN_KEY, token);
+      return customer;
+    },
+    login: async (email: string, password: string) => {
+      const result = await request<{ token: string; customer: Customer } | null>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!result) throw new Error("INVALID_CREDENTIALS");
+      setToken(CUSTOMER_TOKEN_KEY, result.token);
+      return result.customer;
+    },
     resetPassword: (email: string, newPassword: string) =>
       request<void>("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ email, newPassword }) }),
-    logout: () => request<void>("/api/auth/logout", { method: "POST" }),
-    getCurrentCustomer: () => request<Customer | null>("/api/customers/me"),
-    createOrder: (input: CreateOrderInput) => request<Order>("/api/orders", { method: "POST", body: JSON.stringify(input) }),
-    getOrder: (id: string) => request<Order>(`/api/orders/${id}`),
-    getCustomerOrders: () => request<Order[]>("/api/orders"),
+    logout: async () => {
+      await request<void>("/api/auth/logout", { method: "POST", tokenKey: CUSTOMER_TOKEN_KEY });
+      clearToken(CUSTOMER_TOKEN_KEY);
+    },
+    getCurrentCustomer: () => request<Customer | null>("/api/customers/me", { tokenKey: CUSTOMER_TOKEN_KEY }),
+    createOrder: (input: CreateOrderInput) =>
+      request<Order>("/api/orders", { method: "POST", body: JSON.stringify(input), tokenKey: CUSTOMER_TOKEN_KEY }),
+    getOrder: (id: string) => request<Order>(`/api/orders/${id}`, { tokenKey: CUSTOMER_TOKEN_KEY }),
+    getCustomerOrders: () => request<Order[]>("/api/orders", { tokenKey: CUSTOMER_TOKEN_KEY }),
     advanceOrderStatus: (id: string, status: OrderStatus) =>
-      request<Order>(`/api/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+      request<Order>(`/api/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }), tokenKey: ADMIN_TOKEN_KEY }),
 
-    registerAdmin: (input: { name: string; email: string; password: string }) =>
-      request<AdminUser>("/api/admin/auth/register", { method: "POST", body: JSON.stringify(input) }),
-    adminLogin: (email: string, password: string) =>
-      request<AdminUser>("/api/admin/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    registerAdmin: async (input: { name: string; email: string; password: string }) => {
+      const { token, adminUser } = await request<{ token: string; adminUser: AdminUser }>("/api/admin/auth/register", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setToken(ADMIN_TOKEN_KEY, token);
+      return adminUser;
+    },
+    adminLogin: async (email: string, password: string) => {
+      const result = await request<{ token: string; adminUser: AdminUser } | null>("/api/admin/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!result) throw new Error("INVALID_CREDENTIALS");
+      setToken(ADMIN_TOKEN_KEY, result.token);
+      return result.adminUser;
+    },
     resetAdminPassword: (email: string, newPassword: string) =>
       request<void>("/api/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ email, newPassword }) }),
-    adminLogout: () => request<void>("/api/admin/auth/logout", { method: "POST" }),
-    getCurrentAdminUser: () => request<AdminUser | null>("/api/admin/auth/me"),
-    createProduct: (input: CreateProductInput) => request<Product>("/api/products", { method: "POST", body: JSON.stringify(input) }),
+    adminLogout: async () => {
+      await request<void>("/api/admin/auth/logout", { method: "POST", tokenKey: ADMIN_TOKEN_KEY });
+      clearToken(ADMIN_TOKEN_KEY);
+    },
+    getCurrentAdminUser: () => request<AdminUser | null>("/api/admin/auth/me", { tokenKey: ADMIN_TOKEN_KEY }),
+    createProduct: (input: CreateProductInput) =>
+      request<Product>("/api/products", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateProduct: (id: string, patch: UpdateProductInput) =>
-      request<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+      request<Product>(`/api/products/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     uploadProductPhoto: async (productId: string | null, file: File) => {
       if (!productId) throw new Error("Salve o produto antes de enviar fotos.");
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`${baseUrl}/api/products/${productId}/photos`, { method: "POST", body: form, credentials: "include" });
-      if (!res.ok) throw new Error(`API error ${res.status} on /api/products/${productId}/photos`);
-      const data = (await res.json()) as { url: string };
+      const data = await upload<{ url: string }>(`/api/products/${productId}/photos`, file, ADMIN_TOKEN_KEY);
       return data.url;
     },
     getAdminOrders: (params) => {
@@ -91,34 +165,33 @@ function createRestApiClient(baseUrl: string): ApiClient {
       if (params?.status) qs.set("status", params.status);
       if (params?.vendorId) qs.set("vendorId", params.vendorId);
       const query = qs.toString();
-      return request<Order[]>(`/api/admin/orders${query ? `?${query}` : ""}`);
+      return request<Order[]>(`/api/admin/orders${query ? `?${query}` : ""}`, { tokenKey: ADMIN_TOKEN_KEY });
     },
-    createVendor: (input: Omit<Vendor, "id">) => request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input) }),
+    createVendor: (input: Omit<Vendor, "id">) =>
+      request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>
-      request<Vendor>(`/api/vendors/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-    createRegion: (input: Omit<DeliveryRegion, "id">) => request<DeliveryRegion>("/api/regions", { method: "POST", body: JSON.stringify(input) }),
+      request<Vendor>(`/api/vendors/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    createRegion: (input: Omit<DeliveryRegion, "id">) =>
+      request<DeliveryRegion>("/api/regions", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateRegion: (id: string, patch: Partial<Omit<DeliveryRegion, "id">>) =>
-      request<DeliveryRegion>(`/api/regions/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+      request<DeliveryRegion>(`/api/regions/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     updateStoreSettings: (patch: Partial<StoreSettings>) =>
-      request<StoreSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch) }),
+      request<StoreSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     uploadLogo: async (file: File) => {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`${baseUrl}/api/settings/logo`, { method: "POST", body: form, credentials: "include" });
-      if (!res.ok) throw new Error(`API error ${res.status} on /api/settings/logo`);
-      const data = (await res.json()) as { url: string };
+      const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
       return data.url;
     },
     getAdminPromotions: (params) =>
-      request<Promotion[]>(`/api/admin/promotions${params?.vendorId ? `?vendorId=${params.vendorId}` : ""}`),
+      request<Promotion[]>(`/api/admin/promotions${params?.vendorId ? `?vendorId=${params.vendorId}` : ""}`, { tokenKey: ADMIN_TOKEN_KEY }),
     createPromotion: (input: CreatePromotionInput) =>
-      request<Promotion>("/api/admin/promotions", { method: "POST", body: JSON.stringify(input) }),
+      request<Promotion>("/api/admin/promotions", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updatePromotion: (id: string, patch: UpdatePromotionInput) =>
-      request<Promotion>(`/api/admin/promotions/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-    createCategory: (input: Omit<Category, "id">) => request<Category>("/api/categories", { method: "POST", body: JSON.stringify(input) }),
+      request<Promotion>(`/api/admin/promotions/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    createCategory: (input: Omit<Category, "id">) =>
+      request<Category>("/api/categories", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateCategory: (id: string, patch: Partial<Omit<Category, "id">>) =>
-      request<Category>(`/api/categories/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-    deleteCategory: (id: string) => request<void>(`/api/categories/${id}`, { method: "DELETE" }),
+      request<Category>(`/api/categories/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    deleteCategory: (id: string) => request<void>(`/api/categories/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
   };
 }
 
