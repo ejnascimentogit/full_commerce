@@ -263,4 +263,20 @@ export interface StoreSettings {
   freeShippingForCnpj: boolean;
   /** Frete cobrado quando não é grátis (CPF, ou CNPJ com freeShippingForCnpj desligado). */
   shippingCost: number;
+
+  /** Chave Pix da loja (cpf/cnpj/email/telefone/aleatória) — gera o QR estático no checkout. Sem isso, PIX no checkout não mostra QR. */
+  pixKey?: string;
+  /** Nome do recebedor exibido no QR (máx. 25 caracteres pela especificação do Bacen — truncado se maior). */
+  pixReceiverName?: string;
+  /** Cidade do recebedor exibida no QR (máx. 15 caracteres). */
+  pixReceiverCity?: string;
+
+  /** Máximo de parcelas oferecidas no cartão. */
+  maxInstallments: number;
+  /** Parcelas com valor abaixo disso somem da lista de opções (evita "12x de R$ 0,80"). */
+  minInstallmentValue: number;
+  /** Até quantas parcelas saem sem juros — acima disso aplica monthlyInterestRate. */
+  interestFreeInstallments: number;
+  /** Taxa de juros ao mês (%) aplicada acima de interestFreeInstallments, via Tabela Price. */
+  monthlyInterestRate: number;
 }

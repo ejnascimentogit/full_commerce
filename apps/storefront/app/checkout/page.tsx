@@ -12,11 +12,66 @@ import { useAuth } from "@/lib/auth-context";
 
 type PaymentMethod = "card" | "pix";
 
-// Sem gateway real integrado ainda — o texto codificado deixa isso explícito
-// (não é um payload EMV/Bacen válido) pra nunca passar a impressão de ser um
-// PIX de verdade que possa ser escaneado por engano num app de banco.
-function buildPixDemoPayload(orderRef: string, amount: number): string {
-  return `PIX-DEMO|pedido:${orderRef}|valor:${amount.toFixed(2)}|ambiente:fullcommerce-demo`;
+// CRC16-CCITT (poly 0x1021, init 0xFFFF) — checksum exigido no final de todo
+// payload Pix, especificação do Bacen (BR Code / EMV QR).
+function crc16ccitt(payload: string): string {
+  let crc = 0xffff;
+  for (let i = 0; i < payload.length; i++) {
+    crc ^= payload.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x8000) !== 0 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function tlv(id: string, value: string): string {
+  return `${id}${value.length.toString().padStart(2, "0")}${value}`;
+}
+
+const COMBINING_MARKS = new RegExp(`[̀-ͯ]`, "g");
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(COMBINING_MARKS, "");
+}
+
+// Pix estático (chave + valor fixo, sem depender de nenhum gateway/API) — o
+// próprio app do banco de quem escaneia lê os dados direto do QR e paga na
+// chave configurada em Configurações > Pagamento.
+function buildStaticPixPayload(pixKey: string, receiverName: string, receiverCity: string, amount: number): string {
+  const merchantAccountInfo = tlv("26", tlv("00", "BR.GOV.BCB.PIX") + tlv("01", pixKey.trim()));
+  const name = stripAccents(receiverName || "LOJA").toUpperCase().slice(0, 25) || "LOJA";
+  const city = stripAccents(receiverCity || "BRASIL").toUpperCase().slice(0, 15) || "BRASIL";
+  const payloadWithoutCrc =
+    tlv("00", "01") +
+    tlv("01", "11") +
+    merchantAccountInfo +
+    tlv("52", "0000") +
+    tlv("53", "986") +
+    tlv("54", amount.toFixed(2)) +
+    tlv("58", "BR") +
+    tlv("59", name) +
+    tlv("60", city) +
+    tlv("62", tlv("05", "***")) +
+    "6304";
+  return payloadWithoutCrc + crc16ccitt(payloadWithoutCrc);
+}
+
+// Tabela Price (juros compostos padrão do mercado): parcela fixa que
+// amortiza o valor presente em n meses à taxa mensal `rate` (decimal).
+function priceInstallment(total: number, n: number, rate: number): number {
+  if (rate <= 0) return total / n;
+  return (total * rate) / (1 - Math.pow(1 + rate, -n));
+}
+
+function buildInstallmentOptions(total: number, settings: StoreSettings) {
+  const options: { n: number; value: number; hasInterest: boolean }[] = [];
+  for (let n = 1; n <= settings.maxInstallments; n++) {
+    const hasInterest = n > settings.interestFreeInstallments;
+    const value = hasInterest ? priceInstallment(total, n, settings.monthlyInterestRate / 100) : total / n;
+    if (value < settings.minInstallmentValue) break;
+    options.push({ n, value, hasInterest });
+  }
+  return options;
 }
 
 export default function CheckoutPage() {
@@ -86,11 +141,11 @@ export default function CheckoutPage() {
         )
       : 0;
     const amount = Math.max(0, sub - disc) + ship;
-    if (amount <= 0) {
+    if (amount <= 0 || !settings.pixKey) {
       setPixQrDataUrl(null);
       return;
     }
-    const code = buildPixDemoPayload(customer.id.slice(0, 8), amount);
+    const code = buildStaticPixPayload(settings.pixKey, settings.pixReceiverName ?? "", settings.pixReceiverCity ?? "", amount);
     setPixCode(code);
     setPixCopied(false);
     let cancelled = false;
@@ -254,9 +309,9 @@ export default function CheckoutPage() {
               onChange={(e) => setInstallments(Number(e.target.value))}
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
             >
-              {[1, 2, 3, 6, 12].map((n) => (
+              {buildInstallmentOptions(total, settings).map(({ n, value, hasInterest }) => (
                 <option key={n} value={n}>
-                  {n}x de R$ {(total / n).toFixed(2).replace(".", ",")} {n === 1 ? "à vista" : "sem juros"}
+                  {n}x de R$ {value.toFixed(2).replace(".", ",")} {n === 1 ? "à vista" : hasInterest ? "com juros" : "sem juros"}
                 </option>
               ))}
             </select>
@@ -264,7 +319,11 @@ export default function CheckoutPage() {
         )}
         {method === "pix" && (
           <div className="mt-3">
-            {pixQrDataUrl ? (
+            {!settings.pixKey ? (
+              <p className="text-sm text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+                A loja ainda não configurou a chave Pix — fale com o suporte ou escolha outra forma de pagamento.
+              </p>
+            ) : pixQrDataUrl ? (
               <div className="flex flex-col items-center gap-3 border border-slate-200 rounded-md p-4">
                 {/* eslint-disable-next-line @next/next/no-img-element -- data URL gerado em memória, não é um asset otimizável */}
                 <img src={pixQrDataUrl} alt="QR Code do PIX" className="w-44 h-44" />
@@ -283,7 +342,7 @@ export default function CheckoutPage() {
                   {pixCopied ? "Código copiado!" : "Copiar código PIX"}
                 </button>
                 <p className="text-xs text-slate-400 text-center">
-                  Ambiente de demonstração — QR Code simulado, sem integração real com banco ainda.
+                  Escaneie no app do seu banco ou copie o código — o pagamento cai direto na chave Pix da loja.
                 </p>
               </div>
             ) : (

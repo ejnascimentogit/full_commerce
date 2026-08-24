@@ -37,6 +37,15 @@ export default function ConfiguracoesPage() {
   const [shippingCost, setShippingCost] = useState("19.90");
   const [savingOrderRules, setSavingOrderRules] = useState(false);
 
+  const [pixKey, setPixKey] = useState("");
+  const [pixReceiverName, setPixReceiverName] = useState("");
+  const [pixReceiverCity, setPixReceiverCity] = useState("");
+  const [maxInstallments, setMaxInstallments] = useState("12");
+  const [minInstallmentValue, setMinInstallmentValue] = useState("5");
+  const [interestFreeInstallments, setInterestFreeInstallments] = useState("12");
+  const [monthlyInterestRate, setMonthlyInterestRate] = useState("0");
+  const [savingPayment, setSavingPayment] = useState(false);
+
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
   }, [user, router]);
@@ -50,6 +59,13 @@ export default function ConfiguracoesPage() {
       setMinOrderValue(s.minOrderValue?.toString() ?? "");
       setFreeShippingForCnpj(s.freeShippingForCnpj);
       setShippingCost(s.shippingCost.toString());
+      setPixKey(s.pixKey ?? "");
+      setPixReceiverName(s.pixReceiverName ?? "");
+      setPixReceiverCity(s.pixReceiverCity ?? "");
+      setMaxInstallments(s.maxInstallments.toString());
+      setMinInstallmentValue(s.minInstallmentValue.toString());
+      setInterestFreeInstallments(s.interestFreeInstallments.toString());
+      setMonthlyInterestRate(s.monthlyInterestRate.toString());
     });
   }
 
@@ -125,6 +141,21 @@ export default function ConfiguracoesPage() {
       shippingCost: Number(shippingCost),
     });
     setSavingOrderRules(false);
+    refresh();
+  }
+
+  async function handleSavePayment() {
+    setSavingPayment(true);
+    await apiClient.updateStoreSettings({
+      pixKey: pixKey.trim() || undefined,
+      pixReceiverName: pixReceiverName.trim() || undefined,
+      pixReceiverCity: pixReceiverCity.trim() || undefined,
+      maxInstallments: Number(maxInstallments),
+      minInstallmentValue: Number(minInstallmentValue),
+      interestFreeInstallments: Number(interestFreeInstallments),
+      monthlyInterestRate: Number(monthlyInterestRate),
+    });
+    setSavingPayment(false);
     refresh();
   }
 
@@ -648,6 +679,106 @@ export default function ConfiguracoesPage() {
             className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
           >
             {savingOrderRules ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-xl">
+        <h2 className="font-semibold text-slate-900 mb-1">Pagamento</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Configure a chave Pix da loja pra gerar o QR Code no checkout, e as regras de parcelamento no cartão.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Chave Pix</label>
+            <input
+              type="text"
+              value={pixKey}
+              onChange={(e) => setPixKey(e.target.value)}
+              placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Sem chave configurada, o checkout não consegue gerar o QR Code do Pix.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nome do recebedor</label>
+              <input
+                type="text"
+                value={pixReceiverName}
+                onChange={(e) => setPixReceiverName(e.target.value)}
+                maxLength={25}
+                placeholder="Nome que aparece no QR (máx. 25 caracteres)"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Cidade do recebedor</label>
+              <input
+                type="text"
+                value={pixReceiverCity}
+                onChange={(e) => setPixReceiverCity(e.target.value)}
+                maxLength={15}
+                placeholder="Cidade (máx. 15 caracteres)"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4 grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Máximo de parcelas</label>
+              <input
+                type="number"
+                min={1}
+                value={maxInstallments}
+                onChange={(e) => setMaxInstallments(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Valor mínimo da parcela (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={minInstallmentValue}
+                onChange={(e) => setMinInstallmentValue(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Parcelas sem juros até</label>
+              <input
+                type="number"
+                min={1}
+                value={interestFreeInstallments}
+                onChange={(e) => setInterestFreeInstallments(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-slate-400 mt-1">Acima dessa quantidade, aplica a taxa de juros abaixo.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Juros ao mês acima disso (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={monthlyInterestRate}
+                onChange={(e) => setMonthlyInterestRate(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSavePayment}
+            disabled={savingPayment}
+            className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700 disabled:opacity-50"
+          >
+            {savingPayment ? "Salvando..." : "Salvar pagamento"}
           </button>
         </div>
       </section>

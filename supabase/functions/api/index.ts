@@ -248,6 +248,13 @@ function mapSettings(s: Record<string, unknown>) {
     minOrderValue: s.min_order_value != null ? Number(s.min_order_value) : undefined,
     freeShippingForCnpj: s.free_shipping_for_cnpj,
     shippingCost: Number(s.shipping_cost),
+    pixKey: s.pix_key ?? undefined,
+    pixReceiverName: s.pix_receiver_name ?? undefined,
+    pixReceiverCity: s.pix_receiver_city ?? undefined,
+    maxInstallments: s.max_installments,
+    minInstallmentValue: Number(s.min_installment_value),
+    interestFreeInstallments: s.interest_free_installments,
+    monthlyInterestRate: Number(s.monthly_interest_rate),
   };
 }
 
@@ -1190,6 +1197,13 @@ app.patch("/settings", async (c) => {
   if ("minOrderValue" in patch) row.min_order_value = patch.minOrderValue;
   if ("freeShippingForCnpj" in patch) row.free_shipping_for_cnpj = patch.freeShippingForCnpj;
   if ("shippingCost" in patch) row.shipping_cost = patch.shippingCost;
+  if ("pixKey" in patch) row.pix_key = patch.pixKey;
+  if ("pixReceiverName" in patch) row.pix_receiver_name = patch.pixReceiverName;
+  if ("pixReceiverCity" in patch) row.pix_receiver_city = patch.pixReceiverCity;
+  if ("maxInstallments" in patch) row.max_installments = patch.maxInstallments;
+  if ("minInstallmentValue" in patch) row.min_installment_value = patch.minInstallmentValue;
+  if ("interestFreeInstallments" in patch) row.interest_free_installments = patch.interestFreeInstallments;
+  if ("monthlyInterestRate" in patch) row.monthly_interest_rate = patch.monthlyInterestRate;
   row.updated_at = new Date().toISOString();
   const { data, error } = await eco().from("store_settings").update(row).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);

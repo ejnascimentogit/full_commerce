@@ -42,6 +42,10 @@ function seedSettings(): StoreSettings {
     },
     freeShippingForCnpj: true,
     shippingCost: 19.9,
+    maxInstallments: 12,
+    minInstallmentValue: 5,
+    interestFreeInstallments: 12,
+    monthlyInterestRate: 0,
   };
 }
 
