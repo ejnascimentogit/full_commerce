@@ -92,9 +92,10 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       <section className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <h2 className="font-semibold text-slate-900 mb-3">Itens do pedido</h2>
         <div className="divide-y divide-slate-100">
-          {order.items.map((item) => (
-            <div key={item.productId} className="py-2.5 flex justify-between items-center text-sm">
-              <div>
+          {order.items.map((item, i) => (
+            <div key={item.productId} className="py-2.5 flex justify-between items-center text-sm gap-3">
+              <span className="w-6 shrink-0 text-slate-400 font-mono text-xs">{i + 1}.</span>
+              <div className="flex-1">
                 <p className="text-slate-900">{item.name}</p>
                 <p className="text-slate-500">
                   {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
@@ -140,7 +141,12 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
         </div>
         <div>
           <h3 className="font-semibold text-slate-900 mb-1">Pagamento</h3>
-          <p className="text-slate-600">{paymentMethodLabel[order.paymentMethod]}</p>
+          <p className="text-slate-600">
+            {paymentMethodLabel[order.paymentMethod]}
+            {order.paymentMethod === "card" && order.installments
+              ? ` — ${order.installments}x de R$ ${(order.total / order.installments).toFixed(2).replace(".", ",")}${order.installments === 1 ? " à vista" : " sem juros"}`
+              : ""}
+          </p>
         </div>
       </section>
       </div>

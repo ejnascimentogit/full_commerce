@@ -6,6 +6,12 @@ import type { Order } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
+const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
+  card: "Cartão de crédito",
+  pix: "PIX",
+  boleto: "Boleto",
+};
+
 export default function PedidoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAdminAuth();
@@ -65,9 +71,10 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <h2 className="font-semibold text-slate-900 mb-3">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
         <div className="divide-y divide-slate-100 text-sm">
-          {visibleItems.map((item) => (
-            <div key={item.productId} className="py-2.5 flex justify-between">
-              <div>
+          {visibleItems.map((item, i) => (
+            <div key={item.productId} className="py-2.5 flex justify-between gap-3">
+              <span className="w-6 shrink-0 text-slate-400 font-mono text-xs">{i + 1}.</span>
+              <div className="flex-1">
                 <p className="text-slate-900">{item.name}</p>
                 <p className="text-slate-500">
                   {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
@@ -79,12 +86,21 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-5 grid sm:grid-cols-2 gap-4 text-sm">
+      <div className="bg-white border border-slate-200 rounded-lg p-5 grid sm:grid-cols-3 gap-4 text-sm">
         <div>
           <h3 className="font-semibold text-slate-900 mb-1">Entrega</h3>
           <p className="text-slate-600">
             {order.shippingAddress.street}, {order.shippingAddress.number} — {order.shippingAddress.neighborhood},{" "}
             {order.shippingAddress.city}/{order.shippingAddress.state}
+          </p>
+        </div>
+        <div>
+          <h3 className="font-semibold text-slate-900 mb-1">Condição de pagamento</h3>
+          <p className="text-slate-600">
+            {paymentMethodLabel[order.paymentMethod]}
+            {order.paymentMethod === "card" && order.installments
+              ? ` — ${order.installments}x de R$ ${(order.total / order.installments).toFixed(2).replace(".", ",")}${order.installments === 1 ? " à vista" : " sem juros"}`
+              : ""}
           </p>
         </div>
         <div>

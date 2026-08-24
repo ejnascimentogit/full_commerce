@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
-import type { Category } from "@ecommerce/types";
+import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
+import type { Category, Order } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { useAuth } from "@/lib/auth-context";
@@ -13,10 +13,16 @@ export default function ContaPage() {
   const { customer, loading } = useAuth();
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
   }, []);
+
+  useEffect(() => {
+    if (!customer) return;
+    apiClient.getCustomerOrders(customer.id).then(setOrders);
+  }, [customer]);
 
   useEffect(() => {
     if (!loading && !customer) router.replace("/conta/entrar?redirect=/conta");
@@ -79,9 +85,37 @@ export default function ContaPage() {
 
         <Link
           href="/conta/pedidos"
-          className="block bg-white border border-slate-200 rounded-lg p-5 font-medium text-slate-900 hover:border-brand-300"
+          className="block bg-white border border-slate-200 rounded-lg p-5 hover:border-brand-300"
         >
-          Meus pedidos →
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-slate-900">Minhas compras</h2>
+            <span className="text-sm font-medium text-brand-600">Ver todos os pedidos →</span>
+          </div>
+          {orders.length === 0 ? (
+            <p className="text-sm text-slate-500">Você ainda não fez nenhum pedido.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mb-3">
+                <div>
+                  <p className="text-slate-500">Pedidos feitos</p>
+                  <p className="text-slate-900 font-bold text-lg">{orders.length}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Total comprado</p>
+                  <p className="text-slate-900 font-bold text-lg">
+                    R$ {orders.reduce((sum, o) => sum + o.total, 0).toFixed(2).replace(".", ",")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Último pedido</p>
+                  <p className="text-slate-900 font-medium">{new Date(orders[0].createdAt).toLocaleDateString("pt-BR")}</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400">
+                Pedido mais recente: {orders[0].orderNumber} — {ORDER_STATUS_LABEL[orders[0].status]}
+              </p>
+            </>
+          )}
         </Link>
       </div>
     </>
