@@ -16,8 +16,11 @@ export default function FornecedoresPage() {
   const [cnpj, setCnpj] = useState("");
   const [code, setCode] = useState("");
   const [referenceCode, setReferenceCode] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingLogoFor, setUploadingLogoFor] = useState<string | null>(null);
+  const [uploadingNewLogo, setUploadingNewLogo] = useState(false);
+  const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
@@ -39,14 +42,26 @@ export default function FornecedoresPage() {
       isFeatured: false,
       code: code || undefined,
       referenceCode: referenceCode || undefined,
+      logoUrl,
     });
     setName("");
     setCnpj("");
     setCode("");
     setReferenceCode("");
+    setLogoUrl(undefined);
     setShowForm(false);
     setSubmitting(false);
     refresh();
+  }
+
+  async function handleNewLogoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingNewLogo(true);
+    const url = await apiClient.uploadLogo(file);
+    setLogoUrl(url);
+    setUploadingNewLogo(false);
   }
 
   async function handleLogoSelected(vendor: Vendor, e: React.ChangeEvent<HTMLInputElement>) {
@@ -117,6 +132,25 @@ export default function FornecedoresPage() {
               />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Logo (opcional)</label>
+            <div className="flex items-center gap-3">
+              <label className="relative w-14 h-14 rounded-md border border-slate-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-brand-400 shrink-0 bg-white">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded vendor logo
+                  <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <span className="text-slate-300 text-[10px] text-center px-0.5">{uploadingNewLogo ? "..." : "+ logo"}</span>
+                )}
+                <input type="file" accept="image/*" onChange={handleNewLogoSelected} disabled={uploadingNewLogo} className="hidden" />
+              </label>
+              {logoUrl && (
+                <button type="button" onClick={() => setLogoUrl(undefined)} className="text-xs text-slate-500 hover:text-red-600">
+                  Remover
+                </button>
+              )}
+            </div>
+          </div>
           <button type="submit" disabled={submitting} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
             Salvar
           </button>
@@ -133,6 +167,7 @@ export default function FornecedoresPage() {
               <th className="text-left px-4 py-2.5">CNPJ</th>
               <th className="text-left px-4 py-2.5">Status</th>
               <th className="text-left px-4 py-2.5">Destaque na home</th>
+              <th className="text-left px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -178,11 +213,94 @@ export default function FornecedoresPage() {
                     {v.isFeatured ? "Em destaque" : "Não destacado"}
                   </button>
                 </td>
+                <td className="px-4 py-2.5 text-right">
+                  <button type="button" onClick={() => setEditingVendor(v)} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
+                    Editar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {editingVendor && (
+        <EditVendorModal
+          vendor={editingVendor}
+          onClose={() => setEditingVendor(null)}
+          onSaved={() => {
+            setEditingVendor(null);
+            refresh();
+          }}
+        />
+      )}
     </AdminShell>
+  );
+}
+
+function EditVendorModal({ vendor, onClose, onSaved }: { vendor: Vendor; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(vendor.name);
+  const [cnpj, setCnpj] = useState(vendor.cnpj);
+  const [code, setCode] = useState(vendor.code ?? "");
+  const [referenceCode, setReferenceCode] = useState(vendor.referenceCode ?? "");
+  const [description, setDescription] = useState(vendor.description ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await apiClient.updateVendor(vendor.id, {
+      name,
+      cnpj,
+      code: code || undefined,
+      referenceCode: referenceCode || undefined,
+      description: description || undefined,
+    });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4" onClick={onClose}>
+      <form
+        onSubmit={handleSave}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-lg p-6 w-full max-w-md space-y-4"
+      >
+        <h2 className="text-lg font-bold text-slate-900">Editar fornecedor</h2>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
+          <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">CNPJ</label>
+          <input required value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Código do fornecedor</label>
+            <input value={code} onChange={(e) => setCode(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Código de referência</label>
+            <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Descrição (opcional)</label>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
+            {saving ? "Salvando..." : "Salvar"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

@@ -59,7 +59,7 @@ function CatalogoContent() {
               <li>
                 <Link
                   href="/catalogo"
-                  className={`block px-2 py-1 rounded transition-colors ${!activeCategory ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-brand-50 hover:text-brand-700 hover:font-medium"}`}
+                  className={`block px-2.5 py-1.5 rounded-md border-l-4 transition-colors ${!activeCategory ? "bg-brand-100 border-brand-600 text-brand-700 font-semibold" : "border-transparent text-slate-600 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700"}`}
                 >
                   Todos
                 </Link>
@@ -68,7 +68,7 @@ function CatalogoContent() {
                 <li key={c.id}>
                   <Link
                     href={`/catalogo?categoria=${c.slug}`}
-                    className={`block px-2 py-1 rounded transition-colors ${activeCategory?.id === c.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-brand-50 hover:text-brand-700 hover:font-medium"}`}
+                    className={`block px-2.5 py-1.5 rounded-md border-l-4 transition-colors ${activeCategory?.id === c.id ? "bg-brand-100 border-brand-600 text-brand-700 font-semibold" : "border-transparent text-slate-600 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700"}`}
                   >
                     {c.icon ? `${c.icon} ` : ""}
                     {c.name}
@@ -85,7 +85,7 @@ function CatalogoContent() {
                 <li key={v.id}>
                   <Link
                     href={`/catalogo?fornecedor=${v.id}`}
-                    className={`block px-2 py-1 rounded transition-colors ${fornecedor === v.id ? "bg-brand-50 text-brand-700 font-medium" : "text-slate-600 hover:bg-brand-50 hover:text-brand-700 hover:font-medium"}`}
+                    className={`block px-2.5 py-1.5 rounded-md border-l-4 transition-colors ${fornecedor === v.id ? "bg-brand-100 border-brand-600 text-brand-700 font-semibold" : "border-transparent text-slate-600 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700"}`}
                   >
                     {v.name}
                   </Link>
