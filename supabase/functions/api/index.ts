@@ -95,6 +95,29 @@ async function signInAndGetToken(email: string, password: string) {
   return data.session.access_token;
 }
 
+// Empresa 1 é o "fullcommerce" original, virado ambiente de demonstração —
+// toda origem sem domínio próprio configurado cai aqui (hoje é sempre o caso,
+// já que nenhum cliente configurou domínio ainda).
+const DEMO_COMPANY_ID = "00000000-0000-0000-0000-000000000001";
+
+// Rotas públicas (catálogo, cadastro) ainda não têm usuário logado pra saber
+// a empresa — descobrem pelo domínio de onde veio a requisição (Origin do
+// CORS). Cliente autenticado (admin ou customer) já carrega o company_id
+// direto na própria linha (ver requireAdmin/requireCustomer), não precisa
+// disso.
+async function resolveCompanyId(c: Context): Promise<string> {
+  const origin = c.req.header("Origin");
+  if (!origin) return DEMO_COMPANY_ID;
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return DEMO_COMPANY_ID;
+  }
+  const { data } = await eco().from("companies").select("id").eq("domain", hostname).eq("active", true).maybeSingle();
+  return data?.id ?? DEMO_COMPANY_ID;
+}
+
 // ---------- Mappers (snake_case do banco -> camelCase do contrato) ----------
 
 function mapAddress(a: Record<string, unknown>) {
@@ -316,7 +339,7 @@ async function resolveCustomerRegion(customer: Record<string, unknown>) {
   const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", customer.id);
   const defaultAddress = (addresses ?? []).find((a) => a.is_default) ?? addresses?.[0];
   if (!defaultAddress) return customer;
-  const { data: regions } = await eco().from("delivery_regions").select("*");
+  const { data: regions } = await eco().from("delivery_regions").select("*").eq("company_id", customer.company_id);
   const region = matchRegionByNeighborhood(regions ?? [], defaultAddress.neighborhood as string);
   if (!region) return customer;
   const { data: updated } = await eco().from("customers").update({ region_id: region.id }).eq("id", customer.id).select("*").single();
@@ -418,8 +441,9 @@ function isValidCNPJ(value: string): boolean {
 // ---------- Rotas públicas (catálogo) ----------
 
 app.get("/regions", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const includeInactive = c.req.query("includeInactive") === "true";
-  let query = eco().from("delivery_regions").select("*");
+  let query = eco().from("delivery_regions").select("*").eq("company_id", companyId);
   if (!includeInactive) query = query.eq("active", true);
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -427,15 +451,17 @@ app.get("/regions", async (c) => {
 });
 
 app.get("/categories", async (c) => {
-  const { data, error } = await eco().from("categories").select("*").order("name");
+  const companyId = await resolveCompanyId(c);
+  const { data, error } = await eco().from("categories").select("*").eq("company_id", companyId).order("name");
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json((data ?? []).map(mapCategory));
 });
 
 app.get("/vendors", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const featured = c.req.query("featured") === "true";
   const includeInactive = c.req.query("includeInactive") === "true";
-  let query = eco().from("vendors").select("*");
+  let query = eco().from("vendors").select("*").eq("company_id", companyId);
   if (!includeInactive) query = query.eq("active", true);
   if (featured) query = query.eq("is_featured", true);
   const { data, error } = await query;
@@ -443,32 +469,38 @@ app.get("/vendors", async (c) => {
   return c.json((data ?? []).map(mapVendor));
 });
 
-async function getActiveAutoPromotions(): Promise<Record<string, unknown>[]> {
-  const { data } = await eco().from("promotions").select("*");
+async function getActiveAutoPromotions(companyId: string): Promise<Record<string, unknown>[]> {
+  const { data } = await eco().from("promotions").select("*").eq("company_id", companyId);
   return activeAutoPromotions(data ?? []);
 }
 
 app.get("/products", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const categoryId = c.req.query("categoryId");
   const vendorId = c.req.query("vendorId");
   const q = c.req.query("q");
   const page = Number(c.req.query("page") ?? "1");
   const pageSize = Number(c.req.query("pageSize") ?? "24");
-  let query = eco().from("products").select("*", { count: "exact" }).eq("status", "active");
+  let query = eco().from("products").select("*", { count: "exact" }).eq("company_id", companyId).eq("status", "active");
   if (categoryId) query = query.eq("category_id", categoryId);
   if (vendorId) query = query.eq("vendor_id", vendorId);
   if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
   const from = (page - 1) * pageSize;
-  const [{ data, error, count }, autoPromotions] = await Promise.all([query.range(from, from + pageSize - 1), getActiveAutoPromotions()]);
+  const [{ data, error, count }, autoPromotions] = await Promise.all([
+    query.range(from, from + pageSize - 1),
+    getActiveAutoPromotions(companyId),
+  ]);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json({ items: (data ?? []).map((p) => mapProduct(p, [], autoPromotions)), total: count ?? 0, page, pageSize });
 });
 
 app.get("/products/best-sellers", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const limit = Number(c.req.query("limit") ?? "12");
   const { data: items, error } = await eco()
     .from("order_items")
-    .select("product_id, quantity, orders!inner(status)")
+    .select("product_id, quantity, orders!inner(status, company_id)")
+    .eq("orders.company_id", companyId)
     .not("orders.status", "in", "(CANCELLED,REFUNDED)");
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const totals = new Map<string, number>();
@@ -476,33 +508,36 @@ app.get("/products/best-sellers", async (c) => {
   const topIds = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
   if (topIds.length === 0) return c.json([]);
   const [{ data: products }, autoPromotions] = await Promise.all([
-    eco().from("products").select("*").in("id", topIds).eq("status", "active"),
-    getActiveAutoPromotions(),
+    eco().from("products").select("*").eq("company_id", companyId).in("id", topIds).eq("status", "active"),
+    getActiveAutoPromotions(companyId),
   ]);
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
   return c.json(topIds.map((id) => byId.get(id)).filter(Boolean).map((p) => mapProduct(p!, [], autoPromotions)));
 });
 
 app.get("/products/:id", async (c) => {
-  const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).maybeSingle();
+  const companyId = await resolveCompanyId(c);
+  const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).eq("company_id", companyId).maybeSingle();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   if (!product) throw new ApiError(404, "NOT_FOUND");
   const [{ data: variants }, autoPromotions] = await Promise.all([
     eco().from("product_variants").select("*").eq("product_id", product.id),
-    getActiveAutoPromotions(),
+    getActiveAutoPromotions(companyId),
   ]);
   return c.json(mapProduct(product, variants ?? [], autoPromotions));
 });
 
 app.get("/settings", async (c) => {
-  const { data, error } = await eco().from("store_settings").select("*").eq("id", true).maybeSingle();
+  const companyId = await resolveCompanyId(c);
+  const { data, error } = await eco().from("store_settings").select("*").eq("company_id", companyId).maybeSingle();
   if (error || !data) throw new ApiError(500, "DB_ERROR", error?.message);
   return c.json(mapSettings(data));
 });
 
 app.get("/promotions/active", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const featuredOnly = c.req.query("featured") === "true";
-  let query = eco().from("promotions").select("*");
+  let query = eco().from("promotions").select("*").eq("company_id", companyId);
   if (featuredOnly) query = query.eq("is_featured", true);
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -510,10 +545,11 @@ app.get("/promotions/active", async (c) => {
 });
 
 app.get("/promotions/coupon/:code", async (c) => {
-  const { data: settings } = await eco().from("store_settings").select("promotions_enabled").eq("id", true).maybeSingle();
+  const companyId = await resolveCompanyId(c);
+  const { data: settings } = await eco().from("store_settings").select("promotions_enabled").eq("company_id", companyId).maybeSingle();
   if (!settings?.promotions_enabled) return c.json(null);
   const code = c.req.param("code").trim().toUpperCase();
-  const { data } = await eco().from("promotions").select("*").ilike("coupon_code", code).maybeSingle();
+  const { data } = await eco().from("promotions").select("*").eq("company_id", companyId).ilike("coupon_code", code).maybeSingle();
   if (!data || !isPromotionActive(data)) return c.json(null);
   return c.json(mapPromotion(data));
 });
@@ -521,6 +557,7 @@ app.get("/promotions/coupon/:code", async (c) => {
 // ---------- Auth do cliente ----------
 
 app.post("/auth/register", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const body = await c.req.json();
   const { name, email, password, documentType, document, businessName, phone, address, referenceCode } = body;
   const isValidDoc = documentType === "cpf" ? isValidCPF(document) : isValidCNPJ(document);
@@ -529,13 +566,14 @@ app.post("/auth/register", async (c) => {
   const { data: created, error: createError } = await db().auth.admin.createUser({ email, password, email_confirm: true });
   if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
 
-  const { data: regions } = await eco().from("delivery_regions").select("*");
+  const { data: regions } = await eco().from("delivery_regions").select("*").eq("company_id", companyId);
   const region = matchRegionByNeighborhood(regions ?? [], address.neighborhood);
   const { data: codeRow } = await eco().rpc("next_customer_code");
 
   const { data: customer, error: insertError } = await eco()
     .from("customers")
     .insert({
+      company_id: companyId,
       auth_user_id: created.user.id,
       name,
       email,
@@ -557,7 +595,7 @@ app.post("/auth/register", async (c) => {
 
   const { data: addressRow } = await eco()
     .from("addresses")
-    .insert({ customer_id: customer.id, ...toAddressRow(address), is_default: true })
+    .insert({ company_id: companyId, customer_id: customer.id, ...toAddressRow(address), is_default: true })
     .select("*")
     .single();
 
@@ -620,8 +658,8 @@ app.post("/orders", async (c) => {
 
   const productIds = input.items.map((i: { productId: string }) => i.productId);
   const [{ data: products }, autoPromotions] = await Promise.all([
-    eco().from("products").select("*").in("id", productIds),
-    getActiveAutoPromotions(),
+    eco().from("products").select("*").eq("company_id", customer.company_id).in("id", productIds),
+    getActiveAutoPromotions(customer.company_id),
   ]);
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
 
@@ -632,14 +670,19 @@ app.post("/orders", async (c) => {
   });
   const subtotal = items.reduce((sum: number, i: { estimated_subtotal: number }) => sum + i.estimated_subtotal, 0);
 
-  const { data: settings } = await eco().from("store_settings").select("*").eq("id", true).single();
+  const { data: settings } = await eco().from("store_settings").select("*").eq("company_id", customer.company_id).single();
   if (settings.min_order_value && subtotal < Number(settings.min_order_value)) throw new ApiError(422, "BELOW_MIN_ORDER_VALUE");
 
   let discount = 0;
   let shipping = calculateShipping(customer.document_type, settings);
   let appliedPromotion: Record<string, unknown> | null = null;
   if (input.couponCode && settings.promotions_enabled) {
-    const { data: promotion } = await eco().from("promotions").select("*").ilike("coupon_code", input.couponCode.trim()).maybeSingle();
+    const { data: promotion } = await eco()
+      .from("promotions")
+      .select("*")
+      .eq("company_id", customer.company_id)
+      .ilike("coupon_code", input.couponCode.trim())
+      .maybeSingle();
     if (promotion && isPromotionActive(promotion)) {
       appliedPromotion = promotion;
       if (promotion.type === "freeShipping") shipping = 0;
@@ -661,6 +704,7 @@ app.post("/orders", async (c) => {
   const { data: order, error: orderError } = await eco()
     .from("orders")
     .insert({
+      company_id: customer.company_id,
       order_number: orderNumber,
       customer_id: customer.id,
       shipping_address: mapAddress(address),
@@ -679,12 +723,12 @@ app.post("/orders", async (c) => {
 
   await eco()
     .from("order_items")
-    .insert(items.map((i: Record<string, unknown>) => ({ ...i, order_id: order.id })));
+    .insert(items.map((i: Record<string, unknown>) => ({ ...i, company_id: customer.company_id, order_id: order.id })));
   await eco()
     .from("order_status_history")
     .insert([
-      { order_id: order.id, status: "PENDING", changed_at: now },
-      { order_id: order.id, status: "PAID", changed_at: now },
+      { company_id: customer.company_id, order_id: order.id, status: "PENDING", changed_at: now },
+      { company_id: customer.company_id, order_id: order.id, status: "PAID", changed_at: now },
     ]);
   if (appliedPromotion) {
     await eco()
@@ -726,13 +770,13 @@ app.post("/quotes", async (c) => {
   const customer = await requireCustomer(c);
   const input = await c.req.json();
   const productIds = input.items.map((i: { productId: string }) => i.productId);
-  const { data: products } = await eco().from("products").select("*").in("id", productIds);
+  const { data: products } = await eco().from("products").select("*").eq("company_id", customer.company_id).in("id", productIds);
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
 
   const { data: quoteNumberRow } = await eco().rpc("next_quote_number");
   const { data: quote, error } = await eco()
     .from("quotes")
-    .insert({ quote_number: quoteNumberRow, customer_id: customer.id, note: input.note ?? null })
+    .insert({ company_id: customer.company_id, quote_number: quoteNumberRow, customer_id: customer.id, note: input.note ?? null })
     .select("*")
     .single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -741,6 +785,7 @@ app.post("/quotes", async (c) => {
     const p = productById.get(i.productId);
     if (!p) throw new ApiError(422, "PRODUCT_NOT_FOUND");
     return {
+      company_id: customer.company_id,
       quote_id: quote.id,
       product_id: p.id,
       vendor_id: p.vendor_id,
@@ -771,12 +816,13 @@ app.get("/quotes", async (c) => {
 // ---------- Auth do admin ----------
 
 app.post("/admin/auth/register", async (c) => {
+  const companyId = await resolveCompanyId(c);
   const { name, email, password } = await c.req.json();
   const { data: created, error: createError } = await db().auth.admin.createUser({ email, password, email_confirm: true });
   if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
   const { data: adminUser, error } = await eco()
     .from("admin_users")
-    .insert({ auth_user_id: created.user.id, name, email, role: "platformAdmin" })
+    .insert({ company_id: companyId, auth_user_id: created.user.id, name, email, role: "platformAdmin" })
     .select("*")
     .single();
   if (error) {
@@ -823,6 +869,7 @@ app.post("/products", async (c) => {
   const { data, error } = await eco()
     .from("products")
     .insert({
+      company_id: admin.company_id,
       vendor_id: vendorId,
       category_id: input.categoryId,
       name: input.name,
@@ -851,8 +898,8 @@ app.post("/products", async (c) => {
 app.patch("/products/:id", async (c) => {
   const admin = await requireAdmin(c);
   const patch = await c.req.json();
-  const { data: existing } = await eco().from("products").select("vendor_id").eq("id", c.req.param("id")).maybeSingle();
-  if (!existing) throw new ApiError(404, "NOT_FOUND");
+  const { data: existing } = await eco().from("products").select("vendor_id, company_id").eq("id", c.req.param("id")).maybeSingle();
+  if (!existing || existing.company_id !== admin.company_id) throw new ApiError(404, "NOT_FOUND");
   if (admin.role === "vendorAdmin" && existing.vendor_id !== admin.vendor_id) throw new ApiError(403, "FORBIDDEN");
 
   const row: Record<string, unknown> = {};
@@ -880,7 +927,7 @@ app.patch("/products/:id", async (c) => {
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
   if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
 
-  const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapProduct(data));
 });
@@ -899,7 +946,7 @@ app.post("/products/:id/photos", async (c) => {
 
 app.get("/admin/products", async (c) => {
   const admin = await requireAdmin(c);
-  let query = eco().from("products").select("*").order("name");
+  let query = eco().from("products").select("*").eq("company_id", admin.company_id).order("name");
   if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -911,7 +958,7 @@ app.get("/admin/products", async (c) => {
 // misturado com uma Promoção de campanha (isso é só pra exibição pública).
 app.get("/admin/products/:id", async (c) => {
   const admin = await requireAdmin(c);
-  const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).maybeSingle();
+  const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   if (!product) throw new ApiError(404, "NOT_FOUND");
   if (admin.role === "vendorAdmin" && product.vendor_id !== admin.vendor_id) throw new ApiError(403, "FORBIDDEN");
@@ -922,11 +969,12 @@ app.get("/admin/products/:id", async (c) => {
 // ---------- Admin: fornecedores ----------
 
 app.post("/vendors", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const input = await c.req.json();
   const { data, error } = await eco()
     .from("vendors")
     .insert({
+      company_id: admin.company_id,
       name: input.name,
       cnpj: input.cnpj,
       logo_url: input.logoUrl ?? null,
@@ -943,7 +991,7 @@ app.post("/vendors", async (c) => {
 });
 
 app.patch("/vendors/:id", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -954,7 +1002,7 @@ app.patch("/vendors/:id", async (c) => {
   if ("isFeatured" in patch) row.is_featured = patch.isFeatured;
   if ("code" in patch) row.code = patch.code;
   if ("referenceCode" in patch) row.reference_code = patch.referenceCode;
-  const { data, error } = await eco().from("vendors").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data, error } = await eco().from("vendors").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapVendor(data));
 });
@@ -962,11 +1010,12 @@ app.patch("/vendors/:id", async (c) => {
 // ---------- Admin: roteirização ----------
 
 app.post("/regions", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const input = await c.req.json();
   const { data, error } = await eco()
     .from("delivery_regions")
     .insert({
+      company_id: admin.company_id,
       name: input.name,
       active: input.active ?? true,
       cutoff_time: input.cutoffTime,
@@ -980,7 +1029,7 @@ app.post("/regions", async (c) => {
 });
 
 app.patch("/regions/:id", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -988,7 +1037,7 @@ app.patch("/regions/:id", async (c) => {
   if ("cutoffTime" in patch) row.cutoff_time = patch.cutoffTime;
   if ("estimatedDeliveryHours" in patch) row.estimated_delivery_hours = patch.estimatedDeliveryHours;
   if ("neighborhoods" in patch) row.neighborhoods = patch.neighborhoods;
-  const { data, error } = await eco().from("delivery_regions").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data, error } = await eco().from("delivery_regions").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapRegion(data));
 });
@@ -996,8 +1045,8 @@ app.patch("/regions/:id", async (c) => {
 // ---------- Admin: clientes ----------
 
 app.get("/admin/customers", async (c) => {
-  await requireAdmin(c);
-  const { data: customers, error } = await eco().from("customers").select("*").order("created_at", { ascending: false });
+  const admin = await requireAdmin(c);
+  const { data: customers, error } = await eco().from("customers").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const results = await Promise.all(
     (customers ?? []).map(async (cust) => {
@@ -1009,7 +1058,7 @@ app.get("/admin/customers", async (c) => {
 });
 
 app.patch("/admin/customers/:id", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -1018,7 +1067,13 @@ app.patch("/admin/customers/:id", async (c) => {
   if ("regionId" in patch) row.region_id = patch.regionId;
   if ("referenceCode" in patch) row.reference_code = patch.referenceCode;
   if ("status" in patch) row.status = patch.status;
-  const { data: customer, error } = await eco().from("customers").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data: customer, error } = await eco()
+    .from("customers")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", customer.id);
   return c.json(mapCustomer(customer, addresses ?? []));
@@ -1029,7 +1084,11 @@ app.patch("/admin/customers/:id", async (c) => {
 app.get("/admin/orders", async (c) => {
   const admin = await requireAdmin(c);
   const status = c.req.query("status");
-  let query = eco().from("orders").select("*, order_items!inner(vendor_id)").order("created_at", { ascending: false });
+  let query = eco()
+    .from("orders")
+    .select("*, order_items!inner(vendor_id)")
+    .eq("company_id", admin.company_id)
+    .order("created_at", { ascending: false });
   if (status) query = query.eq("status", status);
   if (admin.role === "vendorAdmin") query = query.eq("order_items.vendor_id", admin.vendor_id);
   const { data: orders } = await query;
@@ -1046,7 +1105,7 @@ app.get("/admin/orders", async (c) => {
 
 app.get("/admin/orders/:id", async (c) => {
   const admin = await requireAdmin(c);
-  const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).maybeSingle();
+  const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (!order) throw new ApiError(404, "NOT_FOUND");
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
   if (admin.role === "vendorAdmin" && !(items ?? []).some((i) => i.vendor_id === admin.vendor_id)) throw new ApiError(403, "FORBIDDEN");
@@ -1055,21 +1114,27 @@ app.get("/admin/orders/:id", async (c) => {
 });
 
 app.patch("/orders/:id/status", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const { status } = await c.req.json();
-  const { data: order, error } = await eco().from("orders").update({ status }).eq("id", c.req.param("id")).select("*").single();
+  const { data: order, error } = await eco()
+    .from("orders")
+    .update({ status })
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   await eco()
     .from("order_status_history")
-    .insert({ order_id: order.id, status, changed_at: new Date().toISOString() });
+    .insert({ company_id: admin.company_id, order_id: order.id, status, changed_at: new Date().toISOString() });
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
   return c.json(mapOrder({ ...order, order_status_history: history }, items ?? []));
 });
 
 app.get("/admin/quotes", async (c) => {
-  await requireAdmin(c);
-  const { data: quotes } = await eco().from("quotes").select("*").order("created_at", { ascending: false });
+  const admin = await requireAdmin(c);
+  const { data: quotes } = await eco().from("quotes").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   const results = await Promise.all(
     (quotes ?? []).map(async (q) => {
       const { data: items } = await eco().from("quote_items").select("*").eq("quote_id", q.id);
@@ -1080,14 +1145,20 @@ app.get("/admin/quotes", async (c) => {
 });
 
 app.patch("/admin/quotes/:id", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("status" in patch) row.status = patch.status;
   if ("quotedTotal" in patch) row.quoted_total = patch.quotedTotal;
   if ("responseNote" in patch) row.response_note = patch.responseNote;
   if (patch.status === "quoted") row.quoted_at = new Date().toISOString();
-  const { data: quote, error } = await eco().from("quotes").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data: quote, error } = await eco()
+    .from("quotes")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const { data: items } = await eco().from("quote_items").select("*").eq("quote_id", quote.id);
   return c.json(mapQuote(quote, items ?? []));
@@ -1096,7 +1167,7 @@ app.patch("/admin/quotes/:id", async (c) => {
 // ---------- Admin: configurações ----------
 
 app.patch("/settings", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("brandColor" in patch) row.brand_color = patch.brandColor;
@@ -1109,7 +1180,7 @@ app.patch("/settings", async (c) => {
   if ("freeShippingForCnpj" in patch) row.free_shipping_for_cnpj = patch.freeShippingForCnpj;
   if ("shippingCost" in patch) row.shipping_cost = patch.shippingCost;
   row.updated_at = new Date().toISOString();
-  const { data, error } = await eco().from("store_settings").update(row).eq("id", true).select("*").single();
+  const { data, error } = await eco().from("store_settings").update(row).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapSettings(data));
 });
@@ -1130,7 +1201,7 @@ app.post("/settings/logo", async (c) => {
 
 app.get("/admin/promotions", async (c) => {
   const admin = await requireAdmin(c);
-  let query = eco().from("promotions").select("*");
+  let query = eco().from("promotions").select("*").eq("company_id", admin.company_id);
   if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -1144,6 +1215,7 @@ app.post("/admin/promotions", async (c) => {
   const { data, error } = await eco()
     .from("promotions")
     .insert({
+      company_id: admin.company_id,
       type: input.type,
       product_ids: input.rules?.productIds ?? [],
       category_ids: input.rules?.categoryIds ?? [],
@@ -1163,7 +1235,7 @@ app.post("/admin/promotions", async (c) => {
 });
 
 app.patch("/admin/promotions/:id", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("type" in patch) row.type = patch.type;
@@ -1180,7 +1252,7 @@ app.patch("/admin/promotions/:id", async (c) => {
   if ("couponCode" in patch) row.coupon_code = patch.couponCode;
   if ("maxUses" in patch) row.max_uses = patch.maxUses;
   if ("currentUses" in patch) row.current_uses = patch.currentUses;
-  const { data, error } = await eco().from("promotions").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data, error } = await eco().from("promotions").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapPromotion(data));
 });
@@ -1188,11 +1260,17 @@ app.patch("/admin/promotions/:id", async (c) => {
 // ---------- Admin: departamentos ----------
 
 app.post("/categories", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const input = await c.req.json();
   const { data, error } = await eco()
     .from("categories")
-    .insert({ name: input.name, slug: input.slug, icon: input.icon ?? null, parent_category_id: input.parentCategoryId ?? null })
+    .insert({
+      company_id: admin.company_id,
+      name: input.name,
+      slug: input.slug,
+      icon: input.icon ?? null,
+      parent_category_id: input.parentCategoryId ?? null,
+    })
     .select("*")
     .single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -1200,21 +1278,21 @@ app.post("/categories", async (c) => {
 });
 
 app.patch("/categories/:id", async (c) => {
-  await requireAdmin(c);
+  const admin = await requireAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
   if ("slug" in patch) row.slug = patch.slug;
   if ("icon" in patch) row.icon = patch.icon;
   if ("parentCategoryId" in patch) row.parent_category_id = patch.parentCategoryId;
-  const { data, error } = await eco().from("categories").update(row).eq("id", c.req.param("id")).select("*").single();
+  const { data, error } = await eco().from("categories").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapCategory(data));
 });
 
 app.delete("/categories/:id", async (c) => {
-  await requireAdmin(c);
-  const { error } = await eco().from("categories").delete().eq("id", c.req.param("id"));
+  const admin = await requireAdmin(c);
+  const { error } = await eco().from("categories").delete().eq("id", c.req.param("id")).eq("company_id", admin.company_id);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.body(null, 204);
 });
