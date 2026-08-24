@@ -17,6 +17,7 @@ export default function FornecedoresPage() {
   const [code, setCode] = useState("");
   const [referenceCode, setReferenceCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingLogoFor, setUploadingLogoFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
@@ -45,6 +46,17 @@ export default function FornecedoresPage() {
     setReferenceCode("");
     setShowForm(false);
     setSubmitting(false);
+    refresh();
+  }
+
+  async function handleLogoSelected(vendor: Vendor, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingLogoFor(vendor.id);
+    const url = await apiClient.uploadLogo(file);
+    await apiClient.updateVendor(vendor.id, { logoUrl: url });
+    setUploadingLogoFor(null);
     refresh();
   }
 
@@ -115,6 +127,7 @@ export default function FornecedoresPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
+              <th className="text-left px-4 py-2.5">Logo</th>
               <th className="text-left px-4 py-2.5">Nome</th>
               <th className="text-left px-4 py-2.5">Código</th>
               <th className="text-left px-4 py-2.5">CNPJ</th>
@@ -125,6 +138,25 @@ export default function FornecedoresPage() {
           <tbody className="divide-y divide-slate-100">
             {vendors.map((v) => (
               <tr key={v.id}>
+                <td className="px-4 py-2.5">
+                  <label className="relative w-10 h-10 rounded-md border border-slate-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-brand-400 shrink-0 bg-white">
+                    {v.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded vendor logo
+                      <img src={v.logoUrl} alt={v.name} className="w-full h-full object-contain p-1" />
+                    ) : (
+                      <span className="text-slate-300 text-[10px] text-center px-0.5">
+                        {uploadingLogoFor === v.id ? "..." : "+ logo"}
+                      </span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoSelected(v, e)}
+                      disabled={uploadingLogoFor === v.id}
+                      className="hidden"
+                    />
+                  </label>
+                </td>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{v.name}</td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{v.code ?? "—"}</td>
                 <td className="px-4 py-2.5 text-slate-500">{v.cnpj}</td>

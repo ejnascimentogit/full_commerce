@@ -53,6 +53,9 @@ export function Header({ categories }: { categories: Category[] }) {
             {c.name}
           </Link>
         ))}
+        <Link href="/fornecedores" className="shrink-0 text-brand-50 hover:text-white hover:underline underline-offset-4 ml-auto">
+          Fornecedores
+        </Link>
       </nav>
     </header>
   );
