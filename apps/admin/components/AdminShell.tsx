@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
+// Sem domínio próprio ainda (pendência conhecida) — quando tiver, só trocar aqui.
+const STOREFRONT_URL = "https://fullcommerce-storefront.ejnascimento1.workers.dev";
+
 const NAV = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/produtos", label: "Produtos", icon: "📦" },
@@ -38,7 +41,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           full<span className="text-brand-500">commerce</span>
           <span className="block text-xs font-normal text-slate-400 mt-0.5">Painel Admin</span>
         </div>
-        <nav className="flex-1 py-3">
+        <a
+          href={STOREFRONT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mx-5 mt-4 flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-md py-2"
+        >
+          🌐 Ver loja
+          <span aria-hidden className="text-xs">
+            ↗
+          </span>
+        </a>
+        <nav className="flex-1 py-3 mt-2">
           {visibleNav.map((item) => {
             const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             return (
