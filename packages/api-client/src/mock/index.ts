@@ -214,6 +214,7 @@ export const mockApiClient: ApiClient = {
       shippingAddress: address,
       regionId: customer.regionId,
       paymentMethod: input.paymentMethod,
+      installments: input.paymentMethod === "card" ? input.installments : undefined,
       ...totals,
       status: "PAID",
       statusHistory: [

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import { apiClient, unitPriceOf, calculateShipping, calculatePromotionDiscount } from "@ecommerce/api-client";
 import type { Address, Category, Product, Promotion, StoreSettings } from "@ecommerce/types";
 import { Header } from "@/components/Header";
@@ -10,6 +11,13 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
 type PaymentMethod = "card" | "pix";
+
+// Sem gateway real integrado ainda — o texto codificado deixa isso explícito
+// (não é um payload EMV/Bacen válido) pra nunca passar a impressão de ser um
+// PIX de verdade que possa ser escaneado por engano num app de banco.
+function buildPixDemoPayload(orderRef: string, amount: number): string {
+  return `PIX-DEMO|pedido:${orderRef}|valor:${amount.toFixed(2)}|ambiente:fullcommerce-demo`;
+}
 
 export default function CheckoutPage() {
   const { lines, clear } = useCart();
@@ -29,6 +37,10 @@ export default function CheckoutPage() {
   const [appliedPromotion, setAppliedPromotion] = useState<Promotion | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [checkingCoupon, setCheckingCoupon] = useState(false);
+
+  const [pixCode, setPixCode] = useState("");
+  const [pixQrDataUrl, setPixQrDataUrl] = useState<string | null>(null);
+  const [pixCopied, setPixCopied] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !customer) {
@@ -50,6 +62,45 @@ export default function CheckoutPage() {
       },
     );
   }, [customer, lines]);
+
+  useEffect(() => {
+    if (method !== "pix" || !customer || !settings) {
+      setPixQrDataUrl(null);
+      return;
+    }
+    const resolved = lines
+      .map((l) => ({ line: l, product: products[l.productId] }))
+      .filter((l): l is { line: (typeof lines)[number]; product: Product } => Boolean(l.product));
+    if (resolved.length === 0) {
+      setPixQrDataUrl(null);
+      return;
+    }
+    const sub = resolved.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity, 0);
+    const isFreeShip = appliedPromotion?.type === "freeShipping";
+    const ship = isFreeShip ? 0 : calculateShipping(customer, settings);
+    const disc = appliedPromotion
+      ? calculatePromotionDiscount(
+          appliedPromotion,
+          resolved.map(({ line, product }) => ({ product, subtotal: unitPriceOf(product) * line.quantity })),
+          sub,
+        )
+      : 0;
+    const amount = Math.max(0, sub - disc) + ship;
+    if (amount <= 0) {
+      setPixQrDataUrl(null);
+      return;
+    }
+    const code = buildPixDemoPayload(customer.id.slice(0, 8), amount);
+    setPixCode(code);
+    setPixCopied(false);
+    let cancelled = false;
+    QRCode.toDataURL(code, { margin: 1, width: 220 }).then((url) => {
+      if (!cancelled) setPixQrDataUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [method, lines, products, settings, customer, appliedPromotion]);
 
   if (lines.length === 0) {
     return (
@@ -167,6 +218,7 @@ export default function CheckoutPage() {
                 className="mt-1"
               />
               <span className="text-sm text-slate-700">
+                {address.label && <span className="font-medium text-slate-500">{address.label}: </span>}
                 {address.street}, {address.number} {address.complement && `- ${address.complement}`} —{" "}
                 {address.neighborhood}, {address.city}/{address.state} — {address.zipCode}
               </span>
@@ -211,9 +263,33 @@ export default function CheckoutPage() {
           </div>
         )}
         {method === "pix" && (
-          <p className="mt-3 text-sm text-slate-500">
-            O QR Code e o código copia-e-cola são gerados na confirmação, junto com o gateway de pagamento do banco.
-          </p>
+          <div className="mt-3">
+            {pixQrDataUrl ? (
+              <div className="flex flex-col items-center gap-3 border border-slate-200 rounded-md p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element -- data URL gerado em memória, não é um asset otimizável */}
+                <img src={pixQrDataUrl} alt="QR Code do PIX" className="w-44 h-44" />
+                <p className="text-sm font-semibold text-slate-900">
+                  R$ {total.toFixed(2).replace(".", ",")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(pixCode);
+                    setPixCopied(true);
+                    setTimeout(() => setPixCopied(false), 2000);
+                  }}
+                  className="text-xs font-medium text-brand-600 border border-brand-200 rounded-md px-3 py-1.5 hover:bg-brand-50"
+                >
+                  {pixCopied ? "Código copiado!" : "Copiar código PIX"}
+                </button>
+                <p className="text-xs text-slate-400 text-center">
+                  Ambiente de demonstração — QR Code simulado, sem integração real com banco ainda.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Gerando QR Code do PIX...</p>
+            )}
+          </div>
         )}
       </section>
 

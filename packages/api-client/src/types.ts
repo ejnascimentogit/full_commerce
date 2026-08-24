@@ -20,6 +20,7 @@ export interface RegisterAddressInput {
   city: string;
   state: string;
   zipCode: string;
+  label?: string;
 }
 
 export interface Paginated<T> {
@@ -62,6 +63,8 @@ export interface RegisterInput {
   phone: string;
   /** Vira o primeiro endereço (padrão) do cliente. regionId é resolvido automaticamente pelo bairro — não é escolhido no cadastro. */
   address: RegisterAddressInput;
+  /** Endereço próprio do cliente (cadastral), quando diferente do endereço de entrega. Opcional. */
+  businessAddress?: RegisterAddressInput;
   /** Código que o próprio cliente usa para nos identificar no sistema dele — opcional, digitado por ele no cadastro. */
   referenceCode?: string;
 }

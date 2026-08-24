@@ -131,6 +131,7 @@ function mapAddress(a: Record<string, unknown>) {
     state: a.state,
     zipCode: a.zip_code,
     isDefault: a.is_default,
+    label: a.label ?? undefined,
   };
 }
 
@@ -269,6 +270,7 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[]) 
     shippingAddress: o.shipping_address,
     regionId: o.region_id ?? undefined,
     paymentMethod: o.payment_method,
+    installments: o.installments ?? undefined,
     subtotal: Number(o.subtotal),
     discount: Number(o.discount),
     shipping: Number(o.shipping),
@@ -559,7 +561,7 @@ app.get("/promotions/coupon/:code", async (c) => {
 app.post("/auth/register", async (c) => {
   const companyId = await resolveCompanyId(c);
   const body = await c.req.json();
-  const { name, email, password, documentType, document, businessName, phone, address, referenceCode } = body;
+  const { name, email, password, documentType, document, businessName, phone, address, businessAddress, referenceCode } = body;
   const isValidDoc = documentType === "cpf" ? isValidCPF(document) : isValidCNPJ(document);
   if (!isValidDoc) throw new ApiError(422, "INVALID_DOCUMENT");
 
@@ -593,14 +595,22 @@ app.post("/auth/register", async (c) => {
     throw new ApiError(500, "DB_ERROR", insertError.message);
   }
 
-  const { data: addressRow } = await eco()
-    .from("addresses")
-    .insert({ company_id: companyId, customer_id: customer.id, ...toAddressRow(address), is_default: true })
-    .select("*")
-    .single();
+  const addressRows = [
+    { company_id: companyId, customer_id: customer.id, ...toAddressRow(address), is_default: true, label: address.label ?? "Entrega" },
+  ];
+  if (businessAddress) {
+    addressRows.push({
+      company_id: companyId,
+      customer_id: customer.id,
+      ...toAddressRow(businessAddress),
+      is_default: false,
+      label: businessAddress.label ?? "Endereço",
+    });
+  }
+  const { data: insertedAddresses } = await eco().from("addresses").insert(addressRows).select("*");
 
   const token = await signInAndGetToken(email, password);
-  return c.json({ token, customer: mapCustomer(customer, addressRow ? [addressRow] : []) });
+  return c.json({ token, customer: mapCustomer(customer, insertedAddresses ?? []) });
 });
 
 function toAddressRow(a: Record<string, unknown>) {
@@ -710,6 +720,7 @@ app.post("/orders", async (c) => {
       shipping_address: mapAddress(address),
       region_id: customer.region_id,
       payment_method: input.paymentMethod,
+      installments: input.paymentMethod === "card" ? input.installments ?? null : null,
       subtotal,
       discount,
       shipping,

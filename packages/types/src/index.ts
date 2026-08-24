@@ -19,7 +19,10 @@ export interface Address {
   city: string;
   state: string;
   zipCode: string;
+  /** Usado para roteirização e como padrão no checkout — o endereço para onde o pedido vai. */
   isDefault: boolean;
+  /** Rótulo livre pra distinguir múltiplos endereços na lista (ex: "Entrega", "Endereço"). */
+  label?: string;
 }
 
 export interface Customer {
@@ -155,6 +158,8 @@ export interface Order {
   shippingAddress: Address;
   regionId?: string;
   paymentMethod: "card" | "pix" | "boleto";
+  /** Só relevante pra paymentMethod "card" — quantas parcelas o cliente escolheu no checkout. */
+  installments?: number;
   subtotal: number;
   discount: number;
   shipping: number;

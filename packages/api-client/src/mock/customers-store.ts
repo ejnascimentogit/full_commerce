@@ -52,6 +52,8 @@ export function findById(id: string): Customer | undefined {
 
 type CreateCustomerInput = Omit<StoredCustomer, "id" | "addresses" | "createdAt" | "status" | "regionId"> & {
   address: Omit<Address, "id" | "isDefault">;
+  /** Endereço próprio do cliente (cadastral), quando diferente do endereço de entrega. */
+  businessAddress?: Omit<Address, "id" | "isDefault">;
   regionId?: string;
 };
 
@@ -60,12 +62,16 @@ export function createCustomer(input: CreateCustomerInput): Customer {
   if (customers.some((c) => c.email.toLowerCase() === input.email.toLowerCase())) {
     throw new Error("EMAIL_IN_USE");
   }
-  const { address, ...rest } = input;
+  const { address, businessAddress, ...rest } = input;
+  const addresses: Address[] = [{ ...address, id: `addr-${Date.now()}`, isDefault: true, label: "Entrega" }];
+  if (businessAddress) {
+    addresses.push({ ...businessAddress, id: `addr-${Date.now()}-2`, isDefault: false, label: "Endereço" });
+  }
   const customer: StoredCustomer = {
     ...rest,
     id: `customer-${Date.now()}`,
     code: `CLI-${1001 + customers.length}`,
-    addresses: [{ ...address, id: `addr-${Date.now()}`, isDefault: true }],
+    addresses,
     createdAt: new Date().toISOString(),
     status: "active",
   };

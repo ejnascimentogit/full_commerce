@@ -31,6 +31,17 @@ export default function CriarContaPage() {
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
 
+  const [sameAddress, setSameAddress] = useState(true);
+  const [ownZipCode, setOwnZipCode] = useState("");
+  const [ownStreet, setOwnStreet] = useState("");
+  const [ownNumber, setOwnNumber] = useState("");
+  const [ownComplement, setOwnComplement] = useState("");
+  const [ownNeighborhood, setOwnNeighborhood] = useState("");
+  const [ownCity, setOwnCity] = useState("");
+  const [ownState, setOwnState] = useState("");
+  const [ownCepLoading, setOwnCepLoading] = useState(false);
+  const [ownCepError, setOwnCepError] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,6 +80,28 @@ export default function CriarContaPage() {
     }
   }
 
+  async function handleOwnZipCodeBlur() {
+    const digits = onlyDigits(ownZipCode);
+    if (digits.length !== 8) return;
+    setOwnCepLoading(true);
+    setOwnCepError(null);
+    try {
+      const address = await lookupCep(digits);
+      if (!address) {
+        setOwnCepError("CEP não encontrado.");
+        return;
+      }
+      setOwnStreet(address.street);
+      setOwnNeighborhood(address.neighborhood);
+      setOwnCity(address.city);
+      setOwnState(address.state);
+    } catch {
+      setOwnCepError("Não foi possível buscar o CEP agora — preencha manualmente.");
+    } finally {
+      setOwnCepLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!documentValid) {
@@ -86,7 +119,19 @@ export default function CriarContaPage() {
         document,
         businessName: documentType === "cnpj" ? businessName : undefined,
         phone,
-        address: { street, number, complement: complement || undefined, neighborhood, city, state, zipCode },
+        address: { street, number, complement: complement || undefined, neighborhood, city, state, zipCode, label: "Entrega" },
+        businessAddress: sameAddress
+          ? undefined
+          : {
+              street: ownStreet,
+              number: ownNumber,
+              complement: ownComplement || undefined,
+              neighborhood: ownNeighborhood,
+              city: ownCity,
+              state: ownState,
+              zipCode: ownZipCode,
+              label: "Endereço",
+            },
         referenceCode: referenceCode || undefined,
       });
       router.push("/conta");
@@ -188,6 +233,50 @@ export default function CriarContaPage() {
           <p className="text-xs text-slate-400 mt-2">
             Sua região de entrega é definida automaticamente pelo bairro — não precisa escolher.
           </p>
+        </div>
+
+        <div className="pt-2 border-t border-slate-100">
+          <label className="flex items-center gap-2 text-sm text-slate-700 pt-2 cursor-pointer">
+            <input type="checkbox" checked={sameAddress} onChange={(e) => setSameAddress(e.target.checked)} />
+            Meu endereço {documentType === "cnpj" ? "comercial/cadastral" : "próprio"} é o mesmo da entrega
+          </label>
+
+          {!sameAddress && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold text-slate-900 mb-3">
+                {documentType === "cnpj" ? "Endereço comercial" : "Seu endereço"}
+              </p>
+
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-700 mb-1">CEP</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required={!sameAddress}
+                  value={ownZipCode}
+                  onChange={(e) => setOwnZipCode(formatCep(e.target.value))}
+                  onBlur={handleOwnZipCodeBlur}
+                  placeholder="00000-000"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                />
+                {ownCepLoading && <p className="text-xs text-slate-400 mt-1">Buscando endereço...</p>}
+                {ownCepError && <p className="text-xs text-amber-600 mt-1">{ownCepError}</p>}
+              </div>
+
+              <div className="space-y-3">
+                <Field label="Rua" value={ownStreet} onChange={setOwnStreet} required={!sameAddress} />
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Número" value={ownNumber} onChange={setOwnNumber} required={!sameAddress} />
+                  <Field label="Complemento" value={ownComplement} onChange={setOwnComplement} />
+                </div>
+                <Field label="Bairro" value={ownNeighborhood} onChange={setOwnNeighborhood} required={!sameAddress} />
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Cidade" value={ownCity} onChange={setOwnCity} required={!sameAddress} />
+                  <Field label="Estado" value={ownState} onChange={setOwnState} required={!sameAddress} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {error && <p className="text-red-600 text-sm">{error}</p>}

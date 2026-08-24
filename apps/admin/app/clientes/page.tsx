@@ -173,6 +173,7 @@ function EditCustomerModal({
             <ul className="space-y-1">
               {customer.addresses.map((a) => (
                 <li key={a.id} className="text-slate-900 text-xs">
+                  {a.label && <span className="text-slate-500 font-medium">{a.label}: </span>}
                   {a.street}, {a.number}
                   {a.complement && ` - ${a.complement}`} — {a.neighborhood}, {a.city}/{a.state} — {a.zipCode}
                   {a.isDefault && <span className="ml-1 text-brand-600 font-medium">(padrão)</span>}
