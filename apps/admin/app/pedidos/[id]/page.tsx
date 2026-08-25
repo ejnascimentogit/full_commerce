@@ -170,7 +170,8 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                   ) : (
                     <p className="text-slate-500">
-                      {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+                      {(currentTotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType} × R${" "}
+                      {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
                       {delta !== 0 && (
                         <span className={`ml-2 font-medium ${delta > 0 ? "text-green-600" : "text-amber-600"}`}>
                           {delta > 0 ? "▲" : "▼"} ajustado {delta > 0 ? "para mais" : "para menos"}

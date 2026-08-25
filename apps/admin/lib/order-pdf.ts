@@ -35,7 +35,8 @@ export function downloadOrderPdf(order: Order, items: OrderItem[]) {
     doc.text(`R$ ${total.toFixed(2).replace(".", ",")}`, 195, y, { align: "right" });
     y += 5;
     doc.setTextColor(120);
-    doc.text(`   ${item.quantity} x R$ ${item.unitPrice.toFixed(2).replace(".", ",")}/${item.unitType}`, marginX, y);
+    const qty = (total / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0);
+    doc.text(`   ${qty} ${item.unitType} x R$ ${item.unitPrice.toFixed(2).replace(".", ",")}/${item.unitType}`, marginX, y);
     doc.setTextColor(0);
     y += 7;
   });

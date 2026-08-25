@@ -64,7 +64,7 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
                 <p className="text-xs text-slate-500">SKU: {item.sku}</p>
               </td>
               <td className="py-3 text-right font-bold text-slate-900 text-base">
-                {item.quantity} {item.unitType}
+                {(item.estimatedSubtotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType}
               </td>
             </tr>
           ))}
