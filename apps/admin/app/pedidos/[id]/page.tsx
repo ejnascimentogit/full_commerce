@@ -117,8 +117,12 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-900">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
           {!editingItems ? (
-            <button type="button" onClick={startEditingItems} className="text-sm font-medium text-brand-600 hover:text-brand-700">
-              Ajustar quantidades separadas
+            <button
+              type="button"
+              onClick={startEditingItems}
+              className="text-sm font-medium text-brand-600 border border-brand-200 rounded-md px-3 py-1.5 hover:bg-brand-50"
+            >
+              ✏️ Ajustar quantidades separadas
             </button>
           ) : (
             <div className="flex items-center gap-3">
