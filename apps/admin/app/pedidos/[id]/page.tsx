@@ -109,7 +109,10 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <AdminShell>
-      <div className="flex items-start justify-between mb-1">
+      <Link href="/pedidos" className="text-sm text-brand-600 hover:underline">
+        ← Voltar para pedidos
+      </Link>
+      <div className="flex items-start justify-between mb-1 mt-2">
         <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
         <div className="flex items-center gap-2">
           <Link
@@ -270,6 +273,30 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
           })}
         </div>
       </div>
+
+      {!!order.itemAdjustments?.length && (
+        <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
+          <h2 className="font-semibold text-slate-900 mb-3">Histórico de ajustes</h2>
+          <div className="divide-y divide-slate-100 text-sm">
+            {order.itemAdjustments.map((adj, i) => (
+              <div key={i} className="py-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-slate-900">{adj.productName}</p>
+                  <p className="text-xs text-slate-500">
+                    {adj.adminName} — {new Date(adj.changedAt).toLocaleString("pt-BR")}
+                  </p>
+                </div>
+                <p className="text-slate-600">
+                  R$ {adj.previousSubtotal.toFixed(2).replace(".", ",")} →{" "}
+                  <span className={`font-semibold ${adj.newSubtotal > adj.previousSubtotal ? "text-green-600" : "text-amber-600"}`}>
+                    R$ {adj.newSubtotal.toFixed(2).replace(".", ",")}
+                  </span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 grid sm:grid-cols-3 gap-4 text-sm">
         <div>

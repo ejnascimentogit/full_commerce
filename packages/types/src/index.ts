@@ -168,6 +168,17 @@ export interface Order {
   statusHistory: { status: OrderStatus; changedAt: string }[];
   tracking?: { code: string; carrier: string; url: string };
   createdAt: string;
+  /** Registro em Supabase de cada ajuste feito na separação — quem mudou, quando, valor antes/depois. Complementa OrderItem.finalSubtotal (que só guarda o resultado atual). */
+  itemAdjustments?: OrderItemAdjustment[];
+}
+
+export interface OrderItemAdjustment {
+  productId: string;
+  productName: string;
+  previousSubtotal: number;
+  newSubtotal: number;
+  adminName: string;
+  changedAt: string;
 }
 
 export type PaymentStatus = "pending" | "approved" | "refused" | "refunded";

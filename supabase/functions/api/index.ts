@@ -258,7 +258,7 @@ function mapSettings(s: Record<string, unknown>) {
   };
 }
 
-function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[]) {
+function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[], adjustments: Record<string, unknown>[] = []) {
   return {
     id: o.id,
     orderNumber: o.order_number,
@@ -286,7 +286,20 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[]) 
     statusHistory: (o.order_status_history ?? []).map((h: Record<string, unknown>) => ({ status: h.status, changedAt: h.changed_at })),
     tracking: o.tracking ?? undefined,
     createdAt: o.created_at,
+    itemAdjustments: adjustments.map((a) => ({
+      productId: a.product_id,
+      productName: a.product_name,
+      previousSubtotal: Number(a.previous_subtotal),
+      newSubtotal: Number(a.new_subtotal),
+      adminName: a.admin_name,
+      changedAt: a.changed_at,
+    })),
   };
+}
+
+async function fetchOrderAdjustments(orderId: string) {
+  const { data } = await eco().from("order_item_adjustments").select("*").eq("order_id", orderId).order("changed_at", { ascending: true });
+  return data ?? [];
 }
 
 function mapQuote(q: Record<string, unknown>, items: Record<string, unknown>[]) {
@@ -757,7 +770,7 @@ app.post("/orders", async (c) => {
 
   const { data: fullItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
-  return c.json(mapOrder({ ...order, order_status_history: history }, fullItems ?? []));
+  return c.json(mapOrder({ ...order, order_status_history: history }, fullItems ?? [], await fetchOrderAdjustments(order.id)));
 });
 
 app.get("/orders", async (c) => {
@@ -767,7 +780,7 @@ app.get("/orders", async (c) => {
     (orders ?? []).map(async (o) => {
       const { data: items } = await eco().from("order_items").select("*").eq("order_id", o.id);
       const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", o.id);
-      return mapOrder({ ...o, order_status_history: history }, items ?? []);
+      return mapOrder({ ...o, order_status_history: history }, items ?? [], await fetchOrderAdjustments(o.id));
     }),
   );
   return c.json(results);
@@ -779,7 +792,7 @@ app.get("/orders/:id", async (c) => {
   if (!order || order.customer_id !== customer.id) throw new ApiError(404, "NOT_FOUND");
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
-  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? []));
+  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? [], await fetchOrderAdjustments(order.id)));
 });
 
 // ---------- Orçamentos (cliente) ----------
@@ -1115,7 +1128,7 @@ app.get("/admin/orders", async (c) => {
     uniqueOrders.map(async (o) => {
       const { data: items } = await eco().from("order_items").select("*").eq("order_id", o.id);
       const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", o.id);
-      return mapOrder({ ...o, order_status_history: history }, items ?? []);
+      return mapOrder({ ...o, order_status_history: history }, items ?? [], await fetchOrderAdjustments(o.id));
     }),
   );
   return c.json(results);
@@ -1128,7 +1141,7 @@ app.get("/admin/orders/:id", async (c) => {
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
   if (admin.role === "vendorAdmin" && !(items ?? []).some((i) => i.vendor_id === admin.vendor_id)) throw new ApiError(403, "FORBIDDEN");
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
-  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? []));
+  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? [], await fetchOrderAdjustments(order.id)));
 });
 
 // Ajuste feito na separação (peso variável, falta de estoque): grava a
@@ -1141,13 +1154,28 @@ app.patch("/admin/orders/:id/items", async (c) => {
   if (!order) throw new ApiError(404, "NOT_FOUND");
 
   const { data: orderItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  const auditRows: Record<string, unknown>[] = [];
   for (const adj of items as { productId: string; finalQuantity: number }[]) {
     const item = (orderItems ?? []).find((i) => i.product_id === adj.productId);
     if (!item) continue;
     if (admin.role === "vendorAdmin" && item.vendor_id !== admin.vendor_id) continue;
-    const finalSubtotal = Math.round(Number(item.unit_price) * adj.finalQuantity * 100) / 100;
-    await eco().from("order_items").update({ final_subtotal: finalSubtotal }).eq("id", item.id);
+    const previousSubtotal = item.final_subtotal != null ? Number(item.final_subtotal) : Number(item.estimated_subtotal);
+    const newSubtotal = Math.round(Number(item.unit_price) * adj.finalQuantity * 100) / 100;
+    if (newSubtotal === previousSubtotal) continue;
+    await eco().from("order_items").update({ final_subtotal: newSubtotal }).eq("id", item.id);
+    auditRows.push({
+      company_id: admin.company_id,
+      order_id: order.id,
+      order_item_id: item.id,
+      product_id: item.product_id,
+      product_name: item.name,
+      previous_subtotal: previousSubtotal,
+      new_subtotal: newSubtotal,
+      admin_id: admin.id,
+      admin_name: admin.name,
+    });
   }
+  if (auditRows.length) await eco().from("order_item_adjustments").insert(auditRows);
 
   const { data: updatedItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const newSubtotal =
@@ -1164,7 +1192,7 @@ app.patch("/admin/orders/:id/items", async (c) => {
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
 
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
-  return c.json(mapOrder({ ...updatedOrder, order_status_history: history }, updatedItems ?? []));
+  return c.json(mapOrder({ ...updatedOrder, order_status_history: history }, updatedItems ?? [], await fetchOrderAdjustments(order.id)));
 });
 
 app.patch("/orders/:id/status", async (c) => {
@@ -1183,7 +1211,7 @@ app.patch("/orders/:id/status", async (c) => {
     .insert({ company_id: admin.company_id, order_id: order.id, status, changed_at: new Date().toISOString() });
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
-  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? []));
+  return c.json(mapOrder({ ...order, order_status_history: history }, items ?? [], await fetchOrderAdjustments(order.id)));
 });
 
 app.get("/admin/quotes", async (c) => {

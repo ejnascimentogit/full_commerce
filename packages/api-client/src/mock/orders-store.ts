@@ -134,14 +134,24 @@ export function advanceOrderStatus(id: string, status: OrderStatus): Order | und
 // finalSubtotal registrado por item; subtotal/total do pedido recalculados
 // a partir dele — estimatedSubtotal permanece intacto como o valor original
 // pedido, pra loja e cliente conseguirem comparar antes x depois.
-export function updateOrderItems(id: string, adjustments: { productId: string; finalQuantity: number }[]): Order | undefined {
+export function updateOrderItems(
+  id: string,
+  adjustments: { productId: string; finalQuantity: number }[],
+  adminName: string,
+): Order | undefined {
   const orders = readOrders();
   const order = orders.find((o) => o.id === id);
   if (!order) return undefined;
+  order.itemAdjustments = order.itemAdjustments ?? [];
+  const now = new Date().toISOString();
   for (const adj of adjustments) {
     const item = order.items.find((i) => i.productId === adj.productId);
     if (!item) continue;
-    item.finalSubtotal = Math.round(item.unitPrice * adj.finalQuantity * 100) / 100;
+    const previousSubtotal = item.finalSubtotal ?? item.estimatedSubtotal;
+    const newSubtotal = Math.round(item.unitPrice * adj.finalQuantity * 100) / 100;
+    if (newSubtotal === previousSubtotal) continue;
+    item.finalSubtotal = newSubtotal;
+    order.itemAdjustments.push({ productId: item.productId, productName: item.name, previousSubtotal, newSubtotal, adminName, changedAt: now });
   }
   const newSubtotal = order.items.reduce((sum, i) => sum + (i.finalSubtotal ?? i.estimatedSubtotal), 0);
   order.subtotal = Math.round(newSubtotal * 100) / 100;

@@ -251,7 +251,9 @@ export const mockApiClient: ApiClient = {
 
   async updateOrderItems(id: string, adjustments: { productId: string; finalQuantity: number }[]): Promise<Order> {
     await delay(300);
-    const order = updateOrderItemsStore(id, adjustments);
+    const adminId = getAdminSessionUserId();
+    const admin = adminId ? findAdminUserById(adminId) : null;
+    const order = updateOrderItemsStore(id, adjustments, admin?.name ?? "Admin");
     if (!order) throw new Error(`Order not found: ${id}`);
     return order;
   },
