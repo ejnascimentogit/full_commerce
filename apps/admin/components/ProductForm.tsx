@@ -103,7 +103,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         unitType,
         basePrice: Number(basePrice),
         salePrice: salePrice && Number(salePrice) > 0 ? Number(salePrice) : undefined,
-        boxQuantity: unitType === "cx" ? Number(boxQuantity) : undefined,
+        boxQuantity: boxQuantity ? Number(boxQuantity) : undefined,
         isVariableWeight,
         avgWeight: isVariableWeight ? Number(avgWeight) : undefined,
         isSeasonal,
@@ -226,9 +226,12 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
             ))}
           </select>
         </div>
-        {unitType === "cx" && <Field label="Unidades por caixa" value={boxQuantity} onChange={setBoxQuantity} type="number" />}
+        <Field label="Unidades por caixa/fardo (opcional)" value={boxQuantity} onChange={setBoxQuantity} type="number" />
         <Field label="Estoque" value={stock} onChange={setStock} type="number" required />
       </div>
+      <p className="text-xs text-slate-400 -mt-2">
+        Informativo — aparece na página do produto (ex: &quot;Caixa com 12 unidades&quot;), mesmo vendendo por unidade.
+      </p>
 
       {activePromotion && (
         <p className="text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-md px-3 py-2 flex items-center gap-1.5">
