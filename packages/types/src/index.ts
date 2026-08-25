@@ -290,4 +290,7 @@ export interface StoreSettings {
   interestFreeInstallments: number;
   /** Taxa de juros ao mês (%) aplicada acima de interestFreeInstallments, via Tabela Price. */
   monthlyInterestRate: number;
+
+  /** Desligado (padrão): depois que o pedido sai para entrega ou é entregue, a mercadoria já deixou o estoque e a nota fiscal já foi emitida — não dá mais pra ajustar quantidade. Ligar aqui libera o ajuste mesmo nesses status. */
+  allowAdjustmentsAfterDispatch: boolean;
 }

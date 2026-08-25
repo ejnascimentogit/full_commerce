@@ -255,6 +255,7 @@ function mapSettings(s: Record<string, unknown>) {
     minInstallmentValue: Number(s.min_installment_value),
     interestFreeInstallments: s.interest_free_installments,
     monthlyInterestRate: Number(s.monthly_interest_rate),
+    allowAdjustmentsAfterDispatch: s.allow_adjustments_after_dispatch,
   };
 }
 
@@ -1147,11 +1148,20 @@ app.get("/admin/orders/:id", async (c) => {
 // Ajuste feito na separação (peso variável, falta de estoque): grava a
 // quantidade realmente enviada por item. estimated_subtotal original nunca
 // é sobrescrito — cliente e loja precisam poder comparar antes x depois.
+const DISPATCHED_STATUSES = new Set(["OUT_FOR_DELIVERY", "DELIVERED"]);
+
 app.patch("/admin/orders/:id/items", async (c) => {
   const admin = await requireAdmin(c);
   const { items } = await c.req.json();
   const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (!order) throw new ApiError(404, "NOT_FOUND");
+
+  if (DISPATCHED_STATUSES.has(order.status as string)) {
+    const { data: settings } = await eco().from("store_settings").select("allow_adjustments_after_dispatch").eq("company_id", admin.company_id).maybeSingle();
+    if (!settings?.allow_adjustments_after_dispatch) {
+      throw new ApiError(422, "ORDER_ALREADY_DISPATCHED", "Pedido já saiu para entrega ou foi entregue — mercadoria já baixada do estoque e nota fiscal emitida.");
+    }
+  }
 
   const { data: orderItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const auditRows: Record<string, unknown>[] = [];
@@ -1268,6 +1278,7 @@ app.patch("/settings", async (c) => {
   if ("minInstallmentValue" in patch) row.min_installment_value = patch.minInstallmentValue;
   if ("interestFreeInstallments" in patch) row.interest_free_installments = patch.interestFreeInstallments;
   if ("monthlyInterestRate" in patch) row.monthly_interest_rate = patch.monthlyInterestRate;
+  if ("allowAdjustmentsAfterDispatch" in patch) row.allow_adjustments_after_dispatch = patch.allowAdjustmentsAfterDispatch;
   row.updated_at = new Date().toISOString();
   const { data, error } = await eco().from("store_settings").update(row).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);

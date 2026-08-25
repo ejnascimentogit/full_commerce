@@ -251,6 +251,10 @@ export const mockApiClient: ApiClient = {
 
   async updateOrderItems(id: string, adjustments: { productId: string; finalQuantity: number }[]): Promise<Order> {
     await delay(300);
+    const existing = findOrderById(id);
+    if (existing && (existing.status === "OUT_FOR_DELIVERY" || existing.status === "DELIVERED") && !getSettings().allowAdjustmentsAfterDispatch) {
+      throw new Error("ORDER_ALREADY_DISPATCHED");
+    }
     const adminId = getAdminSessionUserId();
     const admin = adminId ? findAdminUserById(adminId) : null;
     const order = updateOrderItemsStore(id, adjustments, admin?.name ?? "Admin");

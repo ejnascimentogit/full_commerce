@@ -16,6 +16,7 @@ export default function ConfiguracoesPage() {
   const [savingColor, setSavingColor] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [savingPromotionsToggle, setSavingPromotionsToggle] = useState(false);
+  const [savingDispatchToggle, setSavingDispatchToggle] = useState(false);
 
   const [bannerTitle, setBannerTitle] = useState("");
   const [bannerLink, setBannerLink] = useState("");
@@ -76,6 +77,14 @@ export default function ConfiguracoesPage() {
     setSavingPromotionsToggle(true);
     await apiClient.updateStoreSettings({ promotionsEnabled: !settings.promotionsEnabled });
     setSavingPromotionsToggle(false);
+    refresh();
+  }
+
+  async function toggleAllowAdjustmentsAfterDispatch() {
+    if (!settings) return;
+    setSavingDispatchToggle(true);
+    await apiClient.updateStoreSettings({ allowAdjustmentsAfterDispatch: !settings.allowAdjustmentsAfterDispatch });
+    setSavingDispatchToggle(false);
     refresh();
   }
 
@@ -670,6 +679,26 @@ export default function ConfiguracoesPage() {
             <p className="text-xs text-slate-400 mt-1">
               Cobrado de clientes CPF sempre, e de CNPJ também se o frete grátis acima estiver desligado.
             </p>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Permitir ajustar quantidade após saída para entrega</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Desligado (padrão): depois que o pedido está &quot;Saiu para entrega&quot; ou &quot;Entregue&quot;, a
+                mercadoria já saiu do estoque e a nota fiscal já foi emitida — não dá mais pra ajustar quantidade.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleAllowAdjustmentsAfterDispatch}
+              disabled={savingDispatchToggle}
+              className={`shrink-0 ml-4 relative w-12 h-7 rounded-full transition-colors disabled:opacity-50 ${settings.allowAdjustmentsAfterDispatch ? "bg-brand-600" : "bg-slate-300"}`}
+            >
+              <span
+                className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform ${settings.allowAdjustmentsAfterDispatch ? "translate-x-6" : "translate-x-1"}`}
+              />
+            </button>
           </div>
 
           <button

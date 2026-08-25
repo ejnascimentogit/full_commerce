@@ -48,6 +48,11 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
   // sem essa guarda, um pedido cancelado mostraria "Avançar para: Pendente".
   const nextStatus = currentIndex === -1 ? undefined : ORDER_STATUS_FLOW[currentIndex + 1];
   const isTerminal = order.status === "CANCELLED" || order.status === "REFUNDED";
+  // Depois que sai para entrega, a mercadoria já deixou o estoque e a nota
+  // fiscal já foi emitida — trava o ajuste de itens, a não ser que o admin
+  // tenha ligado o parâmetro em Configurações.
+  const isDispatched = order.status === "OUT_FOR_DELIVERY" || order.status === "DELIVERED";
+  const itemsLocked = isTerminal || (isDispatched && !settings?.allowAdjustmentsAfterDispatch);
 
   async function advance() {
     if (!nextStatus) return;
@@ -158,7 +163,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-900">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
-          {isTerminal ? null : !editingItems ? (
+          {itemsLocked ? null : !editingItems ? (
             <button
               type="button"
               onClick={startEditingItems}
@@ -182,6 +187,13 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
             </div>
           )}
         </div>
+        {isDispatched && itemsLocked && (
+          <p className="text-xs text-slate-500 mb-3 bg-slate-50 rounded-md px-3 py-2">
+            🔒 Pedido {order.status === "DELIVERED" ? "entregue" : "saiu para entrega"} — mercadoria já baixada do
+            estoque e nota fiscal emitida, quantidade não pode mais ser ajustada. Para liberar mesmo assim, ligue o
+            parâmetro em Configurações → Pedidos e frete.
+          </p>
+        )}
         {editingItems && !belowMinimum && (
           <p className="text-xs text-slate-500 mb-3 bg-amber-50 rounded-md px-3 py-2">
             Informe a quantidade realmente separada de cada item. O cliente verá o pedido marcado como ajustado, com o valor a mais ou a menos.
