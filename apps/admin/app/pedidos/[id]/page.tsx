@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
-import type { Order } from "@ecommerce/types";
+import type { Order, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { downloadOrderPdf } from "@/lib/order-pdf";
@@ -22,10 +22,17 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
   const [editingItems, setEditingItems] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [savingItems, setSavingItems] = useState(false);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
+  const [confirmingBelowMinimum, setConfirmingBelowMinimum] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     apiClient.getAdminOrder(id).then(setOrder);
   }, [id]);
+
+  useEffect(() => {
+    apiClient.getStoreSettings().then(setSettings);
+  }, []);
 
   if (!order) {
     return (
@@ -37,7 +44,10 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
 
   const visibleItems = user?.role === "vendorAdmin" ? order.items.filter((i) => i.vendorId === user.vendorId) : order.items;
   const currentIndex = ORDER_STATUS_FLOW.indexOf(order.status);
-  const nextStatus = ORDER_STATUS_FLOW[currentIndex + 1];
+  // CANCELLED/REFUNDED não fazem parte do fluxo linear (indexOf retorna -1) —
+  // sem essa guarda, um pedido cancelado mostraria "Avançar para: Pendente".
+  const nextStatus = currentIndex === -1 ? undefined : ORDER_STATUS_FLOW[currentIndex + 1];
+  const isTerminal = order.status === "CANCELLED" || order.status === "REFUNDED";
 
   async function advance() {
     if (!nextStatus) return;
@@ -65,6 +75,35 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
     const updated = await apiClient.updateOrderItems(id, adjustments);
     setOrder(updated);
     setSavingItems(false);
+    setEditingItems(false);
+    setConfirmingBelowMinimum(false);
+  }
+
+  // Ajuste na separação pode derrubar o total abaixo do pedido mínimo da loja
+  // (ex: faltou peso do produto). Não deixa salvar direto nesse caso — o
+  // admin precisa falar com o cliente antes: cancelar o pedido ou seguir
+  // assim mesmo (ex: cliente aceitou, ou vai completar com outro item).
+  const projectedSubtotal = order.items.reduce((sum, item) => {
+    const typed = quantities[item.productId];
+    if (typed !== undefined) return sum + item.unitPrice * (Number(typed) || 0);
+    return sum + (item.finalSubtotal ?? item.estimatedSubtotal);
+  }, 0);
+  const belowMinimum = editingItems && !!settings?.minOrderValue && projectedSubtotal < settings.minOrderValue;
+
+  function requestSaveItemAdjustments() {
+    if (belowMinimum) {
+      setConfirmingBelowMinimum(true);
+      return;
+    }
+    saveItemAdjustments();
+  }
+
+  async function cancelOrder() {
+    setCancelling(true);
+    const updated = await apiClient.advanceOrderStatus(id, "CANCELLED");
+    setOrder(updated);
+    setCancelling(false);
+    setConfirmingBelowMinimum(false);
     setEditingItems(false);
   }
 
@@ -116,7 +155,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-900">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
-          {!editingItems ? (
+          {isTerminal ? null : !editingItems ? (
             <button
               type="button"
               onClick={startEditingItems}
@@ -131,7 +170,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
               </button>
               <button
                 type="button"
-                onClick={saveItemAdjustments}
+                onClick={requestSaveItemAdjustments}
                 disabled={savingItems}
                 className="bg-brand-600 text-white font-semibold rounded-md px-3 py-1.5 text-sm hover:bg-brand-700 disabled:opacity-50"
               >
@@ -140,10 +179,55 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
             </div>
           )}
         </div>
-        {editingItems && (
+        {editingItems && !belowMinimum && (
           <p className="text-xs text-slate-500 mb-3 bg-amber-50 rounded-md px-3 py-2">
             Informe a quantidade realmente separada de cada item. O cliente verá o pedido marcado como ajustado, com o valor a mais ou a menos.
           </p>
+        )}
+        {belowMinimum && settings?.minOrderValue && (
+          <p className="text-xs text-red-700 mb-3 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            ⚠️ Com esse ajuste o pedido fica em R$ {projectedSubtotal.toFixed(2).replace(".", ",")}, abaixo do mínimo de R${" "}
+            {settings.minOrderValue.toFixed(2).replace(".", ",")}. Fale com o cliente antes de salvar — ele vai precisar decidir entre
+            cancelar o pedido ou completar com outro item.
+          </p>
+        )}
+        {confirmingBelowMinimum && (
+          <div className="mb-3 bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-sm font-semibold text-red-800 mb-1">Pedido abaixo do valor mínimo</p>
+            <p className="text-sm text-red-700 mb-3">
+              Já conversou com o cliente? Escolha o que fazer — não é possível deixar o pedido salvo abaixo do mínimo sem uma decisão.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {user?.role === "platformAdmin" ? (
+                <button
+                  type="button"
+                  onClick={cancelOrder}
+                  disabled={cancelling || savingItems}
+                  className="bg-red-600 text-white font-semibold rounded-md px-3 py-1.5 text-sm hover:bg-red-700 disabled:opacity-50"
+                >
+                  {cancelling ? "Cancelando..." : "Cancelar pedido"}
+                </button>
+              ) : (
+                <p className="text-xs text-red-600 self-center">Cancelar o pedido é uma ação da plataforma, não do fornecedor.</p>
+              )}
+              <button
+                type="button"
+                onClick={saveItemAdjustments}
+                disabled={cancelling || savingItems}
+                className="bg-white border border-red-300 text-red-700 font-semibold rounded-md px-3 py-1.5 text-sm hover:bg-red-50 disabled:opacity-50"
+              >
+                {savingItems ? "Salvando..." : "Cliente aceitou — confirmar assim mesmo"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingBelowMinimum(false)}
+                disabled={cancelling || savingItems}
+                className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5"
+              >
+                Voltar e ajustar
+              </button>
+            </div>
+          </div>
         )}
         <div className="divide-y divide-slate-100 text-sm">
           {visibleItems.map((item, i) => {
