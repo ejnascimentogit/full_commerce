@@ -1,10 +1,12 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import Link from "next/link";
 import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
 import type { Order } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
+import { downloadOrderPdf } from "@/lib/order-pdf";
 
 const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
   card: "Cartão de crédito",
@@ -17,6 +19,9 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
   const { user } = useAdminAuth();
   const [order, setOrder] = useState<Order | null>(null);
   const [advancing, setAdvancing] = useState(false);
+  const [editingItems, setEditingItems] = useState(false);
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [savingItems, setSavingItems] = useState(false);
 
   useEffect(() => {
     apiClient.getAdminOrder(id).then(setOrder);
@@ -41,9 +46,49 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
     setAdvancing(false);
   }
 
+  function startEditingItems() {
+    const initial: Record<string, string> = {};
+    for (const item of visibleItems) {
+      const currentTotal = item.finalSubtotal ?? item.estimatedSubtotal;
+      initial[item.productId] = (currentTotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0);
+    }
+    setQuantities(initial);
+    setEditingItems(true);
+  }
+
+  async function saveItemAdjustments() {
+    setSavingItems(true);
+    const adjustments = visibleItems.map((item) => ({
+      productId: item.productId,
+      finalQuantity: Number(quantities[item.productId]) || 0,
+    }));
+    const updated = await apiClient.updateOrderItems(id, adjustments);
+    setOrder(updated);
+    setSavingItems(false);
+    setEditingItems(false);
+  }
+
   return (
     <AdminShell>
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">{order.orderNumber}</h1>
+      <div className="flex items-start justify-between mb-1">
+        <h1 className="text-2xl font-bold text-slate-900">{order.orderNumber}</h1>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/pedidos/${id}/imprimir`}
+            target="_blank"
+            className="text-sm font-medium text-slate-600 border border-slate-300 rounded-md px-3 py-1.5 hover:bg-slate-50"
+          >
+            🖨️ Imprimir separação
+          </Link>
+          <button
+            type="button"
+            onClick={() => downloadOrderPdf(order, visibleItems)}
+            className="text-sm font-medium text-slate-600 border border-slate-300 rounded-md px-3 py-1.5 hover:bg-slate-50"
+          >
+            📄 Gerar PDF
+          </button>
+        </div>
+      </div>
       <p className="text-sm text-slate-500 mb-6">Feito em {new Date(order.createdAt).toLocaleDateString("pt-BR")}</p>
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4 flex items-center justify-between">
@@ -69,20 +114,71 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
-        <h2 className="font-semibold text-slate-900 mb-3">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
-        <div className="divide-y divide-slate-100 text-sm">
-          {visibleItems.map((item, i) => (
-            <div key={item.productId} className="py-2.5 flex justify-between gap-3">
-              <span className="w-6 shrink-0 text-slate-400 font-mono text-xs">{i + 1}.</span>
-              <div className="flex-1">
-                <p className="text-slate-900">{item.name}</p>
-                <p className="text-slate-500">
-                  {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
-                </p>
-              </div>
-              <p className="font-medium text-slate-900">R$ {(item.finalSubtotal ?? item.estimatedSubtotal).toFixed(2).replace(".", ",")}</p>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-slate-900">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
+          {!editingItems ? (
+            <button type="button" onClick={startEditingItems} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+              Ajustar quantidades separadas
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => setEditingItems(false)} className="text-sm text-slate-500 hover:text-slate-700">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveItemAdjustments}
+                disabled={savingItems}
+                className="bg-brand-600 text-white font-semibold rounded-md px-3 py-1.5 text-sm hover:bg-brand-700 disabled:opacity-50"
+              >
+                {savingItems ? "Salvando..." : "Salvar ajuste"}
+              </button>
             </div>
-          ))}
+          )}
+        </div>
+        {editingItems && (
+          <p className="text-xs text-slate-500 mb-3 bg-amber-50 rounded-md px-3 py-2">
+            Informe a quantidade realmente separada de cada item. O cliente verá o pedido marcado como ajustado, com o valor a mais ou a menos.
+          </p>
+        )}
+        <div className="divide-y divide-slate-100 text-sm">
+          {visibleItems.map((item, i) => {
+            const currentTotal = item.finalSubtotal ?? item.estimatedSubtotal;
+            const delta = item.finalSubtotal != null ? Math.round((item.finalSubtotal - item.estimatedSubtotal) * 100) / 100 : 0;
+            return (
+              <div key={item.productId} className="py-2.5 flex justify-between items-center gap-3">
+                <span className="w-6 shrink-0 text-slate-400 font-mono text-xs">{i + 1}.</span>
+                <div className="flex-1">
+                  <p className="text-slate-900">{item.name}</p>
+                  {editingItems ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="number"
+                        step={item.unitType === "kg" ? "0.001" : "1"}
+                        min="0"
+                        value={quantities[item.productId] ?? ""}
+                        onChange={(e) => setQuantities({ ...quantities, [item.productId]: e.target.value })}
+                        className="w-28 border border-slate-300 rounded-md px-2 py-1 text-sm"
+                      />
+                      <span className="text-slate-500 text-xs">
+                        {item.unitType} — pedido: {(item.estimatedSubtotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500">
+                      {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+                      {delta !== 0 && (
+                        <span className={`ml-2 font-medium ${delta > 0 ? "text-green-600" : "text-amber-600"}`}>
+                          {delta > 0 ? "▲" : "▼"} ajustado {delta > 0 ? "para mais" : "para menos"}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+                {!editingItems && <p className="font-medium text-slate-900">R$ {currentTotal.toFixed(2).replace(".", ",")}</p>}
+              </div>
+            );
+          })}
         </div>
       </div>
 

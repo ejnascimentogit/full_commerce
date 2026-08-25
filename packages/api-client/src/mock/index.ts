@@ -26,6 +26,7 @@ import {
   findOrdersByCustomer,
   nextOrderNumber,
   saveOrder,
+  updateOrderItems as updateOrderItemsStore,
 } from "./orders-store";
 import {
   buildOrderItem,
@@ -244,6 +245,13 @@ export const mockApiClient: ApiClient = {
   async advanceOrderStatus(id: string, status: OrderStatus): Promise<Order> {
     await delay(300);
     const order = advanceOrderStatusStore(id, status);
+    if (!order) throw new Error(`Order not found: ${id}`);
+    return order;
+  },
+
+  async updateOrderItems(id: string, adjustments: { productId: string; finalQuantity: number }[]): Promise<Order> {
+    await delay(300);
+    const order = updateOrderItemsStore(id, adjustments);
     if (!order) throw new Error(`Order not found: ${id}`);
     return order;
   },

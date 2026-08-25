@@ -126,6 +126,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getCustomerOrders: () => request<Order[]>("/api/orders", { tokenKey: CUSTOMER_TOKEN_KEY }),
     advanceOrderStatus: (id: string, status: OrderStatus) =>
       request<Order>(`/api/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }), tokenKey: ADMIN_TOKEN_KEY }),
+    updateOrderItems: (id: string, adjustments: { productId: string; finalQuantity: number }[]) =>
+      request<Order>(`/api/admin/orders/${id}/items`, { method: "PATCH", body: JSON.stringify({ items: adjustments }), tokenKey: ADMIN_TOKEN_KEY }),
 
     registerAdmin: async (input: { name: string; email: string; password: string }) => {
       const { token, adminUser } = await request<{ token: string; adminUser: AdminUser }>("/api/admin/auth/register", {

@@ -92,20 +92,29 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       <section className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <h2 className="font-semibold text-slate-900 mb-3">Itens do pedido</h2>
         <div className="divide-y divide-slate-100">
-          {order.items.map((item, i) => (
-            <div key={item.productId} className="py-2.5 flex justify-between items-center text-sm gap-3">
-              <span className="w-6 shrink-0 text-slate-400 font-mono text-xs">{i + 1}.</span>
-              <div className="flex-1">
-                <p className="text-slate-900">{item.name}</p>
-                <p className="text-slate-500">
-                  {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+          {order.items.map((item, i) => {
+            const delta = item.finalSubtotal != null ? Math.round((item.finalSubtotal - item.estimatedSubtotal) * 100) / 100 : 0;
+            return (
+              <div key={item.productId} className="py-2.5 flex justify-between items-center text-sm gap-3">
+                <span className="w-6 shrink-0 text-slate-400 font-mono text-xs">{i + 1}.</span>
+                <div className="flex-1">
+                  <p className="text-slate-900">{item.name}</p>
+                  <p className="text-slate-500">
+                    {item.quantity} × R$ {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+                  </p>
+                  {delta !== 0 && (
+                    <p className={`text-xs font-medium mt-0.5 ${delta > 0 ? "text-green-600" : "text-amber-600"}`}>
+                      {delta > 0 ? "▲" : "▼"} Ajustado na separação — {delta > 0 ? "+" : ""}R$ {delta.toFixed(2).replace(".", ",")} em
+                      relação ao pedido original
+                    </p>
+                  )}
+                </div>
+                <p className="font-medium text-slate-900">
+                  R$ {(item.finalSubtotal ?? item.estimatedSubtotal).toFixed(2).replace(".", ",")}
                 </p>
               </div>
-              <p className="font-medium text-slate-900">
-                R$ {(item.finalSubtotal ?? item.estimatedSubtotal).toFixed(2).replace(".", ",")}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="mt-3 pt-3 border-t border-slate-200 text-sm space-y-1">
           <div className="flex justify-between text-slate-600">

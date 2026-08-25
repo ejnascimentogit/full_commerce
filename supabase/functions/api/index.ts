@@ -1131,6 +1131,42 @@ app.get("/admin/orders/:id", async (c) => {
   return c.json(mapOrder({ ...order, order_status_history: history }, items ?? []));
 });
 
+// Ajuste feito na separação (peso variável, falta de estoque): grava a
+// quantidade realmente enviada por item. estimated_subtotal original nunca
+// é sobrescrito — cliente e loja precisam poder comparar antes x depois.
+app.patch("/admin/orders/:id/items", async (c) => {
+  const admin = await requireAdmin(c);
+  const { items } = await c.req.json();
+  const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
+  if (!order) throw new ApiError(404, "NOT_FOUND");
+
+  const { data: orderItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  for (const adj of items as { productId: string; finalQuantity: number }[]) {
+    const item = (orderItems ?? []).find((i) => i.product_id === adj.productId);
+    if (!item) continue;
+    if (admin.role === "vendorAdmin" && item.vendor_id !== admin.vendor_id) continue;
+    const finalSubtotal = Math.round(Number(item.unit_price) * adj.finalQuantity * 100) / 100;
+    await eco().from("order_items").update({ final_subtotal: finalSubtotal }).eq("id", item.id);
+  }
+
+  const { data: updatedItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  const newSubtotal =
+    Math.round(
+      (updatedItems ?? []).reduce((sum, i) => sum + (i.final_subtotal != null ? Number(i.final_subtotal) : Number(i.estimated_subtotal)), 0) * 100,
+    ) / 100;
+  const newTotal = Math.round((Math.max(0, newSubtotal - Number(order.discount)) + Number(order.shipping)) * 100) / 100;
+  const { data: updatedOrder, error } = await eco()
+    .from("orders")
+    .update({ subtotal: newSubtotal, total: newTotal })
+    .eq("id", order.id)
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+
+  const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
+  return c.json(mapOrder({ ...updatedOrder, order_status_history: history }, updatedItems ?? []));
+});
+
 app.patch("/orders/:id/status", async (c) => {
   const admin = await requireAdmin(c);
   const { status } = await c.req.json();

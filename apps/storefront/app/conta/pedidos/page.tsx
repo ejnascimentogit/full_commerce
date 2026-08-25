@@ -57,7 +57,14 @@ export default function MeusPedidosPage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-slate-900">{order.orderNumber}</p>
+                  <p className="font-semibold text-slate-900 flex items-center gap-2">
+                    {order.orderNumber}
+                    {order.items.some((i) => i.finalSubtotal != null && i.finalSubtotal !== i.estimatedSubtotal) && (
+                      <span className="text-xs font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                        Ajustado na separação
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString("pt-BR")}</p>
                 </div>
                 <span className="text-sm font-medium text-brand-600">{ORDER_STATUS_LABEL[order.status]}</span>

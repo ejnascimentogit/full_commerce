@@ -101,6 +101,8 @@ export interface ApiClient {
   getCustomerOrders(customerId: string): Promise<Order[]>;
   /** Só existe em mock por enquanto — no backend real isso é o painel de entregas do admin (PATCH /api/orders/:id/status). */
   advanceOrderStatus(id: string, status: OrderStatus): Promise<Order>;
+  /** Ajuste feito na separação (peso variável, falta de estoque): grava a quantidade realmente enviada por item e recalcula subtotal/total do pedido. estimatedSubtotal original fica preservado pra comparação. */
+  updateOrderItems(id: string, adjustments: { productId: string; finalQuantity: number }[]): Promise<Order>;
 
   // Admin (painel) — platformAdmin enxerga tudo, vendorAdmin só o próprio vendorId
   /** Autocadastro do dono da loja como platformAdmin — separado das contas demo do seed. */
