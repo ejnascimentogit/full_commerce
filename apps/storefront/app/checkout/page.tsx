@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { apiClient, unitPriceOf, calculateShipping, calculatePromotionDiscount } from "@ecommerce/api-client";
@@ -11,6 +11,8 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
 type PaymentMethod = "card" | "pix";
+
+const PREFERRED_PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX" };
 
 // CRC16-CCITT (poly 0x1021, init 0xFFFF) — checksum exigido no final de todo
 // payload Pix, especificação do Bacen (BR Code / EMV QR).
@@ -102,6 +104,17 @@ export default function CheckoutPage() {
       router.replace("/conta/entrar?redirect=/checkout");
     }
   }, [authLoading, customer, router]);
+
+  // Só pré-seleciona uma vez, quando o cliente carrega — depois disso o
+  // cliente pode trocar livremente, nunca sobrescrevemos a escolha manual.
+  const appliedPreference = useRef(false);
+  useEffect(() => {
+    if (appliedPreference.current || !customer?.preferredPaymentMethod) return;
+    if (customer.preferredPaymentMethod === "card" || customer.preferredPaymentMethod === "pix") {
+      setMethod(customer.preferredPaymentMethod);
+    }
+    appliedPreference.current = true;
+  }, [customer]);
 
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
@@ -283,7 +296,20 @@ export default function CheckoutPage() {
       </section>
 
       <section className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
-        <h2 className="font-semibold text-slate-900 mb-3">2. Forma de pagamento</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-slate-900">2. Forma de pagamento</h2>
+          {customer.preferredPaymentMethod && (
+            <span className="text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">
+              🏷️ Preferência: {PREFERRED_PAYMENT_LABEL[customer.preferredPaymentMethod]}
+            </span>
+          )}
+        </div>
+        {customer.preferredPaymentMethod === "cash" && (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-3 py-2 mb-3">
+            Este cliente prefere pagar em dinheiro — como não há essa opção aqui no checkout online, escolha PIX ou cartão, ou
+            combine a forma correta diretamente com o cliente.
+          </p>
+        )}
         <div className="flex gap-3">
           <button
             type="button"
