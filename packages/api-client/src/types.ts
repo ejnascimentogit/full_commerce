@@ -131,7 +131,10 @@ export interface ApiClient {
   /** Lista todos os clientes cadastrados — só platformAdmin. */
   getAdminCustomers(): Promise<Customer[]>;
   /** Editar cadastro de cliente (nome, telefone, região, cód. de referência, status) — só platformAdmin. */
-  updateCustomer(id: string, patch: Partial<Pick<Customer, "name" | "phone" | "businessName" | "regionId" | "referenceCode" | "status">>): Promise<Customer>;
+  updateCustomer(
+    id: string,
+    patch: Partial<Pick<Customer, "name" | "phone" | "businessName" | "regionId" | "referenceCode" | "preferredPaymentMethod" | "status">>,
+  ): Promise<Customer>;
   createVendor(input: Omit<Vendor, "id">): Promise<Vendor>;
   updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor>;
   /** Roteirização: cria/edita uma zona de entrega e os bairros que ela cobre. */

@@ -54,6 +54,8 @@ export interface Customer {
   code?: string;
   /** Código que o próprio cliente usa para nos identificar no sistema dele — texto livre, opcional. */
   referenceCode?: string;
+  /** Definida pelo admin (ex: cliente que já vem com condição fixada no ERP da empresa) — informativa, não obriga o pagamento no checkout. */
+  preferredPaymentMethod?: "cash" | "card" | "pix";
   createdAt: string;
   status: "active" | "inactive";
 }

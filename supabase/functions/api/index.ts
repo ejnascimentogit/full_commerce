@@ -168,6 +168,7 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
     regionId: c.region_id ?? undefined,
     code: c.code ?? undefined,
     referenceCode: c.reference_code ?? undefined,
+    preferredPaymentMethod: c.preferred_payment_method ?? undefined,
     createdAt: c.created_at,
     status: c.status,
   };
@@ -1137,6 +1138,7 @@ app.patch("/admin/customers/:id", async (c) => {
   if ("businessName" in patch) row.business_name = patch.businessName;
   if ("regionId" in patch) row.region_id = patch.regionId;
   if ("referenceCode" in patch) row.reference_code = patch.referenceCode;
+  if ("preferredPaymentMethod" in patch) row.preferred_payment_method = patch.preferredPaymentMethod || null;
   if ("status" in patch) row.status = patch.status;
   const { data: customer, error } = await eco()
     .from("customers")

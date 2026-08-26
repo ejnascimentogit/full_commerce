@@ -7,12 +7,15 @@ import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { useRouter } from "next/navigation";
 
+const PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX" };
+
 export default function ClientesPage() {
   const { user } = useAdminAuth();
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [regions, setRegions] = useState<DeliveryRegion[]>([]);
   const [search, setSearch] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
 
   useEffect(() => {
@@ -31,27 +34,40 @@ export default function ClientesPage() {
   if (user?.role !== "platformAdmin") return null;
 
   const term = search.trim().toLowerCase();
-  const filtered = term
-    ? customers.filter(
-        (c) =>
-          c.name.toLowerCase().includes(term) ||
-          c.email.toLowerCase().includes(term) ||
-          c.document.toLowerCase().includes(term) ||
-          (c.code ?? "").toLowerCase().includes(term) ||
-          (c.referenceCode ?? "").toLowerCase().includes(term),
-      )
-    : customers;
+  const filtered = customers.filter((c) => {
+    const matchesTerm =
+      !term ||
+      c.name.toLowerCase().includes(term) ||
+      c.email.toLowerCase().includes(term) ||
+      c.document.toLowerCase().includes(term) ||
+      (c.code ?? "").toLowerCase().includes(term) ||
+      (c.referenceCode ?? "").toLowerCase().includes(term);
+    const matchesPayment = !paymentFilter || c.preferredPaymentMethod === paymentFilter;
+    return matchesTerm && matchesPayment;
+  });
 
   return (
     <AdminShell>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="text-2xl font-bold text-slate-900">Clientes</h1>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome, e-mail, documento ou código..."
-          className="border border-slate-300 rounded-md px-3 py-2 text-sm w-80"
-        />
+        <div className="flex items-center gap-2">
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+          >
+            <option value="">Toda condição de pagamento</option>
+            <option value="cash">Dinheiro</option>
+            <option value="card">Cartão</option>
+            <option value="pix">PIX</option>
+          </select>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, e-mail, documento ou código..."
+            className="border border-slate-300 rounded-md px-3 py-2 text-sm w-80"
+          />
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -65,6 +81,7 @@ export default function ClientesPage() {
               <th className="text-left px-4 py-2.5">Telefone</th>
               <th className="text-left px-4 py-2.5">Região</th>
               <th className="text-left px-4 py-2.5">Cód. referência</th>
+              <th className="text-left px-4 py-2.5">Pagamento</th>
               <th className="text-left px-4 py-2.5">Status</th>
               <th className="text-left px-4 py-2.5"></th>
             </tr>
@@ -84,6 +101,7 @@ export default function ClientesPage() {
                   {c.regionId ? (regions.find((r) => r.id === c.regionId)?.name ?? "—") : <span className="text-amber-600">Fora de zona</span>}
                 </td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{c.referenceCode ?? "—"}</td>
+                <td className="px-4 py-2.5 text-slate-500">{PAYMENT_LABEL[c.preferredPaymentMethod ?? ""] ?? "—"}</td>
                 <td className="px-4 py-2.5">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                     {c.status === "active" ? "Ativo" : "Inativo"}
@@ -132,6 +150,7 @@ function EditCustomerModal({
   const [phone, setPhone] = useState(customer.phone);
   const [regionId, setRegionId] = useState(customer.regionId ?? "");
   const [referenceCode, setReferenceCode] = useState(customer.referenceCode ?? "");
+  const [preferredPaymentMethod, setPreferredPaymentMethod] = useState(customer.preferredPaymentMethod ?? "");
   const [status, setStatus] = useState(customer.status);
   const [saving, setSaving] = useState(false);
 
@@ -143,6 +162,7 @@ function EditCustomerModal({
       phone,
       regionId: regionId || undefined,
       referenceCode: referenceCode || undefined,
+      preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
       status,
     });
     setSaving(false);
@@ -223,6 +243,22 @@ function EditCustomerModal({
               onChange={(e) => setReferenceCode(e.target.value)}
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Condição de pagamento</label>
+            <select
+              value={preferredPaymentMethod}
+              onChange={(e) => setPreferredPaymentMethod(e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">Não definida</option>
+              <option value="cash">Dinheiro</option>
+              <option value="card">Cartão</option>
+              <option value="pix">PIX</option>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Útil pra clientes que já vêm do ERP da empresa com a condição pré-definida.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
