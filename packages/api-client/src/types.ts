@@ -1,6 +1,7 @@
 import type {
   AdminUser,
   Category,
+  Company,
   Customer,
   DeliveryRegion,
   DocumentType,
@@ -112,6 +113,10 @@ export interface ApiClient {
   resetAdminPassword(email: string, newPassword: string): Promise<void>;
   adminLogout(): Promise<void>;
   getCurrentAdminUser(): Promise<AdminUser | null>;
+  /** Só retorna algo pra quem é isPlatformOwner — backend rejeita os outros com 403. */
+  getCompanies(): Promise<Company[]>;
+  createCompany(input: { name: string; slug: string }): Promise<Company>;
+  updateCompany(id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }): Promise<Company>;
   createProduct(input: CreateProductInput): Promise<Product>;
   updateProduct(id: string, patch: UpdateProductInput): Promise<Product>;
   /** Todos os produtos (qualquer status), pro admin gerenciar — diferente de getProducts, que só traz "active" pro catálogo público. Escopo (platformAdmin: todos · vendorAdmin: só o próprio) é resolvido pelo backend a partir do token, não por parâmetro. */

@@ -8,6 +8,20 @@ export interface AdminUser {
   email: string;
   role: AdminRole;
   vendorId?: string; // presente só para vendorAdmin — escopa o que ele enxerga
+  /** true só para o admin da empresa 1 (quem opera a plataforma) — só ele vê a tela Empresas e pode cadastrar novos clientes. */
+  isPlatformOwner?: boolean;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  slug: string;
+  /** Domínio da loja pública. Fica undefined até o cliente comprar/apontar um domínio de verdade. */
+  domain?: string;
+  /** Domínio do painel admin — loja e admin costumam ficar em subdomínios diferentes, por isso os dois campos. */
+  adminDomain?: string;
+  active: boolean;
+  createdAt: string;
 }
 
 export interface Address {

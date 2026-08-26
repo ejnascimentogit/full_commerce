@@ -9,7 +9,7 @@ import type {
   UpdatePromotionInput,
   UpdateProductInput,
 } from "../types";
-import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type { AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import {
   createCategory as createCategoryStore,
   deleteCategory as deleteCategoryStore,
@@ -266,7 +266,7 @@ export const mockApiClient: ApiClient = {
     await delay(300);
     const user = createAdminUser(input);
     setAdminSessionUserId(user.id);
-    return user;
+    return { ...user, isPlatformOwner: user.role === "platformAdmin" };
   },
 
   async adminLogin(email: string, password: string): Promise<AdminUser> {
@@ -274,7 +274,7 @@ export const mockApiClient: ApiClient = {
     const user = verifyAdminPassword(email, password);
     if (!user) throw new Error("INVALID_CREDENTIALS");
     setAdminSessionUserId(user.id);
-    return user;
+    return { ...user, isPlatformOwner: user.role === "platformAdmin" };
   },
 
   async resetAdminPassword(email: string, newPassword: string): Promise<void> {
@@ -290,7 +290,29 @@ export const mockApiClient: ApiClient = {
     await delay();
     const id = getAdminSessionUserId();
     if (!id) return null;
-    return findAdminUserById(id) ?? null;
+    const user = findAdminUserById(id);
+    return user ? { ...user, isPlatformOwner: user.role === "platformAdmin" } : null;
+  },
+
+  async getCompanies(): Promise<Company[]> {
+    await delay();
+    return [
+      {
+        id: "00000000-0000-0000-0000-000000000001",
+        name: "Full-Commerce (demo)",
+        slug: "fullcommerce",
+        active: true,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  },
+
+  async createCompany(): Promise<Company> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async updateCompany(): Promise<Company> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
   },
 
   async createProduct(input: CreateProductInput): Promise<Product> {

@@ -91,6 +91,15 @@ async function requireAdmin(c: Context) {
   return data;
 }
 
+// Só o admin da empresa 1 (fullcommerce, quem opera a plataforma) pode
+// criar/editar outras empresas — o platformAdmin de cada empresa cliente
+// (ex: Odoya) é dono só da própria loja, não enxerga as outras.
+async function requirePlatformOwner(c: Context) {
+  const admin = await requireAdmin(c);
+  if (admin.company_id !== DEMO_COMPANY_ID) throw new ApiError(403, "FORBIDDEN");
+  return admin;
+}
+
 async function signInAndGetToken(email: string, password: string) {
   const { data, error } = await db().auth.signInWithPassword({ email, password });
   if (error || !data.session) throw new ApiError(401, "INVALID_CREDENTIALS");
@@ -165,7 +174,26 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
 }
 
 function mapAdminUser(u: Record<string, unknown>) {
-  return { id: u.id, name: u.name, email: u.email, role: u.role, vendorId: u.vendor_id ?? undefined };
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    vendorId: u.vendor_id ?? undefined,
+    isPlatformOwner: u.company_id === DEMO_COMPANY_ID,
+  };
+}
+
+function mapCompany(c: Record<string, unknown>) {
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    domain: c.domain ?? undefined,
+    adminDomain: c.admin_domain ?? undefined,
+    active: c.active,
+    createdAt: c.created_at,
+  };
 }
 
 function mapVendor(v: Record<string, unknown>) {
@@ -1406,6 +1434,62 @@ app.delete("/categories/:id", async (c) => {
   const { error } = await eco().from("categories").delete().eq("id", c.req.param("id")).eq("company_id", admin.company_id);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.body(null, 204);
+});
+
+// ---------- Admin: empresas (só o operador da plataforma) ----------
+
+app.get("/admin/companies", async (c) => {
+  await requirePlatformOwner(c);
+  const { data, error } = await eco().from("companies").select("*").order("created_at", { ascending: false });
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapCompany));
+});
+
+// Cria a empresa + a linha de configurações padrão dela (site_copy/footer
+// já preenchidos com o nome, senão a loja nova quebra visualmente até
+// alguém passar em Configurações). Domínio fica em branco de propósito —
+// só existe depois que o cliente compra/aponta o domínio de verdade.
+app.post("/admin/companies", async (c) => {
+  await requirePlatformOwner(c);
+  const { name, slug } = await c.req.json();
+  if (!name || !slug) throw new ApiError(422, "INVALID_INPUT", "Nome e slug são obrigatórios.");
+
+  const { data: company, error } = await eco().from("companies").insert({ name, slug, active: true }).select("*").single();
+  if (error) throw new ApiError(422, "DB_ERROR", error.message);
+
+  const { error: settingsError } = await eco().from("store_settings").insert({
+    company_id: company.id,
+    site_copy: {
+      storeName: name,
+      heroTitle: `Bem-vindo à ${name}.`,
+      featureBullets: [],
+    },
+    footer: {
+      helpLinks: [],
+      socialLinks: [],
+      paymentMethods: ["Cartão de crédito", "PIX", "Boleto"],
+      legalText: `© ${new Date().getFullYear()} · ${name} · Preencha em Configurações a razão social, CNPJ e endereço da sua empresa.`,
+    },
+  });
+  if (settingsError) {
+    await eco().from("companies").delete().eq("id", company.id);
+    throw new ApiError(500, "DB_ERROR", settingsError.message);
+  }
+
+  return c.json(mapCompany(company));
+});
+
+app.patch("/admin/companies/:id", async (c) => {
+  await requirePlatformOwner(c);
+  const patch = await c.req.json();
+  const row: Record<string, unknown> = {};
+  if ("name" in patch) row.name = patch.name;
+  if ("domain" in patch) row.domain = patch.domain || null;
+  if ("adminDomain" in patch) row.admin_domain = patch.adminDomain || null;
+  if ("active" in patch) row.active = patch.active;
+  const { data, error } = await eco().from("companies").update(row).eq("id", c.req.param("id")).select("*").single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapCompany(data));
 });
 
 Deno.serve(app.fetch);

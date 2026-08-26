@@ -1,4 +1,4 @@
-import type { AdminUser, Category, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type { AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import type {
   ApiClient,
   CreateOrderInput,
@@ -187,6 +187,11 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<DeliveryRegion>(`/api/regions/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     updateStoreSettings: (patch: Partial<StoreSettings>) =>
       request<StoreSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    getCompanies: () => request<Company[]>("/api/admin/companies", { tokenKey: ADMIN_TOKEN_KEY }),
+    createCompany: (input: { name: string; slug: string }) =>
+      request<Company>("/api/admin/companies", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    updateCompany: (id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }) =>
+      request<Company>(`/api/admin/companies/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     uploadLogo: async (file: File) => {
       const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
       return data.url;

@@ -17,6 +17,7 @@ const NAV = [
   { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
+  { href: "/empresas", label: "Empresas", icon: "🏢", ownerOnly: true },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -32,7 +33,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen flex items-center justify-center text-slate-500">Carregando...</div>;
   }
 
-  const visibleNav = NAV.filter((item) => !item.platformOnly || user.role === "platformAdmin");
+  const visibleNav = NAV.filter((item) => {
+    if (item.ownerOnly) return !!user.isPlatformOwner;
+    if (item.platformOnly) return user.role === "platformAdmin";
+    return true;
+  });
 
   return (
     <div className="min-h-screen flex">
