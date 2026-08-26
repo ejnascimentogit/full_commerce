@@ -37,6 +37,8 @@ class ApiError extends Error {
 const ALLOWED_ORIGINS = [
   "https://fullcommerce-storefront.ejnascimento1.workers.dev",
   "https://fullcommerce-admin.ejnascimento1.workers.dev",
+  "https://odoya-storefront.ejnascimento1.workers.dev",
+  "https://odoya-admin.ejnascimento1.workers.dev",
   "http://localhost:3000",
   "http://localhost:3001",
 ];
@@ -114,7 +116,16 @@ async function resolveCompanyId(c: Context): Promise<string> {
   } catch {
     return DEMO_COMPANY_ID;
   }
-  const { data } = await eco().from("companies").select("id").eq("domain", hostname).eq("active", true).maybeSingle();
+  // Loja e admin de uma mesma empresa costumam ficar em subdomínios
+  // diferentes (ex: odoya-storefront.* vs odoya-admin.*) — por isso duas
+  // colunas de domínio, não uma. `domain` cobre a loja pública; `admin_domain`
+  // cobre o admin (usado só na tela de autocadastro, antes do login existir).
+  const { data } = await eco()
+    .from("companies")
+    .select("id")
+    .or(`domain.eq.${hostname},admin_domain.eq.${hostname}`)
+    .eq("active", true)
+    .maybeSingle();
   return data?.id ?? DEMO_COMPANY_ID;
 }
 

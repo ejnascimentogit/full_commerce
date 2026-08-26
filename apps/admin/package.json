@@ -10,7 +10,8 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:deploy-only": "opennextjs-cloudflare deploy"
+    "cf:deploy-only": "opennextjs-cloudflare deploy",
+    "cf:deploy:odoya": "opennextjs-cloudflare build -c wrangler.odoya.jsonc && opennextjs-cloudflare deploy -c wrangler.odoya.jsonc"
   },
   "dependencies": {
     "@ecommerce/api-client": "*",

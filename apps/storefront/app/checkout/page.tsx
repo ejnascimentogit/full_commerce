@@ -330,6 +330,12 @@ export default function CheckoutPage() {
                 <p className="text-sm font-semibold text-slate-900">
                   R$ {total.toFixed(2).replace(".", ",")}
                 </p>
+                {settings.pixReceiverName && (
+                  <p className="text-xs text-slate-500 text-center -mt-1.5">
+                    Recebedor: <span className="font-medium text-slate-700">{settings.pixReceiverName}</span>
+                    {settings.pixReceiverCity ? ` — ${settings.pixReceiverCity}` : ""}
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => {
