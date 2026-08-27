@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiClient, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
@@ -41,6 +41,19 @@ export default function FinanceiroPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Expande os itens do pedido na própria linha, em vez de navegar pra
+  // /pedidos/[id] — com muitos pedidos, sair e voltar pra achar o pedido de
+  // novo custa tempo demais. Vários podem ficar abertos ao mesmo tempo.
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
+
+  function toggleOrder(orderId: string) {
+    setExpandedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
@@ -271,24 +284,77 @@ export default function FinanceiroPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {selected.orders.map((order) => (
-                          <tr key={order.id}>
-                            <td className="px-4 py-2.5 font-medium text-slate-900">{order.orderNumber}</td>
-                            <td className="px-4 py-2.5 text-slate-500">
-                              {new Date(order.createdAt).toLocaleDateString("pt-BR")}
-                            </td>
-                            <td className="px-4 py-2.5 text-slate-500">
-                              {order.items.length} ite{order.items.length === 1 ? "m" : "ns"}
-                            </td>
-                            <td className="px-4 py-2.5 text-slate-500">{PAYMENT_METHOD_LABEL[order.paymentMethod]}</td>
-                            <td className="px-4 py-2.5 text-right font-medium text-slate-900">{money(order.total)}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              <Link href={`/pedidos/${order.id}`} className="text-brand-600 hover:underline text-xs">
-                                Ver
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
+                        {selected.orders.map((order) => {
+                          const expanded = expandedOrderIds.has(order.id);
+                          return (
+                            <Fragment key={order.id}>
+                              <tr>
+                                <td className="px-4 py-2.5 font-medium text-slate-900">{order.orderNumber}</td>
+                                <td className="px-4 py-2.5 text-slate-500">
+                                  {new Date(order.createdAt).toLocaleDateString("pt-BR")}
+                                </td>
+                                <td className="px-4 py-2.5 text-slate-500">
+                                  {order.items.length} ite{order.items.length === 1 ? "m" : "ns"}
+                                </td>
+                                <td className="px-4 py-2.5 text-slate-500">{PAYMENT_METHOD_LABEL[order.paymentMethod]}</td>
+                                <td className="px-4 py-2.5 text-right font-medium text-slate-900">{money(order.total)}</td>
+                                <td className="px-4 py-2.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleOrder(order.id)}
+                                    className="text-brand-600 hover:underline text-xs font-medium"
+                                  >
+                                    {expanded ? "Ocultar" : "Ver"}
+                                  </button>
+                                </td>
+                              </tr>
+                              {expanded && (
+                                <tr>
+                                  <td colSpan={6} className="px-4 py-3 bg-slate-50">
+                                    <table className="w-full text-sm">
+                                      <thead className="text-slate-500 text-xs uppercase">
+                                        <tr>
+                                          <th className="text-left py-1 font-medium">Produto</th>
+                                          <th className="text-right py-1 font-medium">Qtd</th>
+                                          <th className="text-right py-1 font-medium">Preço unit.</th>
+                                          <th className="text-right py-1 font-medium">Subtotal</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-200">
+                                        {order.items.map((item) => (
+                                          <tr key={item.productId}>
+                                            <td className="py-1.5 text-slate-700">{item.name}</td>
+                                            <td className="py-1.5 text-right text-slate-500">{item.quantity}</td>
+                                            <td className="py-1.5 text-right text-slate-500">{money(item.unitPrice)}</td>
+                                            <td className="py-1.5 text-right font-medium text-slate-900">
+                                              {money(item.finalSubtotal ?? item.estimatedSubtotal)}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200">
+                                      <Link href={`/pedidos/${order.id}`} className="text-xs text-brand-600 hover:underline">
+                                        Abrir pedido completo →
+                                      </Link>
+                                      <div className="flex gap-4 text-xs text-slate-500">
+                                        <span>
+                                          Subtotal <span className="font-medium text-slate-900">{money(order.subtotal)}</span>
+                                        </span>
+                                        <span>
+                                          Frete <span className="font-medium text-slate-900">{money(order.shipping)}</span>
+                                        </span>
+                                        <span>
+                                          Total <span className="font-semibold text-slate-900">{money(order.total)}</span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
