@@ -949,6 +949,11 @@ app.post("/products", async (c) => {
   const admin = await requireAdmin(c);
   const input = await c.req.json();
   const vendorId = admin.role === "vendorAdmin" ? admin.vendor_id : input.vendorId;
+  // SKU nunca vem do admin — sempre gerado pelo banco ({número da empresa} + sequencial
+  // de 5 dígitos, ex: empresa 1 → 100001, 100002...). Evita o admin digitar o código
+  // errado (de outro produto) por engano, e garante que nunca colide entre empresas.
+  const { data: skuRow, error: skuError } = await eco().rpc("next_product_code", { p_company_id: admin.company_id });
+  if (skuError) throw new ApiError(500, "DB_ERROR", skuError.message);
   const { data, error } = await eco()
     .from("products")
     .insert({
@@ -957,8 +962,8 @@ app.post("/products", async (c) => {
       category_id: input.categoryId,
       name: input.name,
       description: input.description ?? "",
-      sku: input.sku,
-      customer_reference_code: input.customerReferenceCode ?? null,
+      sku: skuRow as unknown as string,
+      customer_reference_code: input.customerReferenceCode || null,
       brand: input.brand ?? null,
       photos: input.photos ?? [],
       unit_type: input.unitType,
@@ -974,7 +979,10 @@ app.post("/products", async (c) => {
     })
     .select("*")
     .single();
-  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  if (error) {
+    if (error.code === "23505") throw new ApiError(422, "DUPLICATE_REFERENCE_CODE", "Já existe um produto com esse código de referência do cliente.");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
   return c.json(mapProduct(data));
 });
 
@@ -986,12 +994,14 @@ app.patch("/products/:id", async (c) => {
   if (admin.role === "vendorAdmin" && existing.vendor_id !== admin.vendor_id) throw new ApiError(403, "FORBIDDEN");
 
   const row: Record<string, unknown> = {};
+  // "sku" de propósito fora daqui — o código do produto é gerado uma vez na criação
+  // (next_product_code) e nunca mais muda, pra não correr risco de alguém editar pro
+  // código de outro produto por engano.
   const map: Record<string, string> = {
     vendorId: "vendor_id",
     categoryId: "category_id",
     name: "name",
     description: "description",
-    sku: "sku",
     customerReferenceCode: "customer_reference_code",
     brand: "brand",
     photos: "photos",
@@ -1009,9 +1019,13 @@ app.patch("/products/:id", async (c) => {
   for (const [k, v] of Object.entries(patch)) if (map[k]) row[map[k]] = v;
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
   if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
+  if ("customer_reference_code" in row && !row.customer_reference_code) row.customer_reference_code = null;
 
   const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
-  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  if (error) {
+    if (error.code === "23505") throw new ApiError(422, "DUPLICATE_REFERENCE_CODE", "Já existe um produto com esse código de referência do cliente.");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
   return c.json(mapProduct(data));
 });
 
@@ -1468,7 +1482,14 @@ app.post("/admin/companies", async (c) => {
   const { name, slug } = await c.req.json();
   if (!name || !slug) throw new ApiError(422, "INVALID_INPUT", "Nome e slug são obrigatórios.");
 
-  const { data: company, error } = await eco().from("companies").insert({ name, slug, active: true }).select("*").single();
+  // Número da empresa (1, 2, 3...) vira o prefixo do SKU dos produtos dela — ver
+  // next_product_code(). Calculado aqui em vez de sequence pra não precisar de mais
+  // um objeto no banco só pra isso; concorrência não é problema real nessa tela
+  // (só o dono da plataforma cria empresa, e raramente).
+  const { data: maxRow } = await eco().from("companies").select("company_number").order("company_number", { ascending: false }).limit(1).maybeSingle();
+  const companyNumber = (maxRow?.company_number ?? 0) + 1;
+
+  const { data: company, error } = await eco().from("companies").insert({ name, slug, active: true, company_number: companyNumber }).select("*").single();
   if (error) throw new ApiError(422, "DB_ERROR", error.message);
 
   const { error: settingsError } = await eco().from("store_settings").insert({

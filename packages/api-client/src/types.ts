@@ -72,8 +72,11 @@ export interface RegisterInput {
   referenceCode?: string;
 }
 
-export type CreateProductInput = Omit<Product, "id">;
-export type UpdateProductInput = Partial<Omit<Product, "id">>;
+// "sku" fora dos dois — é gerado pelo backend na criação ({número da empresa} +
+// sequencial) e nunca muda depois, pra não ter risco de alguém digitar o código
+// de outro produto por engano.
+export type CreateProductInput = Omit<Product, "id" | "sku">;
+export type UpdateProductInput = Partial<Omit<Product, "id" | "sku">>;
 export type CreatePromotionInput = Omit<Promotion, "id" | "currentUses">;
 export type UpdatePromotionInput = Partial<Omit<Promotion, "id">>;
 

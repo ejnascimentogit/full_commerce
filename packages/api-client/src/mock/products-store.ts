@@ -34,15 +34,18 @@ export function findProductById(id: string): Product | undefined {
   return readAll().find((p) => p.id === id);
 }
 
-export function createProduct(input: Omit<Product, "id">): Product {
+export function createProduct(input: Omit<Product, "id" | "sku">): Product {
   const products = readAll();
-  const product: Product = { ...input, id: `product-${Date.now()}` };
+  // Mock é sempre a "empresa 1" (só existe uma) — mesmo padrão {empresa}{sequencial de
+  // 5 dígitos} do backend real, só que contado localmente já que não há banco aqui.
+  const sku = `1${String(products.length + 1).padStart(5, "0")}`;
+  const product: Product = { ...input, id: `product-${Date.now()}`, sku };
   products.push(product);
   writeAll(products);
   return product;
 }
 
-export function updateProduct(id: string, patch: Partial<Omit<Product, "id">>): Product {
+export function updateProduct(id: string, patch: Partial<Omit<Product, "id" | "sku">>): Product {
   const products = readAll();
   const index = products.findIndex((p) => p.id === id);
   if (index === -1) throw new Error(`Product not found: ${id}`);

@@ -29,7 +29,6 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
 
   const [name, setName] = useState(product?.name ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
-  const [sku, setSku] = useState(product?.sku ?? "");
   const [customerReferenceCode, setCustomerReferenceCode] = useState(product?.customerReferenceCode ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? "");
   const [vendorId, setVendorId] = useState(product?.vendorId ?? (user?.role === "vendorAdmin" ? user.vendorId! : vendors[0]?.id ?? ""));
@@ -101,7 +100,6 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
       const payload = {
         name,
         description,
-        sku,
         customerReferenceCode: customerReferenceCode || undefined,
         categoryId,
         photos,
@@ -123,8 +121,12 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         await apiClient.createProduct({ ...payload, vendorId });
       }
       router.push("/produtos");
-    } catch {
-      setError("Não foi possível salvar o produto.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message === "DUPLICATE_REFERENCE_CODE"
+          ? "Já existe outro produto com esse código de referência do cliente — confira se não digitou o código errado."
+          : "Não foi possível salvar o produto.",
+      );
       setSubmitting(false);
     }
   }
@@ -142,14 +144,30 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
               : ` (recomendado até ${NAME_RECOMMENDED_MAX})`}
           </p>
         </div>
-        <Field label="SKU (código do produto)" value={sku} onChange={setSku} required />
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">SKU (código do produto)</label>
+          <input
+            type="text"
+            value={product?.sku ?? "Gerado automaticamente ao salvar"}
+            disabled
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-500 font-mono"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Definido pelo sistema, não pode ser digitado — evita repetir por engano o código de outro produto.
+          </p>
+        </div>
       </div>
 
-      <Field
-        label="Código de referência do cliente (opcional)"
-        value={customerReferenceCode}
-        onChange={setCustomerReferenceCode}
-      />
+      <div>
+        <Field
+          label="Código de referência do cliente (opcional)"
+          value={customerReferenceCode}
+          onChange={setCustomerReferenceCode}
+        />
+        <p className="text-xs text-slate-400 mt-1">
+          Confira antes de salvar — não pode repetir o código de outro produto (o sistema recusa se já estiver em uso).
+        </p>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
