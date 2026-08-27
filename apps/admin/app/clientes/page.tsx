@@ -156,10 +156,14 @@ function EditCustomerModal({
   const [status, setStatus] = useState(customer.status);
   const [saving, setSaving] = useState(false);
 
-  // Só o endereço padrão (o de entrega) é editável aqui — endereços extras
-  // (ex: endereço de cobrança de PJ) ficam só na lista abaixo por enquanto.
+  // Endereço de entrega (o padrão) e endereço comercial (o próximo "outro" que
+  // achar) são os dois editáveis aqui — escritório e CD/depósito costumam ser
+  // lugares diferentes, então o cliente pode precisar dos dois. Se sobrar mais
+  // de um endereço extra além desse, os demais só aparecem em modo leitura.
   const defaultAddress = customer.addresses.find((a) => a.isDefault) ?? customer.addresses[0];
   const otherAddresses = customer.addresses.filter((a) => a.id !== defaultAddress?.id);
+  const businessAddressRecord = otherAddresses[0];
+  const extraAddresses = otherAddresses.slice(1);
   const [addrStreet, setAddrStreet] = useState(defaultAddress?.street ?? "");
   const [addrNumber, setAddrNumber] = useState(defaultAddress?.number ?? "");
   const [addrComplement, setAddrComplement] = useState(defaultAddress?.complement ?? "");
@@ -167,6 +171,13 @@ function EditCustomerModal({
   const [addrCity, setAddrCity] = useState(defaultAddress?.city ?? "");
   const [addrState, setAddrState] = useState(defaultAddress?.state ?? "");
   const [addrZip, setAddrZip] = useState(defaultAddress?.zipCode ?? "");
+  const [bizStreet, setBizStreet] = useState(businessAddressRecord?.street ?? "");
+  const [bizNumber, setBizNumber] = useState(businessAddressRecord?.number ?? "");
+  const [bizComplement, setBizComplement] = useState(businessAddressRecord?.complement ?? "");
+  const [bizNeighborhood, setBizNeighborhood] = useState(businessAddressRecord?.neighborhood ?? "");
+  const [bizCity, setBizCity] = useState(businessAddressRecord?.city ?? "");
+  const [bizState, setBizState] = useState(businessAddressRecord?.state ?? "");
+  const [bizZip, setBizZip] = useState(businessAddressRecord?.zipCode ?? "");
 
   async function handleSave() {
     setSaving(true);
@@ -181,25 +192,50 @@ function EditCustomerModal({
       isDefault: true,
       label: defaultAddress?.label ?? "Entrega",
     };
-    await Promise.all([
-      apiClient.updateCustomer(customer.id, {
-        name,
-        businessName: businessName || undefined,
-        phone,
-        regionId: regionId || undefined,
-        referenceCode: referenceCode || undefined,
-        preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
-        status,
-      }),
-      defaultAddress ? apiClient.updateCustomerAddress(defaultAddress.id, addressPayload) : apiClient.createCustomerAddress(customer.id, addressPayload),
-    ]);
+    // Sequencial, não Promise.all: o mock local lê o "banco" inteiro, muda e regrava
+    // a cada chamada — três gravações concorrentes fazem a última sobrescrever as
+    // outras. Um de cada vez evita essa corrida (no backend real isso não seria
+    // problema, mas mantemos igual pra não depender do modo de execução).
+    await apiClient.updateCustomer(customer.id, {
+      name,
+      businessName: businessName || undefined,
+      phone,
+      regionId: regionId || undefined,
+      referenceCode: referenceCode || undefined,
+      preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
+      status,
+    });
+    if (defaultAddress) {
+      await apiClient.updateCustomerAddress(defaultAddress.id, addressPayload);
+    } else {
+      await apiClient.createCustomerAddress(customer.id, addressPayload);
+    }
+    // Comercial é opcional — só cria endereço novo se o admin realmente preencheu algo.
+    if (businessAddressRecord || bizStreet.trim()) {
+      const bizPayload = {
+        street: bizStreet,
+        number: bizNumber,
+        complement: bizComplement || undefined,
+        neighborhood: bizNeighborhood,
+        city: bizCity,
+        state: bizState,
+        zipCode: bizZip,
+        isDefault: false,
+        label: businessAddressRecord?.label ?? "Comercial",
+      };
+      if (businessAddressRecord) {
+        await apiClient.updateCustomerAddress(businessAddressRecord.id, bizPayload);
+      } else {
+        await apiClient.createCustomerAddress(customer.id, bizPayload);
+      }
+    }
     setSaving(false);
     onSaved();
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="font-semibold text-slate-900 mb-4">Editar cliente</h2>
 
         <div className="bg-slate-50 border border-slate-200 rounded-md p-3 mb-4 text-sm space-y-2">
@@ -215,11 +251,11 @@ function EditCustomerModal({
             <span className="text-slate-500">{customer.documentType === "cnpj" ? "CNPJ" : "CPF"}</span>
             <span className="text-slate-900 font-mono">{customer.document}</span>
           </div>
-          {otherAddresses.length > 0 && (
+          {extraAddresses.length > 0 && (
             <div>
-              <span className="text-slate-500 block mb-1">Outro{otherAddresses.length > 1 ? "s" : ""} endereço{otherAddresses.length > 1 ? "s" : ""}</span>
+              <span className="text-slate-500 block mb-1">Outro{extraAddresses.length > 1 ? "s" : ""} endereço{extraAddresses.length > 1 ? "s" : ""}</span>
               <ul className="space-y-1">
-                {otherAddresses.map((a) => (
+                {extraAddresses.map((a) => (
                   <li key={a.id} className="text-slate-900 text-xs">
                     {a.label && <span className="text-slate-500 font-medium">{a.label}: </span>}
                     {a.street}, {a.number}
@@ -231,53 +267,96 @@ function EditCustomerModal({
           )}
         </div>
 
-        <div className="border border-slate-200 rounded-md p-3 mb-4 space-y-3">
-          <p className="text-sm font-medium text-slate-700">Endereço de entrega</p>
-          {!defaultAddress && (
-            <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-2 py-1.5">
-              Cliente sem endereço cadastrado — preencha abaixo pra entrega poder ser feita.
+        <div className="space-y-4 mb-4">
+          <div className="border border-slate-200 rounded-md p-3 space-y-3">
+            <p className="text-sm font-medium text-slate-700">
+              Endereço comercial <span className="text-xs text-slate-400 font-normal">(opcional)</span>
             </p>
-          )}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
-              <input value={addrStreet} onChange={(e) => setAddrStreet(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            <p className="text-xs text-slate-400">Preencha só se o escritório/CD do cliente for diferente do endereço de entrega.</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
+                <input value={bizStreet} onChange={(e) => setBizStreet(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
+                <input value={bizNumber} onChange={(e) => setBizNumber(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
-              <input value={addrNumber} onChange={(e) => setAddrNumber(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
+              <input value={bizComplement} onChange={(e) => setBizComplement(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+                <input value={bizNeighborhood} onChange={(e) => setBizNeighborhood(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+                <input value={bizZip} onChange={(e) => setBizZip(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_5rem] gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+                <input value={bizCity} onChange={(e) => setBizCity(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+                <input value={bizState} onChange={(e) => setBizState(e.target.value.toUpperCase())} maxLength={2} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm uppercase" />
+              </div>
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
-            <input value={addrComplement} onChange={(e) => setAddrComplement(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+
+          <div className="border border-slate-200 rounded-md p-3 space-y-3">
+            <p className="text-sm font-medium text-slate-700">Endereço de entrega</p>
+            {!defaultAddress && (
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-2 py-1.5">
+                Cliente sem endereço cadastrado — preencha abaixo pra entrega poder ser feita.
+              </p>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
+                <input value={addrStreet} onChange={(e) => setAddrStreet(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
+                <input value={addrNumber} onChange={(e) => setAddrNumber(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
+              <input value={addrComplement} onChange={(e) => setAddrComplement(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+                <input value={addrNeighborhood} onChange={(e) => setAddrNeighborhood(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+                <input value={addrZip} onChange={(e) => setAddrZip(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-[1fr_5rem] gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+                <input value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+                <input value={addrState} onChange={(e) => setAddrState(e.target.value.toUpperCase())} maxLength={2} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm uppercase" />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Se o bairro mudar, a região de entrega é recalculada automaticamente no próximo acesso do cliente.
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
-              <input value={addrNeighborhood} onChange={(e) => setAddrNeighborhood(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
-              <input value={addrZip} onChange={(e) => setAddrZip(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
-            </div>
-          </div>
-          <div className="grid grid-cols-[1fr_5rem] gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
-              <input value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
-              <input value={addrState} onChange={(e) => setAddrState(e.target.value.toUpperCase())} maxLength={2} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm uppercase" />
-            </div>
-          </div>
-          <p className="text-xs text-slate-400">
-            Se o bairro mudar, a região de entrega é recalculada automaticamente no próximo acesso do cliente.
-          </p>
         </div>
 
-        <div className="space-y-3">
+        <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
