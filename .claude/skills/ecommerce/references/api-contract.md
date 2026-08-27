@@ -15,7 +15,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 |---|---|---|
 | POST | `/api/auth/register` | Cadastro de cliente (`name, email, password, documentType, document, businessName?, phone, address: { street, number, complement?, neighborhood, city, state, zipCode }`) — backend resolve `regionId` casando `address.neighborhood` contra `DeliveryRegion.neighborhoods` |
 | POST | `/api/auth/login` | Login (`email, password`) → retorna `token`, `customer` |
-| POST | `/api/auth/reset-password` | Redefine senha (`email, newPassword`) — no mock não há verificação por e-mail (troca direto se o e-mail existir); backend real deve exigir um token enviado por e-mail antes de aceitar |
+| POST | `/api/auth/forgot-password` | Pede redefinição de senha (`email`) — sempre responde 204, mesmo se o e-mail não existir (evita enumeração). Dispara um e-mail de recuperação de verdade via Supabase Auth (`/auth/v1/recover`); a troca de senha em si acontece em `/conta/redefinir-senha` no storefront, direto contra o Supabase Auth (`PUT /auth/v1/user` com o token do link do e-mail), fora deste backend. **Nunca** aceitar `{email, newPassword}` num passo só — foi assim que a implementação original (herdada do mock) permitia qualquer um que soubesse o e-mail sequestrar a conta. |
 | POST | `/api/auth/refresh` | Renova token |
 | GET | `/api/customers/me` | Dados do cliente autenticado |
 | PATCH | `/api/customers/me` | Atualiza dados cadastrais |
@@ -31,7 +31,7 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 |---|---|---|
 | POST | `/api/admin/auth/register` | Autocadastro do dono da loja como `platformAdmin` (`name, email, password`) — num backend real, travar depois que já existir um platformAdmin (convite, não autocadastro livre) |
 | POST | `/api/admin/auth/login` | Login do admin (`email, password`) → `token`, `AdminUser` (`role`, e `vendorId` se `vendorAdmin`) |
-| POST | `/api/admin/auth/reset-password` | Redefine senha do admin (`email, newPassword`) — mesma ressalva de `/api/auth/reset-password` |
+| POST | `/api/admin/auth/forgot-password` | Pede redefinição de senha do admin (`email`) — mesmo fluxo em dois passos de `/api/auth/forgot-password`, redirecionando para `/redefinir-senha` no admin em vez de `/conta/redefinir-senha` na loja |
 | POST | `/api/admin/auth/logout` | Encerra sessão |
 | GET | `/api/admin/auth/me` | Admin autenticado atual, ou `null` |
 
@@ -41,8 +41,8 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 |---|---|---|
 | GET | `/api/products` | Lista com filtros: `?categoryId=&vendorId=&q=&minPrice=&maxPrice=&regionId=&page=&pageSize=` |
 | GET | `/api/products/:id` | Detalhe do produto (inclui `photos[]`, `variants[]`, `unitType`, `boxQuantity`, `isVariableWeight`) |
-| POST | `/api/products` | *(vendorAdmin)* Cria produto — `vendorId` vem do token, não do payload |
-| PATCH | `/api/products/:id` | *(vendorAdmin, só o dono)* Atualiza produto/preço/estoque |
+| POST | `/api/products` | *(vendorAdmin)* Cria produto — `vendorId` vem do token, não do payload. `sku` **não é aceito no payload** — sempre gerado pelo backend via `next_product_code(company_id)`: `{número da empresa}{sequencial de 5 dígitos}` (empresa 1 → `100001`, `100002`...; empresa 2 → `200001`...). `customerReferenceCode` (opcional, livre) precisa ser único por empresa — retorna `422 DUPLICATE_REFERENCE_CODE` se já estiver em uso por outro produto |
+| PATCH | `/api/products/:id` | *(vendorAdmin, só o dono)* Atualiza produto/preço/estoque — `sku` é ignorado mesmo se enviado (nunca muda depois de criado); mesma regra de unicidade de `customerReferenceCode` do POST |
 | DELETE | `/api/products/:id` | *(vendorAdmin, só o dono)* Remove/inativa produto |
 | POST | `/api/products/:id/photos` | *(vendorAdmin)* Upload de foto (multipart), retorna URL |
 | DELETE | `/api/products/:id/photos/:photoId` | *(vendorAdmin)* Remove foto |

@@ -92,6 +92,7 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 - **Preço variável por peso**: produtos como carnes/queijos têm preço estimado no pedido, ajustável depois pelo peso real.
 - **Multi-fornecedor**: cada produto pertence a um fornecedor (`Vendor`), mas a entrega é centralizada pela plataforma — não vira "pedidos separados" por fornecedor.
 - **Tudo configurável, nada fixo no código**: pedido mínimo, frete grátis para CNPJ, cor, logo, textos, rodapé — todos têm um valor padrão sensato, mas o admin pode mudar qualquer um deles em Configurações.
+- **SKU (código do produto) é gerado pelo sistema, nunca digitado**: cada empresa tem um número sequencial (fullcommerce = 1, próxima empresa = 2...), e cada produto ganha `{número da empresa}{sequencial de 5 dígitos}` — empresa 1 → `100001`, `100002`...; empresa 2 → `200001`, `200002`... Gerado uma vez na criação (`next_product_code` no banco) e nunca editável depois, pra eliminar o risco de o admin digitar por engano o código de outro produto. O "Código de referência do cliente" (campo opcional, separado do SKU) também não pode repetir dentro da mesma empresa — o sistema recusa o cadastro/edição se o código já estiver em uso por outro produto.
 
 ## Pendências conhecidas
 
