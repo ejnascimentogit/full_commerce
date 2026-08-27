@@ -56,33 +56,33 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
       <table className="w-full text-sm border-collapse mb-8">
         <thead>
           <tr className="border-b-2 border-slate-900 text-left">
-            <th className="py-2 w-8">✓</th>
-            <th className="py-2 w-8">#</th>
-            <th className="py-2">Código</th>
-            <th className="py-2">Produto</th>
-            <th className="py-2 text-left w-12">Un.</th>
-            <th className="py-2 text-right">Volumes</th>
-            <th className="py-2 text-right">Qtd.</th>
-            <th className="py-2 text-right">Qtd. separada</th>
+            <th className="py-2 pr-2 w-8">✓</th>
+            <th className="py-2 pr-2 w-8">#</th>
+            <th className="py-2 pr-3">Código</th>
+            <th className="py-2 pr-3">Produto</th>
+            <th className="py-2 pr-4 text-left w-12">Un.</th>
+            <th className="py-2 pr-4 text-right">Volumes</th>
+            <th className="py-2 pr-6 text-right">Qtd.</th>
+            <th className="py-2 pl-4 text-right">Qtd. separada</th>
           </tr>
         </thead>
         <tbody>
           {visibleItems.map((item, i) => (
             <tr key={item.productId} className="border-b border-slate-300">
-              <td className="py-3">
+              <td className="py-3 pr-2">
                 <span className="inline-block w-4 h-4 border border-slate-900" />
               </td>
-              <td className="py-3 text-slate-500">{i + 1}</td>
-              <td className="py-3 text-slate-500 font-mono text-xs">{item.sku}</td>
-              <td className="py-3">
+              <td className="py-3 pr-2 text-slate-500">{i + 1}</td>
+              <td className="py-3 pr-3 text-slate-500 font-mono text-xs">{item.sku}</td>
+              <td className="py-3 pr-3">
                 <p className="font-medium text-slate-900">{item.name}</p>
               </td>
-              <td className="py-3 text-slate-500">{UNIT_TYPE_LABEL[item.unitType] ?? item.unitType}</td>
-              <td className="py-3 text-right text-slate-700">{item.quantity}</td>
-              <td className="py-3 text-right font-bold text-slate-900 text-base">
+              <td className="py-3 pr-4 text-slate-500">{UNIT_TYPE_LABEL[item.unitType] ?? item.unitType}</td>
+              <td className="py-3 pr-4 text-right text-slate-700">{item.quantity}</td>
+              <td className="py-3 pr-6 text-right font-bold text-slate-900 text-base">
                 {(item.estimatedSubtotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType}
               </td>
-              <td className="py-3 text-right">
+              <td className="py-3 pl-4 text-right">
                 <span className="inline-block w-16 border-b border-slate-400">&nbsp;</span>
               </td>
             </tr>
