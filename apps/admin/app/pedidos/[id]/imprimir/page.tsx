@@ -5,6 +5,8 @@ import { apiClient, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
 import type { Customer, DeliveryRegion, Order } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
+const UNIT_TYPE_LABEL: Record<string, string> = { un: "Un.", kg: "Kg", cx: "Cx." };
+
 // Página isolada (sem AdminShell/menu) — só o essencial pra quem vai separar
 // a mercadoria conferir e marcar item por item no papel.
 export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,7 +36,7 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
   const routeName = regions.find((r) => r.id === order.regionId)?.name;
 
   return (
-    <div className="max-w-2xl mx-auto p-8 print:p-0">
+    <div className="max-w-3xl mx-auto p-8 print:p-0">
       <div className="flex justify-end mb-6 print:hidden">
         <button
           type="button"
@@ -58,6 +60,7 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
             <th className="py-2 w-8">#</th>
             <th className="py-2">Código</th>
             <th className="py-2">Produto</th>
+            <th className="py-2 text-left w-12">Un.</th>
             <th className="py-2 text-right">Volumes</th>
             <th className="py-2 text-right">Qtd.</th>
             <th className="py-2 text-right">Qtd. separada</th>
@@ -74,6 +77,7 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
               <td className="py-3">
                 <p className="font-medium text-slate-900">{item.name}</p>
               </td>
+              <td className="py-3 text-slate-500">{UNIT_TYPE_LABEL[item.unitType] ?? item.unitType}</td>
               <td className="py-3 text-right text-slate-700">{item.quantity}</td>
               <td className="py-3 text-right font-bold text-slate-900 text-base">
                 {(item.estimatedSubtotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType}
