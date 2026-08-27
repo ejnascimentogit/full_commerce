@@ -288,7 +288,7 @@ export default function FinanceiroPage() {
                           const expanded = expandedOrderIds.has(order.id);
                           return (
                             <Fragment key={order.id}>
-                              <tr>
+                              <tr className={expanded ? "bg-brand-50/60" : undefined}>
                                 <td className="px-4 py-2.5 font-medium text-slate-900">{order.orderNumber}</td>
                                 <td className="px-4 py-2.5 text-slate-500">
                                   {new Date(order.createdAt).toLocaleDateString("pt-BR")}
@@ -302,51 +302,53 @@ export default function FinanceiroPage() {
                                   <button
                                     type="button"
                                     onClick={() => toggleOrder(order.id)}
-                                    className="text-brand-600 hover:underline text-xs font-medium"
+                                    className={`text-xs font-medium rounded px-2 py-1 ${expanded ? "bg-brand-600 text-white hover:bg-brand-700" : "text-brand-600 hover:bg-brand-50"}`}
                                   >
                                     {expanded ? "Ocultar" : "Ver"}
                                   </button>
                                 </td>
                               </tr>
                               {expanded && (
-                                <tr>
-                                  <td colSpan={6} className="px-4 py-3 bg-slate-50">
-                                    <table className="w-full text-sm">
-                                      <thead className="text-slate-500 text-xs uppercase">
-                                        <tr>
-                                          <th className="text-left py-1 font-medium">Produto</th>
-                                          <th className="text-right py-1 font-medium">Qtd</th>
-                                          <th className="text-right py-1 font-medium">Preço unit.</th>
-                                          <th className="text-right py-1 font-medium">Subtotal</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-slate-200">
-                                        {order.items.map((item) => (
-                                          <tr key={item.productId}>
-                                            <td className="py-1.5 text-slate-700">{item.name}</td>
-                                            <td className="py-1.5 text-right text-slate-500">{item.quantity}</td>
-                                            <td className="py-1.5 text-right text-slate-500">{money(item.unitPrice)}</td>
-                                            <td className="py-1.5 text-right font-medium text-slate-900">
-                                              {money(item.finalSubtotal ?? item.estimatedSubtotal)}
-                                            </td>
+                                <tr className="bg-slate-100">
+                                  <td colSpan={6} className="px-4 py-3">
+                                    <div className="bg-white border border-slate-200 border-l-4 border-l-brand-500 rounded-md shadow-sm p-3">
+                                      <table className="w-full text-sm">
+                                        <thead className="text-slate-500 text-xs uppercase bg-slate-50">
+                                          <tr>
+                                            <th className="text-left py-1.5 px-2 font-medium">Produto</th>
+                                            <th className="text-right py-1.5 px-2 font-medium">Qtd</th>
+                                            <th className="text-right py-1.5 px-2 font-medium">Preço unit.</th>
+                                            <th className="text-right py-1.5 px-2 font-medium">Subtotal</th>
                                           </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200">
-                                      <Link href={`/pedidos/${order.id}`} className="text-xs text-brand-600 hover:underline">
-                                        Abrir pedido completo →
-                                      </Link>
-                                      <div className="flex gap-4 text-xs text-slate-500">
-                                        <span>
-                                          Subtotal <span className="font-medium text-slate-900">{money(order.subtotal)}</span>
-                                        </span>
-                                        <span>
-                                          Frete <span className="font-medium text-slate-900">{money(order.shipping)}</span>
-                                        </span>
-                                        <span>
-                                          Total <span className="font-semibold text-slate-900">{money(order.total)}</span>
-                                        </span>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                          {order.items.map((item) => (
+                                            <tr key={item.productId}>
+                                              <td className="py-1.5 px-2 text-slate-700">{item.name}</td>
+                                              <td className="py-1.5 px-2 text-right text-slate-500">{item.quantity}</td>
+                                              <td className="py-1.5 px-2 text-right text-slate-500">{money(item.unitPrice)}</td>
+                                              <td className="py-1.5 px-2 text-right font-medium text-slate-900">
+                                                {money(item.finalSubtotal ?? item.estimatedSubtotal)}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                      <div className="flex items-center justify-between mt-2 pt-2 px-2 border-t border-slate-200">
+                                        <Link href={`/pedidos/${order.id}`} className="text-xs text-brand-600 hover:underline">
+                                          Abrir pedido completo →
+                                        </Link>
+                                        <div className="flex gap-4 text-xs text-slate-500">
+                                          <span>
+                                            Subtotal <span className="font-medium text-slate-900">{money(order.subtotal)}</span>
+                                          </span>
+                                          <span>
+                                            Frete <span className="font-medium text-slate-900">{money(order.shipping)}</span>
+                                          </span>
+                                          <span>
+                                            Total <span className="font-semibold text-slate-900">{money(order.total)}</span>
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   </td>
