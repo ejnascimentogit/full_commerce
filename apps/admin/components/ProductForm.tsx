@@ -12,6 +12,11 @@ interface ProductFormProps {
   vendors: Vendor[];
 }
 
+// Além desse tamanho, o nome tende a quebrar linha na tabela da folha de
+// separação impressa (/pedidos/[id]/imprimir) — a coluna "Produto" lá tem
+// espaço limitado. Detalhe extra que não caiba aqui deve ir na Descrição.
+const NAME_RECOMMENDED_MAX = 40;
+
 const UNIT_TYPES: { value: UnitType; label: string }[] = [
   { value: "un", label: "Unidade (un)" },
   { value: "kg", label: "Quilo (kg)" },
@@ -127,7 +132,16 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-2xl">
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Nome" value={name} onChange={setName} required />
+        <div>
+          <Field label="Nome" value={name} onChange={setName} required />
+          {/* Nome comprido demais quebra linha na folha de separação impressa — melhor manter curto e deixar detalhe extra na Descrição. */}
+          <p className={`text-xs mt-1 ${name.length > NAME_RECOMMENDED_MAX ? "text-amber-600" : "text-slate-400"}`}>
+            {name.length} caracteres
+            {name.length > NAME_RECOMMENDED_MAX
+              ? ` — acima de ${NAME_RECOMMENDED_MAX} pode quebrar linha na impressão de separação`
+              : ` (recomendado até ${NAME_RECOMMENDED_MAX})`}
+          </p>
+        </div>
         <Field label="SKU (código do produto)" value={sku} onChange={setSku} required />
       </div>
 

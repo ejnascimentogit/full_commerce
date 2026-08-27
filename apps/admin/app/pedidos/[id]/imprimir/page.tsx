@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { apiClient, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
-import type { Customer, DeliveryRegion, Order } from "@ecommerce/types";
+import type { Customer, DeliveryRegion, Order, Product } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 const UNIT_TYPE_LABEL: Record<string, string> = { un: "Un.", kg: "Kg", cx: "Cx." };
@@ -15,10 +15,12 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
   const [order, setOrder] = useState<Order | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [regions, setRegions] = useState<DeliveryRegion[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     apiClient.getAdminOrder(id).then(setOrder);
     apiClient.getRegions({ includeInactive: true }).then(setRegions);
+    apiClient.getAdminProducts().then(setProducts);
   }, [id]);
 
   useEffect(() => {
@@ -34,9 +36,10 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
 
   const visibleItems = user.role === "vendorAdmin" ? order.items.filter((i) => i.vendorId === user.vendorId) : order.items;
   const routeName = regions.find((r) => r.id === order.regionId)?.name;
+  const productById = new Map(products.map((p) => [p.id, p]));
 
   return (
-    <div className="max-w-3xl mx-auto p-8 print:p-0">
+    <div className="max-w-4xl mx-auto p-8 print:p-0">
       <div className="flex justify-end mb-6 print:hidden">
         <button
           type="button"
@@ -53,14 +56,24 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
         <span className="font-semibold">Cliente:</span> {customer?.name ?? "—"}
       </p>
 
-      <table className="w-full text-sm border-collapse mb-8">
+      <table className="w-full text-sm border-collapse mb-8 table-fixed">
+        <colgroup>
+          <col className="w-[4%]" />
+          <col className="w-[4%]" />
+          <col className="w-[13%]" />
+          <col className="w-[33%]" />
+          <col className="w-[6%]" />
+          <col className="w-[10%]" />
+          <col className="w-[14%]" />
+          <col className="w-[16%]" />
+        </colgroup>
         <thead>
           <tr className="border-b-2 border-slate-900 text-left">
-            <th className="py-2 pr-2 w-8">✓</th>
-            <th className="py-2 pr-2 w-8">#</th>
+            <th className="py-2 pr-2">✓</th>
+            <th className="py-2 pr-2">#</th>
             <th className="py-2 pr-3">Código</th>
             <th className="py-2 pr-3">Produto</th>
-            <th className="py-2 pr-4 text-left w-12">Un.</th>
+            <th className="py-2 pr-4 text-left">Un.</th>
             <th className="py-2 pr-4 text-right">Volumes</th>
             <th className="py-2 pr-6 text-right">Qtd.</th>
             <th className="py-2 pl-4 text-right">Qtd. separada</th>
@@ -73,7 +86,9 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
                 <span className="inline-block w-4 h-4 border border-slate-900" />
               </td>
               <td className="py-3 pr-2 text-slate-500">{i + 1}</td>
-              <td className="py-3 pr-3 text-slate-500 font-mono text-xs">{item.sku}</td>
+              <td className="py-3 pr-3 text-slate-500 font-mono text-xs">
+                {productById.get(item.productId)?.customerReferenceCode || item.sku}
+              </td>
               <td className="py-3 pr-3">
                 <p className="font-medium text-slate-900">{item.name}</p>
               </td>
