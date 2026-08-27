@@ -95,8 +95,8 @@ export interface ApiClient {
   // Cliente (loja)
   register(input: RegisterInput): Promise<Customer>;
   login(email: string, password: string): Promise<Customer>;
-  /** Sem verificação por e-mail no mock (não há envio real) — troca a senha direto se o e-mail existir. Backend real deve exigir um token enviado por e-mail antes de aceitar a nova senha. */
-  resetPassword(email: string, newPassword: string): Promise<void>;
+  /** Manda um e-mail com link de redefinição — a troca de senha em si acontece na página que o link abre (fora do ApiClient, é direto com o Supabase Auth). Mock não envia e-mail de verdade, só simula sucesso. */
+  resetPassword(email: string): Promise<void>;
   logout(): Promise<void>;
   getCurrentCustomer(): Promise<Customer | null>;
   createOrder(input: CreateOrderInput): Promise<Order>;
@@ -111,8 +111,8 @@ export interface ApiClient {
   /** Autocadastro do dono da loja como platformAdmin — separado das contas demo do seed. */
   registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser>;
   adminLogin(email: string, password: string): Promise<AdminUser>;
-  /** Mesma ressalva de resetPassword: sem verificação por e-mail no mock. */
-  resetAdminPassword(email: string, newPassword: string): Promise<void>;
+  /** Mesmo fluxo de resetPassword, mas pro admin. */
+  resetAdminPassword(email: string): Promise<void>;
   adminLogout(): Promise<void>;
   getCurrentAdminUser(): Promise<AdminUser | null>;
   /** Só retorna algo pra quem é isPlatformOwner — backend rejeita os outros com 403. */

@@ -16,9 +16,23 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 function db(): SupabaseClient {
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+// "Esqueci minha senha" manda um e-mail de verdade com link de recuperação — só quem
+// tem acesso à caixa de entrada consegue trocar a senha (troca direta por e-mail, sem
+// esse link, deixava QUALQUER UM que soubesse o e-mail sequestrar a conta). O Supabase
+// responde com sucesso mesmo se o e-mail não existir, de propósito — evita que alguém
+// descubra quais e-mails têm conta cadastrada só tentando essa rota.
+async function sendRecoveryEmail(email: string, redirectTo: string): Promise<void> {
+  await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: ANON_KEY },
+    body: JSON.stringify({ email, options: { redirectTo } }),
+  });
 }
 function eco() {
   return db().schema("ecommerce");
@@ -698,12 +712,10 @@ app.post("/auth/login", async (c) => {
   return c.json({ token, customer: mapCustomer(resolved, addresses ?? []) });
 });
 
-app.post("/auth/reset-password", async (c) => {
-  const { email, newPassword } = await c.req.json();
-  const { data, error } = await db().auth.admin.generateLink({ type: "recovery", email });
-  if (error || !data.user) throw new ApiError(404, "EMAIL_NOT_FOUND");
-  const { error: updateError } = await db().auth.admin.updateUserById(data.user.id, { password: newPassword });
-  if (updateError) throw new ApiError(500, "DB_ERROR", updateError.message);
+app.post("/auth/forgot-password", async (c) => {
+  const { email } = await c.req.json();
+  const origin = c.req.header("Origin") ?? ALLOWED_ORIGINS[0];
+  await sendRecoveryEmail(email, `${origin}/conta/redefinir-senha`);
   return c.body(null, 204);
 });
 
@@ -915,12 +927,10 @@ app.post("/admin/auth/login", async (c) => {
   return c.json({ token, adminUser: mapAdminUser(adminUser) });
 });
 
-app.post("/admin/auth/reset-password", async (c) => {
-  const { email, newPassword } = await c.req.json();
-  const { data, error } = await db().auth.admin.generateLink({ type: "recovery", email });
-  if (error || !data.user) throw new ApiError(404, "EMAIL_NOT_FOUND");
-  const { error: updateError } = await db().auth.admin.updateUserById(data.user.id, { password: newPassword });
-  if (updateError) throw new ApiError(500, "DB_ERROR", updateError.message);
+app.post("/admin/auth/forgot-password", async (c) => {
+  const { email } = await c.req.json();
+  const origin = c.req.header("Origin") ?? ALLOWED_ORIGINS[0];
+  await sendRecoveryEmail(email, `${origin}/redefinir-senha`);
   return c.body(null, 204);
 });
 

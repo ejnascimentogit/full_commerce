@@ -44,7 +44,6 @@ import {
   createCustomerAddress as createCustomerAddressStore,
   findById as findCustomerById,
   listAll as listCustomers,
-  resetPassword as resetPasswordStore,
   updateCustomer as updateCustomerStore,
   updateCustomerAddress as updateCustomerAddressStore,
   verifyPassword,
@@ -55,7 +54,6 @@ import {
   createAdminUser,
   findAdminUserById,
   getAdminSessionUserId,
-  resetAdminPassword as resetAdminPasswordStore,
   setAdminSessionUserId,
   verifyAdminPassword,
 } from "./admin-store";
@@ -149,9 +147,11 @@ export const mockApiClient: ApiClient = {
     return customer;
   },
 
-  async resetPassword(email: string, newPassword: string): Promise<void> {
+  async resetPassword(_email: string): Promise<void> {
     await delay(300);
-    if (!resetPasswordStore(email, newPassword)) throw new Error("EMAIL_NOT_FOUND");
+    // Mock não manda e-mail de verdade, então não tem como completar a redefinição por
+    // aqui — só simula o "link enviado" (mesmo comportamento do backend real, que sempre
+    // responde sucesso independente do e-mail existir, por segurança).
   },
 
   async logout(): Promise<void> {
@@ -279,9 +279,9 @@ export const mockApiClient: ApiClient = {
     return { ...user, isPlatformOwner: user.role === "platformAdmin" };
   },
 
-  async resetAdminPassword(email: string, newPassword: string): Promise<void> {
+  async resetAdminPassword(_email: string): Promise<void> {
     await delay(300);
-    if (!resetAdminPasswordStore(email, newPassword)) throw new Error("EMAIL_NOT_FOUND");
+    // Mesma limitação de resetPassword — mock não envia e-mail, só simula sucesso.
   },
 
   async adminLogout(): Promise<void> {

@@ -113,8 +113,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
       setToken(CUSTOMER_TOKEN_KEY, result.token);
       return result.customer;
     },
-    resetPassword: (email: string, newPassword: string) =>
-      request<void>("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ email, newPassword }) }),
+    resetPassword: (email: string) =>
+      request<void>("/api/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
     logout: async () => {
       await request<void>("/api/auth/logout", { method: "POST", tokenKey: CUSTOMER_TOKEN_KEY });
       clearToken(CUSTOMER_TOKEN_KEY);
@@ -146,8 +146,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
       setToken(ADMIN_TOKEN_KEY, result.token);
       return result.adminUser;
     },
-    resetAdminPassword: (email: string, newPassword: string) =>
-      request<void>("/api/admin/auth/reset-password", { method: "POST", body: JSON.stringify({ email, newPassword }) }),
+    resetAdminPassword: (email: string) =>
+      request<void>("/api/admin/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
     adminLogout: async () => {
       await request<void>("/api/admin/auth/logout", { method: "POST", tokenKey: ADMIN_TOKEN_KEY });
       clearToken(ADMIN_TOKEN_KEY);
