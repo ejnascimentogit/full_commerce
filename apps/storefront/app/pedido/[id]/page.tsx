@@ -2,16 +2,10 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
+import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
 import type { Category, Order } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
-
-const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
-  card: "Cartão de crédito",
-  pix: "PIX",
-  boleto: "Boleto",
-};
 
 export default function PedidoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -153,8 +147,8 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
         <div>
           <h3 className="font-semibold text-slate-900 mb-1">Pagamento</h3>
           <p className="text-slate-600">
-            {paymentMethodLabel[order.paymentMethod]}
-            {order.paymentMethod === "card" && order.installments
+            {PAYMENT_METHOD_LABEL[order.paymentMethod]}
+            {order.paymentMethod === "credit" && order.installments
               ? ` — ${order.installments}x de R$ ${(order.total / order.installments).toFixed(2).replace(".", ",")}${order.installments === 1 ? " à vista" : " sem juros"}`
               : ""}
           </p>

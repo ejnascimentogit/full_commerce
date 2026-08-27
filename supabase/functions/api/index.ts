@@ -295,6 +295,7 @@ function mapSettings(s: Record<string, unknown>) {
     minInstallmentValue: Number(s.min_installment_value),
     interestFreeInstallments: s.interest_free_installments,
     monthlyInterestRate: Number(s.monthly_interest_rate),
+    enabledPaymentMethods: s.enabled_payment_methods ?? ["pix", "debit", "credit", "cash"],
     allowAdjustmentsAfterDispatch: s.allow_adjustments_after_dispatch,
   };
 }
@@ -781,7 +782,7 @@ app.post("/orders", async (c) => {
       shipping_address: mapAddress(address),
       region_id: customer.region_id,
       payment_method: input.paymentMethod,
-      installments: input.paymentMethod === "card" ? input.installments ?? null : null,
+      installments: input.paymentMethod === "credit" ? input.installments ?? null : null,
       subtotal,
       discount,
       shipping,
@@ -1319,6 +1320,7 @@ app.patch("/settings", async (c) => {
   if ("minInstallmentValue" in patch) row.min_installment_value = patch.minInstallmentValue;
   if ("interestFreeInstallments" in patch) row.interest_free_installments = patch.interestFreeInstallments;
   if ("monthlyInterestRate" in patch) row.monthly_interest_rate = patch.monthlyInterestRate;
+  if ("enabledPaymentMethods" in patch) row.enabled_payment_methods = patch.enabledPaymentMethods;
   if ("allowAdjustmentsAfterDispatch" in patch) row.allow_adjustments_after_dispatch = patch.allowAdjustmentsAfterDispatch;
   row.updated_at = new Date().toISOString();
   const { data, error } = await eco().from("store_settings").update(row).eq("company_id", admin.company_id).select("*").single();
@@ -1479,6 +1481,73 @@ app.post("/admin/companies", async (c) => {
   }
 
   return c.json(mapCompany(company));
+});
+
+// ---------- Admin: endereços de cliente ----------
+
+// O admin precisa poder corrigir/preencher o endereço de entrega do cliente
+// (ex: cliente ligou pra corrigir o número, ou cadastro veio incompleto do
+// ERP) — antes só dava pra ver, não editar.
+app.post("/admin/customers/:id/addresses", async (c) => {
+  const admin = await requireAdmin(c);
+  const input = await c.req.json();
+  const { data: customer } = await eco().from("customers").select("id").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
+  if (!customer) throw new ApiError(404, "NOT_FOUND");
+
+  if (input.isDefault) {
+    await eco().from("addresses").update({ is_default: false }).eq("customer_id", customer.id);
+  }
+  const { data, error } = await eco()
+    .from("addresses")
+    .insert({
+      company_id: admin.company_id,
+      customer_id: customer.id,
+      street: input.street,
+      number: input.number,
+      complement: input.complement ?? null,
+      neighborhood: input.neighborhood,
+      city: input.city,
+      state: input.state,
+      zip_code: input.zipCode,
+      is_default: input.isDefault ?? true,
+      label: input.label ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapAddress(data));
+});
+
+app.patch("/admin/addresses/:id", async (c) => {
+  const admin = await requireAdmin(c);
+  const patch = await c.req.json();
+  const { data: existing } = await eco()
+    .from("addresses")
+    .select("id, customer_id, is_default")
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .maybeSingle();
+  if (!existing) throw new ApiError(404, "NOT_FOUND");
+
+  const row: Record<string, unknown> = {};
+  if ("street" in patch) row.street = patch.street;
+  if ("number" in patch) row.number = patch.number;
+  if ("complement" in patch) row.complement = patch.complement || null;
+  if ("neighborhood" in patch) row.neighborhood = patch.neighborhood;
+  if ("city" in patch) row.city = patch.city;
+  if ("state" in patch) row.state = patch.state;
+  if ("zipCode" in patch) row.zip_code = patch.zipCode;
+  if ("label" in patch) row.label = patch.label || null;
+  const { data, error } = await eco().from("addresses").update(row).eq("id", c.req.param("id")).select("*").single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+
+  // Bairro mudou no endereço padrão — a região antiga pode não valer mais.
+  // Limpa pra resolveCustomerRegion() recalcular no próximo login/carregamento.
+  if (existing.is_default && "neighborhood" in patch) {
+    await eco().from("customers").update({ region_id: null }).eq("id", existing.customer_id);
+  }
+
+  return c.json(mapAddress(data));
 });
 
 app.patch("/admin/companies/:id", async (c) => {

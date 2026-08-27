@@ -51,7 +51,7 @@ function buildSeedOrders(): Order[] {
       items: [buildOrderItem(products[0], 3)],
       shippingAddress: address,
       regionId: mockCustomer.regionId,
-      paymentMethod: "card",
+      paymentMethod: "credit",
       ...totals2,
       status: "OUT_FOR_DELIVERY",
       statusHistory: [

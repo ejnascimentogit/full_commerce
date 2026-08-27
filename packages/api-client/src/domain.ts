@@ -1,9 +1,21 @@
-import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, Product, Promotion } from "@ecommerce/types";
+import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, PaymentMethod, Product, Promotion } from "@ecommerce/types";
 
 // Pure business-rule functions — no React, no fetch, no storage. Shared by every
 // app (storefront, mobile, admin) so the rules from the ecommerce skill (frete
 // grátis para CNPJ, sem pedido mínimo, preço variável por peso) live in exactly
 // one place instead of being reimplemented per platform.
+
+// Ordem fixa da hierarquia de pagamento (PIX, Débito, Crédito, Dinheiro) —
+// usada tanto pro checkout ordenar as abas quanto pro admin listar o filtro
+// de formas habilitadas, sempre na mesma sequência em todo o app.
+export const PAYMENT_METHOD_ORDER: PaymentMethod[] = ["pix", "debit", "credit", "cash"];
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  pix: "PIX",
+  debit: "Cartão de débito",
+  credit: "Cartão de crédito",
+  cash: "Dinheiro à vista",
+};
 
 export function unitPriceOf(product: Product): number {
   return product.salePrice && product.salePrice > 0 ? product.salePrice : product.basePrice;

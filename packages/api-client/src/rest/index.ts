@@ -1,4 +1,4 @@
-import type { AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import type {
   ApiClient,
   CreateOrderInput,
@@ -177,6 +177,10 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
     updateCustomer: (id, patch) =>
       request<Customer>(`/api/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    createCustomerAddress: (customerId: string, input: Omit<Address, "id">) =>
+      request<Address>(`/api/admin/customers/${customerId}/addresses`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    updateCustomerAddress: (addressId: string, patch: Partial<Omit<Address, "id">>) =>
+      request<Address>(`/api/admin/addresses/${addressId}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     createVendor: (input: Omit<Vendor, "id">) =>
       request<Vendor>("/api/vendors", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateVendor: (id: string, patch: Partial<Omit<Vendor, "id">>) =>

@@ -3,16 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { apiClient, unitPriceOf, calculateShipping, calculatePromotionDiscount } from "@ecommerce/api-client";
-import type { Address, Category, Product, Promotion, StoreSettings } from "@ecommerce/types";
+import {
+  apiClient,
+  unitPriceOf,
+  calculateShipping,
+  calculatePromotionDiscount,
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_METHOD_ORDER,
+} from "@ecommerce/api-client";
+import type { Address, Category, PaymentMethod, Product, Promotion, StoreSettings } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
-
-type PaymentMethod = "card" | "pix";
-
-const PREFERRED_PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX" };
 
 // CRC16-CCITT (poly 0x1021, init 0xFFFF) — checksum exigido no final de todo
 // payload Pix, especificação do Bacen (BR Code / EMV QR).
@@ -105,16 +108,18 @@ export default function CheckoutPage() {
     }
   }, [authLoading, customer, router]);
 
-  // Só pré-seleciona uma vez, quando o cliente carrega — depois disso o
-  // cliente pode trocar livremente, nunca sobrescrevemos a escolha manual.
-  const appliedPreference = useRef(false);
+  // Só escolhe a aba inicial uma vez, quando a loja carrega — depois disso o
+  // cliente troca livremente, nunca sobrescrevemos a escolha manual. Usa a
+  // condição pré-definida do cliente (cadastrada pelo admin) se ela estiver
+  // entre as formas habilitadas pela loja; senão cai na primeira habilitada.
+  const appliedDefault = useRef(false);
   useEffect(() => {
-    if (appliedPreference.current || !customer?.preferredPaymentMethod) return;
-    if (customer.preferredPaymentMethod === "card" || customer.preferredPaymentMethod === "pix") {
-      setMethod(customer.preferredPaymentMethod);
-    }
-    appliedPreference.current = true;
-  }, [customer]);
+    if (appliedDefault.current || !settings) return;
+    const enabled = settings.enabledPaymentMethods?.length ? settings.enabledPaymentMethods : PAYMENT_METHOD_ORDER;
+    const preferred = customer?.preferredPaymentMethod;
+    setMethod(preferred && enabled.includes(preferred) ? preferred : enabled[0]);
+    appliedDefault.current = true;
+  }, [settings, customer]);
 
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
@@ -192,6 +197,8 @@ export default function CheckoutPage() {
     );
   }
 
+  const availableMethods = PAYMENT_METHOD_ORDER.filter((m) => settings.enabledPaymentMethods?.includes(m) ?? true);
+
   const resolvedLines = lines
     .map((l) => ({ line: l, product: products[l.productId] }))
     .filter((l): l is { line: (typeof lines)[number]; product: Product } => Boolean(l.product));
@@ -246,7 +253,7 @@ export default function CheckoutPage() {
         items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
         addressId,
         paymentMethod: method,
-        installments: method === "card" ? installments : undefined,
+        installments: method === "credit" ? installments : undefined,
         couponCode: appliedPromotion?.couponCode,
       });
       clear();
@@ -300,34 +307,24 @@ export default function CheckoutPage() {
           <h2 className="font-semibold text-slate-900">2. Forma de pagamento</h2>
           {customer.preferredPaymentMethod && (
             <span className="text-xs font-medium bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">
-              🏷️ Preferência: {PREFERRED_PAYMENT_LABEL[customer.preferredPaymentMethod]}
+              🏷️ Preferência: {PAYMENT_METHOD_LABEL[customer.preferredPaymentMethod]}
             </span>
           )}
         </div>
-        {customer.preferredPaymentMethod === "cash" && (
-          <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-3 py-2 mb-3">
-            Este cliente prefere pagar em dinheiro — como não há essa opção aqui no checkout online, escolha PIX ou cartão, ou
-            combine a forma correta diretamente com o cliente.
-          </p>
-        )}
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setMethod("pix")}
-            className={`flex-1 border rounded-md py-3 font-medium ${method === "pix" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}
-          >
-            PIX
-          </button>
-          <button
-            type="button"
-            onClick={() => setMethod("card")}
-            className={`flex-1 border rounded-md py-3 font-medium ${method === "card" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}
-          >
-            Cartão de crédito
-          </button>
+        <div className="flex gap-3 flex-wrap">
+          {availableMethods.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMethod(m)}
+              className={`flex-1 min-w-[8rem] border rounded-md py-3 font-medium ${method === m ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}
+            >
+              {PAYMENT_METHOD_LABEL[m]}
+            </button>
+          ))}
         </div>
 
-        {method === "card" && (
+        {method === "credit" && (
           <div className="mt-3">
             <label className="block text-sm text-slate-600 mb-1">3. Condição de pagamento</label>
             <select
@@ -337,11 +334,21 @@ export default function CheckoutPage() {
             >
               {buildInstallmentOptions(total, settings).map(({ n, value, hasInterest }) => (
                 <option key={n} value={n}>
-                  {n}x de R$ {value.toFixed(2).replace(".", ",")} {n === 1 ? "à vista" : hasInterest ? "com juros" : "sem juros"}
+                  {n}x de R$ {value.toFixed(2).replace(".", ",")} {n === 1 ? "à vista (crédito rotativo)" : hasInterest ? "com juros" : "sem juros"}
                 </option>
               ))}
             </select>
           </div>
+        )}
+        {method === "debit" && (
+          <p className="mt-3 text-sm text-slate-600 bg-slate-50 rounded-md px-3 py-2">
+            Pagamento à vista no cartão de débito, na entrega/retirada.
+          </p>
+        )}
+        {method === "cash" && (
+          <p className="mt-3 text-sm text-slate-600 bg-slate-50 rounded-md px-3 py-2">
+            Pagamento à vista em dinheiro, na entrega/retirada.
+          </p>
         )}
         {method === "pix" && (
           <div className="mt-3">

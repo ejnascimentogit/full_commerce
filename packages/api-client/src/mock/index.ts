@@ -9,7 +9,7 @@ import type {
   UpdatePromotionInput,
   UpdateProductInput,
 } from "../types";
-import type { AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import {
   createCategory as createCategoryStore,
   deleteCategory as deleteCategoryStore,
@@ -41,10 +41,12 @@ import {
 import { isValidDocument } from "../documents";
 import {
   createCustomer,
+  createCustomerAddress as createCustomerAddressStore,
   findById as findCustomerById,
   listAll as listCustomers,
   resetPassword as resetPasswordStore,
   updateCustomer as updateCustomerStore,
+  updateCustomerAddress as updateCustomerAddressStore,
   verifyPassword,
 } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
@@ -215,7 +217,7 @@ export const mockApiClient: ApiClient = {
       shippingAddress: address,
       regionId: customer.regionId,
       paymentMethod: input.paymentMethod,
-      installments: input.paymentMethod === "card" ? input.installments : undefined,
+      installments: input.paymentMethod === "credit" ? input.installments : undefined,
       ...totals,
       status: "PAID",
       statusHistory: [
@@ -365,6 +367,16 @@ export const mockApiClient: ApiClient = {
   async updateCustomer(id, patch): Promise<Customer> {
     await delay(300);
     return updateCustomerStore(id, patch);
+  },
+
+  async createCustomerAddress(customerId: string, input: Omit<Address, "id">): Promise<Address> {
+    await delay(300);
+    return createCustomerAddressStore(customerId, input);
+  },
+
+  async updateCustomerAddress(addressId: string, patch: Partial<Omit<Address, "id">>): Promise<Address> {
+    await delay(300);
+    return updateCustomerAddressStore(addressId, patch);
   },
 
   async createVendor(input: Omit<Vendor, "id">): Promise<Vendor> {

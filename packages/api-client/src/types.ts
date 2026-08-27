@@ -1,4 +1,5 @@
 import type {
+  Address,
   AdminUser,
   Category,
   Company,
@@ -7,6 +8,7 @@ import type {
   DocumentType,
   Order,
   OrderStatus,
+  PaymentMethod,
   Product,
   Promotion,
   StoreSettings,
@@ -48,7 +50,7 @@ export interface CreateOrderInput {
   customerId: string;
   items: CreateOrderItemInput[];
   addressId: string;
-  paymentMethod: "card" | "pix" | "boleto";
+  paymentMethod: PaymentMethod;
   installments?: number;
   /** Revalidado no backend (defesa em profundidade) — o desconto exibido no checkout é só uma prévia. */
   couponCode?: string;
@@ -135,6 +137,10 @@ export interface ApiClient {
     id: string,
     patch: Partial<Pick<Customer, "name" | "phone" | "businessName" | "regionId" | "referenceCode" | "preferredPaymentMethod" | "status">>,
   ): Promise<Customer>;
+  /** Cria um endereço pro cliente (ex: cadastro veio sem endereço) — só platformAdmin. */
+  createCustomerAddress(customerId: string, input: Omit<Address, "id">): Promise<Address>;
+  /** Corrige um endereço já existente do cliente — só platformAdmin. Se for o endereço padrão e o bairro mudar, a região do cliente é recalculada no próximo carregamento. */
+  updateCustomerAddress(addressId: string, patch: Partial<Omit<Address, "id">>): Promise<Address>;
   createVendor(input: Omit<Vendor, "id">): Promise<Vendor>;
   updateVendor(id: string, patch: Partial<Omit<Vendor, "id">>): Promise<Vendor>;
   /** Roteirização: cria/edita uma zona de entrega e os bairros que ela cobre. */

@@ -46,6 +46,7 @@ function seedSettings(): StoreSettings {
     minInstallmentValue: 5,
     interestFreeInstallments: 12,
     monthlyInterestRate: 0,
+    enabledPaymentMethods: ["pix", "debit", "credit", "cash"],
     allowAdjustmentsAfterDispatch: false,
   };
 }

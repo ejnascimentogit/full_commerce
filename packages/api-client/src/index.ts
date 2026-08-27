@@ -19,6 +19,8 @@ export { packageLabels } from "./mock";
 export {
   ORDER_STATUS_FLOW,
   ORDER_STATUS_LABEL,
+  PAYMENT_METHOD_ORDER,
+  PAYMENT_METHOD_LABEL,
   calculateOrderTotals,
   calculatePromotionDiscount,
   calculateShipping,

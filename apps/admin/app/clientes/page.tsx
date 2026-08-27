@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
 import type { Customer, DeliveryRegion } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { useRouter } from "next/navigation";
-
-const PAYMENT_LABEL: Record<string, string> = { cash: "Dinheiro", card: "Cartão", pix: "PIX" };
 
 export default function ClientesPage() {
   const { user } = useAdminAuth();
@@ -57,9 +55,11 @@ export default function ClientesPage() {
             className="border border-slate-300 rounded-md px-3 py-2 text-sm"
           >
             <option value="">Toda condição de pagamento</option>
-            <option value="cash">Dinheiro</option>
-            <option value="card">Cartão</option>
-            <option value="pix">PIX</option>
+            {PAYMENT_METHOD_ORDER.map((m) => (
+              <option key={m} value={m}>
+                {PAYMENT_METHOD_LABEL[m]}
+              </option>
+            ))}
           </select>
           <input
             value={search}
@@ -101,7 +101,9 @@ export default function ClientesPage() {
                   {c.regionId ? (regions.find((r) => r.id === c.regionId)?.name ?? "—") : <span className="text-amber-600">Fora de zona</span>}
                 </td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{c.referenceCode ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-500">{PAYMENT_LABEL[c.preferredPaymentMethod ?? ""] ?? "—"}</td>
+                <td className="px-4 py-2.5 text-slate-500">
+                  {c.preferredPaymentMethod ? PAYMENT_METHOD_LABEL[c.preferredPaymentMethod] : "—"}
+                </td>
                 <td className="px-4 py-2.5">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                     {c.status === "active" ? "Ativo" : "Inativo"}
@@ -154,17 +156,43 @@ function EditCustomerModal({
   const [status, setStatus] = useState(customer.status);
   const [saving, setSaving] = useState(false);
 
+  // Só o endereço padrão (o de entrega) é editável aqui — endereços extras
+  // (ex: endereço de cobrança de PJ) ficam só na lista abaixo por enquanto.
+  const defaultAddress = customer.addresses.find((a) => a.isDefault) ?? customer.addresses[0];
+  const otherAddresses = customer.addresses.filter((a) => a.id !== defaultAddress?.id);
+  const [addrStreet, setAddrStreet] = useState(defaultAddress?.street ?? "");
+  const [addrNumber, setAddrNumber] = useState(defaultAddress?.number ?? "");
+  const [addrComplement, setAddrComplement] = useState(defaultAddress?.complement ?? "");
+  const [addrNeighborhood, setAddrNeighborhood] = useState(defaultAddress?.neighborhood ?? "");
+  const [addrCity, setAddrCity] = useState(defaultAddress?.city ?? "");
+  const [addrState, setAddrState] = useState(defaultAddress?.state ?? "");
+  const [addrZip, setAddrZip] = useState(defaultAddress?.zipCode ?? "");
+
   async function handleSave() {
     setSaving(true);
-    await apiClient.updateCustomer(customer.id, {
-      name,
-      businessName: businessName || undefined,
-      phone,
-      regionId: regionId || undefined,
-      referenceCode: referenceCode || undefined,
-      preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
-      status,
-    });
+    const addressPayload = {
+      street: addrStreet,
+      number: addrNumber,
+      complement: addrComplement || undefined,
+      neighborhood: addrNeighborhood,
+      city: addrCity,
+      state: addrState,
+      zipCode: addrZip,
+      isDefault: true,
+      label: defaultAddress?.label ?? "Entrega",
+    };
+    await Promise.all([
+      apiClient.updateCustomer(customer.id, {
+        name,
+        businessName: businessName || undefined,
+        phone,
+        regionId: regionId || undefined,
+        referenceCode: referenceCode || undefined,
+        preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
+        status,
+      }),
+      defaultAddress ? apiClient.updateCustomerAddress(defaultAddress.id, addressPayload) : apiClient.createCustomerAddress(customer.id, addressPayload),
+    ]);
     setSaving(false);
     onSaved();
   }
@@ -187,20 +215,66 @@ function EditCustomerModal({
             <span className="text-slate-500">{customer.documentType === "cnpj" ? "CNPJ" : "CPF"}</span>
             <span className="text-slate-900 font-mono">{customer.document}</span>
           </div>
-          <div>
-            <span className="text-slate-500 block mb-1">Endereço{customer.addresses.length > 1 ? "s" : ""}</span>
-            {customer.addresses.length === 0 && <p className="text-slate-400 text-xs">Nenhum endereço cadastrado.</p>}
-            <ul className="space-y-1">
-              {customer.addresses.map((a) => (
-                <li key={a.id} className="text-slate-900 text-xs">
-                  {a.label && <span className="text-slate-500 font-medium">{a.label}: </span>}
-                  {a.street}, {a.number}
-                  {a.complement && ` - ${a.complement}`} — {a.neighborhood}, {a.city}/{a.state} — {a.zipCode}
-                  {a.isDefault && <span className="ml-1 text-brand-600 font-medium">(padrão)</span>}
-                </li>
-              ))}
-            </ul>
+          {otherAddresses.length > 0 && (
+            <div>
+              <span className="text-slate-500 block mb-1">Outro{otherAddresses.length > 1 ? "s" : ""} endereço{otherAddresses.length > 1 ? "s" : ""}</span>
+              <ul className="space-y-1">
+                {otherAddresses.map((a) => (
+                  <li key={a.id} className="text-slate-900 text-xs">
+                    {a.label && <span className="text-slate-500 font-medium">{a.label}: </span>}
+                    {a.street}, {a.number}
+                    {a.complement && ` - ${a.complement}`} — {a.neighborhood}, {a.city}/{a.state} — {a.zipCode}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="border border-slate-200 rounded-md p-3 mb-4 space-y-3">
+          <p className="text-sm font-medium text-slate-700">Endereço de entrega</p>
+          {!defaultAddress && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-2 py-1.5">
+              Cliente sem endereço cadastrado — preencha abaixo pra entrega poder ser feita.
+            </p>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
+              <input value={addrStreet} onChange={(e) => setAddrStreet(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
+              <input value={addrNumber} onChange={(e) => setAddrNumber(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
           </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
+            <input value={addrComplement} onChange={(e) => setAddrComplement(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+              <input value={addrNeighborhood} onChange={(e) => setAddrNeighborhood(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+              <input value={addrZip} onChange={(e) => setAddrZip(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-[1fr_5rem] gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+              <input value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+              <input value={addrState} onChange={(e) => setAddrState(e.target.value.toUpperCase())} maxLength={2} className="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-sm uppercase" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">
+            Se o bairro mudar, a região de entrega é recalculada automaticamente no próximo acesso do cliente.
+          </p>
         </div>
 
         <div className="space-y-3">
@@ -252,9 +326,11 @@ function EditCustomerModal({
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
             >
               <option value="">Não definida</option>
-              <option value="cash">Dinheiro</option>
-              <option value="card">Cartão</option>
-              <option value="pix">PIX</option>
+              {PAYMENT_METHOD_ORDER.map((m) => (
+                <option key={m} value={m}>
+                  {PAYMENT_METHOD_LABEL[m]}
+                </option>
+              ))}
             </select>
             <p className="text-xs text-slate-400 mt-1">
               Útil pra clientes que já vêm do ERP da empresa com a condição pré-definida.

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
-import type { Banner, FooterLink, FooterSettings, SiteCopy, StoreSettings } from "@ecommerce/types";
+import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
+import type { Banner, FooterLink, FooterSettings, PaymentMethod, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { RegionsSection } from "@/components/RegionsSection";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -45,7 +45,9 @@ export default function ConfiguracoesPage() {
   const [minInstallmentValue, setMinInstallmentValue] = useState("5");
   const [interestFreeInstallments, setInterestFreeInstallments] = useState("12");
   const [monthlyInterestRate, setMonthlyInterestRate] = useState("0");
+  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState<PaymentMethod[]>(PAYMENT_METHOD_ORDER);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && user.role !== "platformAdmin") router.replace("/");
@@ -67,6 +69,7 @@ export default function ConfiguracoesPage() {
       setMinInstallmentValue(s.minInstallmentValue.toString());
       setInterestFreeInstallments(s.interestFreeInstallments.toString());
       setMonthlyInterestRate(s.monthlyInterestRate.toString());
+      setEnabledPaymentMethods(s.enabledPaymentMethods ?? PAYMENT_METHOD_ORDER);
     });
   }
 
@@ -153,7 +156,16 @@ export default function ConfiguracoesPage() {
     refresh();
   }
 
+  function togglePaymentMethod(method: PaymentMethod) {
+    setEnabledPaymentMethods((prev) => (prev.includes(method) ? prev.filter((m) => m !== method) : [...prev, method]));
+  }
+
   async function handleSavePayment() {
+    if (enabledPaymentMethods.length === 0) {
+      setPaymentError("Deixe pelo menos uma forma de pagamento marcada — sem nenhuma, o checkout trava pro cliente.");
+      return;
+    }
+    setPaymentError(null);
     setSavingPayment(true);
     await apiClient.updateStoreSettings({
       pixKey: pixKey.trim() || undefined,
@@ -163,6 +175,7 @@ export default function ConfiguracoesPage() {
       minInstallmentValue: Number(minInstallmentValue),
       interestFreeInstallments: Number(interestFreeInstallments),
       monthlyInterestRate: Number(monthlyInterestRate),
+      enabledPaymentMethods,
     });
     setSavingPayment(false);
     refresh();
@@ -719,6 +732,30 @@ export default function ConfiguracoesPage() {
         </p>
 
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Formas de pagamento disponíveis para o cliente</label>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_METHOD_ORDER.map((method) => {
+                const active = enabledPaymentMethods.includes(method);
+                return (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => togglePaymentMethod(method)}
+                    className={`text-sm font-medium rounded-full px-3 py-1.5 border ${active ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-300 text-slate-500"}`}
+                  >
+                    {active ? "✓ " : ""}
+                    {PAYMENT_METHOD_LABEL[method]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">
+              Só o que estiver marcado aqui aparece pro cliente escolher no checkout, nessa mesma ordem. As regras de
+              parcelamento abaixo valem só para "Cartão de crédito" — nas outras formas o pagamento é sempre à vista.
+            </p>
+            {paymentError && <p className="text-xs text-red-600 mt-1.5">{paymentError}</p>}
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Chave Pix</label>
             <input

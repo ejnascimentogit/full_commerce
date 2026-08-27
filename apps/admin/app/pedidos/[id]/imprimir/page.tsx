@@ -1,15 +1,9 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
 import type { Order } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
-
-const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
-  card: "Cartão de crédito",
-  pix: "PIX",
-  boleto: "Boleto",
-};
 
 // Página isolada (sem AdminShell/menu) — só o essencial pra quem vai separar
 // a mercadoria conferir e marcar item por item no papel.
@@ -77,7 +71,7 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
           {order.shippingAddress.neighborhood}, {order.shippingAddress.city}/{order.shippingAddress.state}
         </p>
         <p>
-          <span className="font-semibold">Pagamento:</span> {paymentMethodLabel[order.paymentMethod]}
+          <span className="font-semibold">Pagamento:</span> {PAYMENT_METHOD_LABEL[order.paymentMethod]}
         </p>
         <p className="font-bold text-base pt-1">Total: R$ {order.total.toFixed(2).replace(".", ",")}</p>
       </div>

@@ -1,5 +1,8 @@
 export type DocumentType = "cpf" | "cnpj";
 
+/** Hierarquia real de pagamento, nessa ordem de exibição: PIX, Débito, Crédito (à vista ou parcelado — ver StoreSettings), Dinheiro à vista. */
+export type PaymentMethod = "pix" | "debit" | "credit" | "cash";
+
 export type AdminRole = "platformAdmin" | "vendorAdmin";
 
 export interface AdminUser {
@@ -54,8 +57,8 @@ export interface Customer {
   code?: string;
   /** Código que o próprio cliente usa para nos identificar no sistema dele — texto livre, opcional. */
   referenceCode?: string;
-  /** Definida pelo admin (ex: cliente que já vem com condição fixada no ERP da empresa) — informativa, não obriga o pagamento no checkout. */
-  preferredPaymentMethod?: "cash" | "card" | "pix";
+  /** Definida pelo admin (ex: cliente que já vem com condição fixada no ERP da empresa) — pré-seleciona a aba no checkout, mas continua editável pelo cliente lá. */
+  preferredPaymentMethod?: PaymentMethod;
   createdAt: string;
   status: "active" | "inactive";
 }
@@ -173,8 +176,8 @@ export interface Order {
   items: OrderItem[];
   shippingAddress: Address;
   regionId?: string;
-  paymentMethod: "card" | "pix" | "boleto";
-  /** Só relevante pra paymentMethod "card" — quantas parcelas o cliente escolheu no checkout. */
+  paymentMethod: PaymentMethod;
+  /** Só relevante pra paymentMethod "credit" — quantas parcelas o cliente escolheu no checkout. */
   installments?: number;
   subtotal: number;
   discount: number;
@@ -202,7 +205,7 @@ export type PaymentStatus = "pending" | "approved" | "refused" | "refunded";
 export interface Payment {
   id: string;
   orderId: string;
-  method: "card" | "pix";
+  method: PaymentMethod;
   status: PaymentStatus;
   amount: number;
   installments: number;
@@ -298,14 +301,17 @@ export interface StoreSettings {
   /** Cidade do recebedor exibida no QR (máx. 15 caracteres). */
   pixReceiverCity?: string;
 
-  /** Máximo de parcelas oferecidas no cartão. */
+  /** Máximo de parcelas oferecidas no crédito. */
   maxInstallments: number;
   /** Parcelas com valor abaixo disso somem da lista de opções (evita "12x de R$ 0,80"). */
   minInstallmentValue: number;
-  /** Até quantas parcelas saem sem juros — acima disso aplica monthlyInterestRate. */
+  /** Até quantas parcelas saem sem juros — acima disso aplica monthlyInterestRate. 1x sempre disponível (é o "crédito rotativo"/à vista). */
   interestFreeInstallments: number;
   /** Taxa de juros ao mês (%) aplicada acima de interestFreeInstallments, via Tabela Price. */
   monthlyInterestRate: number;
+
+  /** Filtro do admin: quais formas de pagamento aparecem pro consumidor escolher no checkout. Vazio/ausente = nenhuma (trava o checkout), então a UI sempre garante pelo menos uma marcada. */
+  enabledPaymentMethods: PaymentMethod[];
 
   /** Desligado (padrão): depois que o pedido sai para entrega ou é entregue, a mercadoria já deixou o estoque e a nota fiscal já foi emitida — não dá mais pra ajustar quantidade. Ligar aqui libera o ajuste mesmo nesses status. */
   allowAdjustmentsAfterDispatch: boolean;

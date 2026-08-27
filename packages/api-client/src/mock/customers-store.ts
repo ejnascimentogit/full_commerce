@@ -91,6 +91,32 @@ export function updateCustomer(id: string, patch: Partial<Omit<Customer, "id">>)
   return customer;
 }
 
+export function createCustomerAddress(customerId: string, input: Omit<Address, "id">): Address {
+  const customers = readAll();
+  const index = customers.findIndex((c) => c.id === customerId);
+  if (index === -1) throw new Error(`Customer not found: ${customerId}`);
+  const address: Address = { ...input, id: `addr-${Date.now()}` };
+  if (address.isDefault) customers[index].addresses.forEach((a) => (a.isDefault = false));
+  customers[index].addresses.push(address);
+  writeAll(customers);
+  return address;
+}
+
+export function updateCustomerAddress(addressId: string, patch: Partial<Omit<Address, "id">>): Address {
+  const customers = readAll();
+  for (const customer of customers) {
+    const address = customer.addresses.find((a) => a.id === addressId);
+    if (!address) continue;
+    Object.assign(address, patch);
+    // Bairro do endereço padrão mudou — a região salva pode não valer mais,
+    // mesma regra do backend real (resolveCustomerRegion recalcula sozinho).
+    if (address.isDefault && "neighborhood" in patch) customer.regionId = undefined;
+    writeAll(customers);
+    return address;
+  }
+  throw new Error(`Address not found: ${addressId}`);
+}
+
 export function verifyPassword(email: string, password: string): Customer | undefined {
   const found = findByEmail(email);
   if (!found || found.password !== password) return undefined;

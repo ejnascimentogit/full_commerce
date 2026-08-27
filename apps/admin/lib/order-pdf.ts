@@ -1,11 +1,6 @@
 import { jsPDF } from "jspdf";
+import { PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
 import type { Order, OrderItem } from "@ecommerce/types";
-
-const paymentMethodLabel: Record<Order["paymentMethod"], string> = {
-  card: "Cartão de crédito",
-  pix: "PIX",
-  boleto: "Boleto",
-};
 
 // Documento simples (só texto, sem tabela/plugin extra) — suficiente pra
 // enviar por WhatsApp/e-mail como comprovante do pedido para separação ou
@@ -62,8 +57,8 @@ export function downloadOrderPdf(order: Order, items: OrderItem[]) {
   y += 6;
   doc.setFont("helvetica", "normal");
   const paymentText =
-    paymentMethodLabel[order.paymentMethod] +
-    (order.paymentMethod === "card" && order.installments && order.installments > 1
+    PAYMENT_METHOD_LABEL[order.paymentMethod] +
+    (order.paymentMethod === "credit" && order.installments && order.installments > 1
       ? ` — ${order.installments}x de R$ ${(order.total / order.installments).toFixed(2).replace(".", ",")}`
       : "");
   doc.text(paymentText, marginX, y);
