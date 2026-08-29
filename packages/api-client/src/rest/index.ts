@@ -1,4 +1,4 @@
-import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, EcommerceType, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import type {
   ApiClient,
   CreateOrderInput,
@@ -192,7 +192,7 @@ function createRestApiClient(baseUrl: string): ApiClient {
     updateStoreSettings: (patch: Partial<StoreSettings>) =>
       request<StoreSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     getCompanies: () => request<Company[]>("/api/admin/companies", { tokenKey: ADMIN_TOKEN_KEY }),
-    createCompany: (input: { name: string; slug: string }) =>
+    createCompany: (input: { name: string; slug: string; ecommerceType?: EcommerceType }) =>
       request<Company>("/api/admin/companies", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateCompany: (id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }) =>
       request<Company>(`/api/admin/companies/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),

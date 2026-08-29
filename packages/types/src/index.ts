@@ -15,6 +15,9 @@ export interface AdminUser {
   isPlatformOwner?: boolean;
 }
 
+/** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */
+export type EcommerceType = "wholesale" | "televendas";
+
 export interface Company {
   id: string;
   name: string;
@@ -25,6 +28,8 @@ export interface Company {
   adminDomain?: string;
   active: boolean;
   createdAt: string;
+  /** Definido na criação da empresa, não editável depois — decide quais telas do admin e qual layout de storefront essa empresa usa. */
+  ecommerceType: EcommerceType;
 }
 
 export interface Address {

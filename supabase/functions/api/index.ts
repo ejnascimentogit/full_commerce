@@ -208,6 +208,7 @@ function mapCompany(c: Record<string, unknown>) {
     adminDomain: c.admin_domain ?? undefined,
     active: c.active,
     createdAt: c.created_at,
+    ecommerceType: c.ecommerce_type ?? "wholesale",
   };
 }
 
@@ -1479,8 +1480,11 @@ app.get("/admin/companies", async (c) => {
 // só existe depois que o cliente compra/aponta o domínio de verdade.
 app.post("/admin/companies", async (c) => {
   await requirePlatformOwner(c);
-  const { name, slug } = await c.req.json();
+  const { name, slug, ecommerceType } = await c.req.json();
   if (!name || !slug) throw new ApiError(422, "INVALID_INPUT", "Nome e slug são obrigatórios.");
+  if (ecommerceType && ecommerceType !== "wholesale" && ecommerceType !== "televendas") {
+    throw new ApiError(422, "INVALID_INPUT", "Tipo de e-commerce inválido.");
+  }
 
   // Número da empresa (1, 2, 3...) vira o prefixo do SKU dos produtos dela — ver
   // next_product_code(). Calculado aqui em vez de sequence pra não precisar de mais
@@ -1489,7 +1493,11 @@ app.post("/admin/companies", async (c) => {
   const { data: maxRow } = await eco().from("companies").select("company_number").order("company_number", { ascending: false }).limit(1).maybeSingle();
   const companyNumber = (maxRow?.company_number ?? 0) + 1;
 
-  const { data: company, error } = await eco().from("companies").insert({ name, slug, active: true, company_number: companyNumber }).select("*").single();
+  const { data: company, error } = await eco()
+    .from("companies")
+    .insert({ name, slug, active: true, company_number: companyNumber, ecommerce_type: ecommerceType || "wholesale" })
+    .select("*")
+    .single();
   if (error) throw new ApiError(422, "DB_ERROR", error.message);
 
   const { error: settingsError } = await eco().from("store_settings").insert({

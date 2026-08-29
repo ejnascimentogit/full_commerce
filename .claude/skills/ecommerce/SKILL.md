@@ -144,6 +144,12 @@ O dono da loja cria sua própria conta `platformAdmin` em `/criar-conta` no admi
 
 `apps/storefront` e `apps/mobile` cobrem exatamente as mesmas telas voltadas ao cliente — só muda a forma (web vs. nativo): Cadastro (nome, documento com validação de dígito verificador, e-mail, senha, **endereço com autopreenchimento por CEP** — consulta um serviço de CEP público e preenche rua/bairro/cidade/estado, cliente só digita número/complemento; a região de entrega é resolvida depois, automaticamente, pelo bairro — não existe seletor de região), Home (com vitrine "Ofertas da Semana" a partir de `Promotion.isFeatured` e vitrines por fornecedor a partir de `Vendor.isFeatured`), Catálogo/busca, Página de produto, Carrinho, Checkout (endereço → forma de pagamento → condição de pagamento → confirmação), Minha Conta (dados cadastrais incluindo CPF/CNPJ, endereços, histórico de pedidos), Acompanhamento de Pedido (timeline lendo `statusHistory`). No app, soma ainda: onboarding/login simplificado (o app deve lembrar a sessão do cliente, sem pedir login toda hora), e permissão de push notification pedida logo após o primeiro login.
 
+## Tipos de e-commerce (multi-tenant) — `wholesale` vs `televendas`
+
+Tudo neste documento até aqui descreve o modelo **`wholesale`** (atacado B2B multi-fornecedor, inspirado no Praso) — é o padrão implícito de toda `Company` cadastrada até agora (fullcommerce, Odoya). A plataforma é multi-tenant: cada `Company` tem seus próprios produtos, clientes e configurações, totalmente isolados das outras (tela **Empresas**, só `platformOwner` vê).
+
+Existe um segundo tipo, **`televendas`** — varejo B2C por telemarketing com crediário próprio (primeira empresa desse tipo: Almir Móveis e Eletro) — escolhido no campo `Company.ecommerceType` na criação da empresa. Esse campo liga/desliga telas do admin e troca o layout do storefront **sem alterar nada do comportamento `wholesale` já existente** — toda mudança é aditiva (campo novo com default `wholesale`, telas novas condicionadas ao tipo). Especificação completa em [references/televendas.md](references/televendas.md) — consulte antes de mexer em `Company`, `PaymentTerm`, `Cart` ou no menu do admin (`AdminShell.tsx`).
+
 ## Contrato de API REST
 
 O contrato completo de endpoints (produtos, clientes, carrinho, pedidos, pagamentos, promoções) está em [references/api-contract.md](references/api-contract.md) — consulte antes de implementar qualquer chamada em `packages/api-client/rest`, e mantenha esse arquivo como a especificação que o usuário vai seguir ao construir o backend.

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Company } from "@ecommerce/types";
+import type { Company, EcommerceType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -14,6 +14,7 @@ export default function EmpresasPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [ecommerceType, setEcommerceType] = useState<EcommerceType>("wholesale");
   const [submitting, setSubmitting] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
 
@@ -42,9 +43,10 @@ export default function EmpresasPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await apiClient.createCompany({ name, slug });
+    await apiClient.createCompany({ name, slug, ecommerceType });
     setName("");
     setSlug("");
+    setEcommerceType("wholesale");
     setShowForm(false);
     setSubmitting(false);
     refresh();
@@ -89,6 +91,20 @@ export default function EmpresasPage() {
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de e-commerce</label>
+            <select
+              value={ecommerceType}
+              onChange={(e) => setEcommerceType(e.target.value as EcommerceType)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+            >
+              <option value="wholesale">Multi-fornecedor (padrão) — atacado B2B, como Odoya</option>
+              <option value="televendas">Televendas — varejo B2C com crediário próprio</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Não pode ser trocado depois de criar a empresa — define quais telas do admin e qual loja essa empresa usa.
+            </p>
+          </div>
           <p className="text-xs text-slate-500 bg-amber-50 rounded-md px-3 py-2">
             O domínio (endereço público da loja/admin) é configurado depois, quando o cliente tiver o domínio próprio pronto —
             use "Editar domínio" na lista abaixo.
@@ -104,6 +120,7 @@ export default function EmpresasPage() {
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-2.5">Nome</th>
+              <th className="text-left px-4 py-2.5">Tipo</th>
               <th className="text-left px-4 py-2.5">Domínio (loja)</th>
               <th className="text-left px-4 py-2.5">Domínio (admin)</th>
               <th className="text-left px-4 py-2.5">Status</th>
@@ -114,6 +131,11 @@ export default function EmpresasPage() {
             {companies.map((c) => (
               <tr key={c.id}>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{c.name}</td>
+                <td className="px-4 py-2.5">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${c.ecommerceType === "televendas" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}`}>
+                    {c.ecommerceType === "televendas" ? "Televendas" : "Multi-fornecedor"}
+                  </span>
+                </td>
                 <td className="px-4 py-2.5 text-slate-500">{c.domain ?? <span className="text-amber-600">não configurado</span>}</td>
                 <td className="px-4 py-2.5 text-slate-500">{c.adminDomain ?? <span className="text-amber-600">não configurado</span>}</td>
                 <td className="px-4 py-2.5">

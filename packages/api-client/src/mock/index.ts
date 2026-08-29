@@ -305,6 +305,7 @@ export const mockApiClient: ApiClient = {
         slug: "fullcommerce",
         active: true,
         createdAt: new Date().toISOString(),
+        ecommerceType: "wholesale",
       },
     ];
   },

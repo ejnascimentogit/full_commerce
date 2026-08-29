@@ -94,6 +94,10 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 - **Tudo configurável, nada fixo no código**: pedido mínimo, frete grátis para CNPJ, cor, logo, textos, rodapé — todos têm um valor padrão sensato, mas o admin pode mudar qualquer um deles em Configurações.
 - **SKU (código do produto) é gerado pelo sistema, nunca digitado**: cada empresa tem um número sequencial (fullcommerce = 1, próxima empresa = 2...), e cada produto ganha `{número da empresa}{sequencial de 5 dígitos}` — empresa 1 → `100001`, `100002`...; empresa 2 → `200001`, `200002`... Gerado uma vez na criação (`next_product_code` no banco) e nunca editável depois, pra eliminar o risco de o admin digitar por engano o código de outro produto. O "Código de referência do cliente" (campo opcional, separado do SKU) também não pode repetir dentro da mesma empresa — o sistema recusa o cadastro/edição se o código já estiver em uso por outro produto.
 
+## Multi-tenant: tipos de e-commerce
+
+Cada `Company` cadastrada em **Empresas** roda isolada (produtos, clientes, configurações próprias). Até aqui, tudo neste documento descreve o tipo `wholesale` (atacado B2B, fullcommerce e Odoya). Está sendo desenhado um segundo tipo, `televendas` — varejo B2C por telemarketing com crediário próprio, primeira empresa: **Almir Móveis e Eletro** — que ativa telas diferentes no admin (Central de Vendas, Carrinhos Abandonados, Potencial de Recompra) e um layout de storefront diferente, sem alterar o comportamento de nenhuma empresa `wholesale` já existente. Especificação completa em [`.claude/skills/ecommerce/references/televendas.md`](.claude/skills/ecommerce/references/televendas.md).
+
 ## Pendências conhecidas
 
 - [x] Migrar o código para o repositório `full_commerce`
@@ -107,4 +111,5 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 - [ ] App mobile (React Native) — o domínio (`packages/types`, `packages/api-client`) já foi desenhado para ser reaproveitado
 - [ ] Cadastro/login de fornecedor (`vendorAdmin`) pelo próprio admin — hoje só existe via seed
 - [ ] Extrato de pagamento e integração real com gateway (cartão/PIX) — o fluxo de checkout já está pronto para plugar
+- [ ] Implementar o tipo de e-commerce `televendas` (campo `Company.ecommerceType`, entidade `Installment`, telas Central de Vendas/Carrinhos Abandonados/Potencial de Recompra) — especificação pronta em `televendas.md`, código ainda não iniciado
 - [ ] Domínio próprio (o pendente combinado antes era usar DuckDNS) apontando para os Workers, em vez do `*.workers.dev`
