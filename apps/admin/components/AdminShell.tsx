@@ -19,6 +19,7 @@ const NAV = [
   { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
   { href: "/empresas", label: "Empresas", icon: "🏢", ownerOnly: true },
+  { href: "/ajuda", label: "Ajuda", icon: "❓" },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

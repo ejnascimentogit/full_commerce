@@ -35,6 +35,8 @@ export type { BrandPalette, ShippingSettings } from "./domain";
 export { formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
 export { lookupCep, formatCep } from "./cep";
 export type { CepAddress } from "./cep";
+export { ADMIN_FAQ, buildCustomerFaq, searchFaq } from "./faq";
+export type { FaqEntry } from "./faq";
 
 // The single place that decides mock vs. real backend. Everything else in the
 // three apps imports `apiClient` from here and never touches mock/ or rest/ directly.

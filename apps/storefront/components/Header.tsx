@@ -56,6 +56,9 @@ export function Header({ categories }: { categories: Category[] }) {
         <Link href="/fornecedores" className="shrink-0 text-brand-50 hover:text-white hover:underline underline-offset-4 ml-auto">
           Fornecedores
         </Link>
+        <Link href="/ajuda" className="shrink-0 text-brand-50 hover:text-white hover:underline underline-offset-4">
+          ❓ Ajuda
+        </Link>
       </nav>
     </header>
   );
