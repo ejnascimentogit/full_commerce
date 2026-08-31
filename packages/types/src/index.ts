@@ -344,3 +344,51 @@ export interface StoreSettings {
   /** Desligado (padrão): depois que o pedido sai para entrega ou é entregue, a mercadoria já deixou o estoque e a nota fiscal já foi emitida — não dá mais pra ajustar quantidade. Ligar aqui libera o ajuste mesmo nesses status. */
   allowAdjustmentsAfterDispatch: boolean;
 }
+
+// ---------- Gestão de Atividades ----------
+// Quadro de reengajamento de clientes usado por vendedores/financeiro (login
+// "staff", ver AdminPermissionKey "atividades") — cada empresa tem o próprio
+// quadro, isolado das demais.
+
+export type ActivityHealth = "green" | "amber" | "red";
+
+/** Cliente do quadro de atividades — pode ser um cliente real (customerId preenchido) ou um lead que ainda não comprou (customerId ausente). */
+export interface ActivityClient {
+  id: string;
+  customerId?: string;
+  name: string;
+  phone?: string;
+  health: ActivityHealth;
+  healthReason?: string;
+  nextContactAt?: string;
+  createdAt: string;
+}
+
+/** Lista configurável (Configurações) do que significa "concluído" num card — ex: "Convertido em venda", "Cobrança resolvida". */
+export interface ActivityOutcome {
+  id: string;
+  name: string;
+  sortOrder: number;
+  active: boolean;
+}
+
+export type ActivityColumn = "urgent" | "todo" | "doing" | "done";
+export type ActivityPriority = "none" | "red" | "amber" | "blue";
+
+/** Um card do quadro de atividades. cardNumber é sequencial por empresa, pra busca futura por número. */
+export interface Activity {
+  id: string;
+  cardNumber: number;
+  clientId: string;
+  title: string;
+  description?: string;
+  column: ActivityColumn;
+  priority: ActivityPriority;
+  createdByAdminId: string;
+  assignedToAdminId: string;
+  /** Preenchido só quando column === "done" — exigido antes de mover pra Concluído. */
+  outcomeId?: string;
+  imageUrls: string[];
+  createdAt: string;
+  completedAt?: string;
+}

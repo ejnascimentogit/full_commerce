@@ -1,4 +1,9 @@
 import type {
+  Activity,
+  ActivityClient,
+  ActivityColumn,
+  ActivityHealth,
+  ActivityOutcome,
   Address,
   AdminPermissionKey,
   AdminUser,
@@ -147,6 +152,40 @@ export interface ApiClient {
   getStaffSectors(): Promise<StaffSector[]>;
   createStaffSector(name: string): Promise<StaffSector>;
   deleteStaffSector(id: string): Promise<void>;
+
+  // ---------- Gestão de Atividades ----------
+  getActivityClients(): Promise<ActivityClient[]>;
+  createActivityClient(input: { customerId?: string; name: string; phone?: string }): Promise<ActivityClient>;
+  updateActivityClient(
+    id: string,
+    patch: Partial<{ health: ActivityHealth; healthReason: string; nextContactAt: string | null; name: string; phone: string }>,
+  ): Promise<ActivityClient>;
+
+  getActivityOutcomes(): Promise<ActivityOutcome[]>;
+  createActivityOutcome(name: string): Promise<ActivityOutcome>;
+  updateActivityOutcome(id: string, patch: Partial<{ name: string; sortOrder: number; active: boolean }>): Promise<ActivityOutcome>;
+
+  getActivities(params?: { column?: ActivityColumn; assignedToAdminId?: string; clientId?: string; cardNumber?: number }): Promise<Activity[]>;
+  createActivity(input: {
+    clientId: string;
+    title: string;
+    description?: string;
+    assignedToAdminId: string;
+    priority?: Activity["priority"];
+  }): Promise<Activity>;
+  updateActivity(
+    id: string,
+    patch: Partial<{
+      column: ActivityColumn;
+      title: string;
+      description: string;
+      assignedToAdminId: string;
+      priority: Activity["priority"];
+      outcomeId: string;
+      imageUrls: string[];
+    }>,
+  ): Promise<Activity>;
+  uploadActivityImage(file: File): Promise<string>;
   createProduct(input: CreateProductInput): Promise<Product>;
   updateProduct(id: string, patch: UpdateProductInput): Promise<Product>;
   /** Todos os produtos (qualquer status), pro admin gerenciar — diferente de getProducts, que só traz "active" pro catálogo público. Escopo (platformAdmin: todos · vendorAdmin: só o próprio) é resolvido pelo backend a partir do token, não por parâmetro. */

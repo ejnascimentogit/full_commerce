@@ -1632,8 +1632,11 @@ app.patch("/admin/companies/:id", async (c) => {
 
 // ---------- Admin: equipe (login "staff", acesso restrito por aba) ----------
 
+// Leitura liberada pra qualquer admin autenticado da empresa (staff precisa
+// ver a lista pra atribuir card a um colega) — só criar/editar continua
+// exclusivo do platformAdmin (requirePlatformAdmin nas rotas POST/PATCH abaixo).
 app.get("/admin/team-members", async (c) => {
-  const admin = await requirePlatformAdmin(c);
+  const admin = await requireAdmin(c);
   const { data, error } = await eco()
     .from("admin_users")
     .select("*")
@@ -1725,6 +1728,218 @@ app.delete("/admin/staff-sectors/:id", async (c) => {
   const { error } = await eco().from("staff_sectors").delete().eq("id", c.req.param("id")).eq("company_id", admin.company_id);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.body(null, 204);
+});
+
+// ---------- Admin: gestão de atividades ----------
+
+function mapActivityClient(r: Record<string, unknown>) {
+  return {
+    id: r.id,
+    customerId: r.customer_id ?? undefined,
+    name: r.name,
+    phone: r.phone ?? undefined,
+    health: r.health,
+    healthReason: r.health_reason ?? undefined,
+    nextContactAt: r.next_contact_at ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+function mapActivityOutcome(r: Record<string, unknown>) {
+  return { id: r.id, name: r.name, sortOrder: r.sort_order, active: r.active };
+}
+
+function mapActivity(r: Record<string, unknown>) {
+  return {
+    id: r.id,
+    cardNumber: r.card_number,
+    clientId: r.client_id,
+    title: r.title,
+    description: r.description ?? undefined,
+    column: r.column,
+    priority: r.priority,
+    createdByAdminId: r.created_by_admin_id,
+    assignedToAdminId: r.assigned_to_admin_id,
+    outcomeId: r.outcome_id ?? undefined,
+    imageUrls: r.image_urls ?? [],
+    createdAt: r.created_at,
+    completedAt: r.completed_at ?? undefined,
+  };
+}
+
+app.get("/admin/activity-clients", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const { data, error } = await eco().from("activity_clients").select("*").eq("company_id", admin.company_id).order("name");
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapActivityClient));
+});
+
+app.post("/admin/activity-clients", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const input = await c.req.json();
+  if (!input.name?.trim()) throw new ApiError(422, "INVALID_INPUT", "Nome é obrigatório.");
+  const { data, error } = await eco()
+    .from("activity_clients")
+    .insert({
+      company_id: admin.company_id,
+      customer_id: input.customerId ?? null,
+      name: input.name.trim(),
+      phone: input.phone || null,
+    })
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapActivityClient(data));
+});
+
+app.patch("/admin/activity-clients/:id", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const patch = await c.req.json();
+  const row: Record<string, unknown> = {};
+  if ("name" in patch) row.name = patch.name;
+  if ("phone" in patch) row.phone = patch.phone || null;
+  if ("health" in patch) row.health = patch.health;
+  if ("healthReason" in patch) row.health_reason = patch.healthReason || null;
+  if ("nextContactAt" in patch) row.next_contact_at = patch.nextContactAt || null;
+  const { data, error } = await eco()
+    .from("activity_clients")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapActivityClient(data));
+});
+
+app.get("/admin/activity-outcomes", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const { data, error } = await eco().from("activity_outcomes").select("*").eq("company_id", admin.company_id).order("sort_order");
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapActivityOutcome));
+});
+
+app.post("/admin/activity-outcomes", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const { name } = await c.req.json();
+  if (!name?.trim()) throw new ApiError(422, "INVALID_INPUT", "Nome é obrigatório.");
+  const { data: maxRow } = await eco()
+    .from("activity_outcomes")
+    .select("sort_order")
+    .eq("company_id", admin.company_id)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data, error } = await eco()
+    .from("activity_outcomes")
+    .insert({ company_id: admin.company_id, name: name.trim(), sort_order: (maxRow?.sort_order ?? -1) + 1 })
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapActivityOutcome(data));
+});
+
+app.patch("/admin/activity-outcomes/:id", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const patch = await c.req.json();
+  const row: Record<string, unknown> = {};
+  if ("name" in patch) row.name = patch.name;
+  if ("sortOrder" in patch) row.sort_order = patch.sortOrder;
+  if ("active" in patch) row.active = patch.active;
+  const { data, error } = await eco()
+    .from("activity_outcomes")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapActivityOutcome(data));
+});
+
+app.get("/admin/activities", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  let query = eco().from("activities").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
+  const column = c.req.query("column");
+  const assignedToAdminId = c.req.query("assignedToAdminId");
+  const clientId = c.req.query("clientId");
+  const cardNumber = c.req.query("cardNumber");
+  if (column) query = query.eq("column", column);
+  if (assignedToAdminId) query = query.eq("assigned_to_admin_id", assignedToAdminId);
+  if (clientId) query = query.eq("client_id", clientId);
+  if (cardNumber) query = query.eq("card_number", Number(cardNumber));
+  const { data, error } = await query;
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapActivity));
+});
+
+app.post("/admin/activities", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const input = await c.req.json();
+  if (!input.title?.trim() || !input.clientId || !input.assignedToAdminId) {
+    throw new ApiError(422, "INVALID_INPUT", "Cliente, título e responsável são obrigatórios.");
+  }
+  const { data: cardNumberRow, error: seqError } = await eco().rpc("next_activity_number", { p_company_id: admin.company_id });
+  if (seqError) throw new ApiError(500, "DB_ERROR", seqError.message);
+  const { data, error } = await eco()
+    .from("activities")
+    .insert({
+      company_id: admin.company_id,
+      card_number: cardNumberRow,
+      client_id: input.clientId,
+      title: input.title.trim(),
+      description: input.description || null,
+      priority: input.priority ?? "none",
+      created_by_admin_id: admin.id,
+      assigned_to_admin_id: input.assignedToAdminId,
+    })
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapActivity(data));
+});
+
+app.patch("/admin/activities/:id", async (c) => {
+  const admin = await requirePermission(c, "atividades");
+  const patch = await c.req.json();
+  // Mover pra "Concluído" sem dizer o resultado (venda? cobrança resolvida?)
+  // deixaria o painel de desempenho sem dado nenhum — por isso outcomeId é
+  // obrigatório nesse momento específico, não só uma checagem no frontend.
+  if (patch.column === "done" && !patch.outcomeId) {
+    throw new ApiError(422, "OUTCOME_REQUIRED", "Escolha o resultado antes de mover pra Concluído.");
+  }
+  const row: Record<string, unknown> = {};
+  if ("title" in patch) row.title = patch.title;
+  if ("description" in patch) row.description = patch.description || null;
+  if ("assignedToAdminId" in patch) row.assigned_to_admin_id = patch.assignedToAdminId;
+  if ("priority" in patch) row.priority = patch.priority;
+  if ("imageUrls" in patch) row.image_urls = patch.imageUrls;
+  if ("outcomeId" in patch) row.outcome_id = patch.outcomeId || null;
+  if ("column" in patch) {
+    row.column = patch.column;
+    row.completed_at = patch.column === "done" ? new Date().toISOString() : null;
+  }
+  const { data, error } = await eco()
+    .from("activities")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapActivity(data));
+});
+
+app.post("/admin/activities/photos", async (c) => {
+  await requirePermission(c, "atividades");
+  const form = await c.req.formData();
+  const file = form.get("file") as File;
+  if (!file) throw new ApiError(422, "FILE_REQUIRED");
+  const path = `${Date.now()}-${file.name}`;
+  const { error } = await db().storage.from("ecommerce-activity-photos").upload(path, file, { contentType: file.type });
+  if (error) throw new ApiError(500, "STORAGE_ERROR", error.message);
+  const { data } = db().storage.from("ecommerce-activity-photos").getPublicUrl(path);
+  return c.json({ url: data.publicUrl });
 });
 
 Deno.serve(app.fetch);

@@ -195,4 +195,16 @@ export const ADMIN_FAQ: FaqEntry[] = [
     answer:
       "No cadastro do cliente, dá pra editar o endereço de entrega e, separadamente, um endereço comercial (opcional) — útil quando o escritório e o local de entrega/CD são diferentes.",
   },
+  {
+    question: "Como funciona o quadro de Atividades?",
+    keywords: ["atividades", "quadro", "kanban", "card", "vendedor", "reengajar"],
+    answer:
+      'Em Atividades, crie um card ligado a um cliente (real ou um lead novo) e arraste entre as colunas Fila de Urgências, A Fazer, Em Andamento e Concluído. Ao mover pra Concluído, escolha o resultado (ex: "Convertido em venda") — isso alimenta o histórico do cliente e o painel de Desempenho da equipe.',
+  },
+  {
+    question: "Como funciona a saúde do cliente (verde/amarelo/vermelho) em Atividades?",
+    keywords: ["saude", "saúde", "rag", "verde", "amarelo", "vermelho", "atividades"],
+    answer:
+      "Em Atividades → Clientes, cada cliente/lead tem um indicador de saúde (verde/amarelo/vermelho) que você ajusta manualmente, com um motivo opcional quando não estiver verde — junto com a data do próximo contato planejado.",
+  },
 ];

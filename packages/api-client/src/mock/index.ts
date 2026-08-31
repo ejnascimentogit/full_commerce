@@ -11,7 +11,23 @@ import type {
   UpdateProductInput,
   UpdateTeamMemberInput,
 } from "../types";
-import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type {
+  Activity,
+  ActivityClient,
+  ActivityOutcome,
+  Address,
+  AdminUser,
+  Category,
+  Company,
+  Customer,
+  DeliveryRegion,
+  Order,
+  OrderStatus,
+  Product,
+  Promotion,
+  StoreSettings,
+  Vendor,
+} from "@ecommerce/types";
 import {
   createCategory as createCategoryStore,
   deleteCategory as deleteCategoryStore,
@@ -31,6 +47,17 @@ import {
   deleteStaffSector as deleteStaffSectorStore,
   listStaffSectors,
 } from "./staff-sectors-store";
+import {
+  createActivity as createActivityStore,
+  createActivityClient as createActivityClientStore,
+  createActivityOutcome as createActivityOutcomeStore,
+  listActivities,
+  listActivityClients,
+  listActivityOutcomes,
+  updateActivity as updateActivityStore,
+  updateActivityClient as updateActivityClientStore,
+  updateActivityOutcome as updateActivityOutcomeStore,
+} from "./activity-store";
 import {
   advanceOrderStatus as advanceOrderStatusStore,
   findAllOrders,
@@ -358,6 +385,57 @@ export const mockApiClient: ApiClient = {
   async deleteStaffSector(id: string) {
     await delay(200);
     deleteStaffSectorStore(id);
+  },
+
+  async getActivityClients(): Promise<ActivityClient[]> {
+    await delay();
+    return listActivityClients();
+  },
+
+  async createActivityClient(input): Promise<ActivityClient> {
+    await delay(200);
+    return createActivityClientStore(input);
+  },
+
+  async updateActivityClient(id, patch): Promise<ActivityClient> {
+    await delay(200);
+    return updateActivityClientStore(id, patch);
+  },
+
+  async getActivityOutcomes(): Promise<ActivityOutcome[]> {
+    await delay();
+    return listActivityOutcomes();
+  },
+
+  async createActivityOutcome(name: string): Promise<ActivityOutcome> {
+    await delay(200);
+    return createActivityOutcomeStore(name);
+  },
+
+  async updateActivityOutcome(id, patch): Promise<ActivityOutcome> {
+    await delay(200);
+    return updateActivityOutcomeStore(id, patch);
+  },
+
+  async getActivities(params): Promise<Activity[]> {
+    await delay();
+    return listActivities(params);
+  },
+
+  async createActivity(input): Promise<Activity> {
+    await delay(300);
+    const adminId = getAdminSessionUserId();
+    return createActivityStore({ ...input, createdByAdminId: adminId ?? "unknown" });
+  },
+
+  async updateActivity(id, patch): Promise<Activity> {
+    await delay(300);
+    return updateActivityStore(id, patch);
+  },
+
+  async uploadActivityImage(file: File): Promise<string> {
+    await delay(300);
+    return resizeImageToDataUrl(file);
   },
 
   async createProduct(input: CreateProductInput): Promise<Product> {

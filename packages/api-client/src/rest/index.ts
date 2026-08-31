@@ -1,4 +1,22 @@
-import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, EcommerceType, Order, OrderStatus, Product, Promotion, StaffSector, StoreSettings, Vendor } from "@ecommerce/types";
+import type {
+  Activity,
+  ActivityClient,
+  ActivityOutcome,
+  Address,
+  AdminUser,
+  Category,
+  Company,
+  Customer,
+  DeliveryRegion,
+  EcommerceType,
+  Order,
+  OrderStatus,
+  Product,
+  Promotion,
+  StaffSector,
+  StoreSettings,
+  Vendor,
+} from "@ecommerce/types";
 import type {
   ApiClient,
   CreateOrderInput,
@@ -208,6 +226,36 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<StaffSector>("/api/admin/staff-sectors", { method: "POST", body: JSON.stringify({ name }), tokenKey: ADMIN_TOKEN_KEY }),
     deleteStaffSector: (id: string) =>
       request<void>(`/api/admin/staff-sectors/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
+
+    getActivityClients: () => request<ActivityClient[]>("/api/admin/activity-clients", { tokenKey: ADMIN_TOKEN_KEY }),
+    createActivityClient: (input) =>
+      request<ActivityClient>("/api/admin/activity-clients", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    updateActivityClient: (id, patch) =>
+      request<ActivityClient>(`/api/admin/activity-clients/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+
+    getActivityOutcomes: () => request<ActivityOutcome[]>("/api/admin/activity-outcomes", { tokenKey: ADMIN_TOKEN_KEY }),
+    createActivityOutcome: (name: string) =>
+      request<ActivityOutcome>("/api/admin/activity-outcomes", { method: "POST", body: JSON.stringify({ name }), tokenKey: ADMIN_TOKEN_KEY }),
+    updateActivityOutcome: (id, patch) =>
+      request<ActivityOutcome>(`/api/admin/activity-outcomes/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+
+    getActivities: (params) => {
+      const qs = new URLSearchParams();
+      if (params?.column) qs.set("column", params.column);
+      if (params?.assignedToAdminId) qs.set("assignedToAdminId", params.assignedToAdminId);
+      if (params?.clientId) qs.set("clientId", params.clientId);
+      if (params?.cardNumber) qs.set("cardNumber", String(params.cardNumber));
+      const query = qs.toString();
+      return request<Activity[]>(`/api/admin/activities${query ? `?${query}` : ""}`, { tokenKey: ADMIN_TOKEN_KEY });
+    },
+    createActivity: (input) =>
+      request<Activity>("/api/admin/activities", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    updateActivity: (id, patch) =>
+      request<Activity>(`/api/admin/activities/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    uploadActivityImage: async (file: File) => {
+      const data = await upload<{ url: string }>("/api/admin/activities/photos", file, ADMIN_TOKEN_KEY);
+      return data.url;
+    },
     uploadLogo: async (file: File) => {
       const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
       return data.url;

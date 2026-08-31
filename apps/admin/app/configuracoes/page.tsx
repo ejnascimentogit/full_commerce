@@ -7,6 +7,7 @@ import type { Banner, FooterLink, FooterSettings, PaymentMethod, SiteCopy, Store
 import { AdminShell } from "@/components/AdminShell";
 import { RegionsSection } from "@/components/RegionsSection";
 import { TeamSection } from "@/components/TeamSection";
+import { ActivityOutcomesSection } from "@/components/ActivityOutcomesSection";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 export default function ConfiguracoesPage() {
@@ -852,6 +853,7 @@ export default function ConfiguracoesPage() {
 
       <RegionsSection />
       <TeamSection />
+      <ActivityOutcomesSection />
     </AdminShell>
   );
 }

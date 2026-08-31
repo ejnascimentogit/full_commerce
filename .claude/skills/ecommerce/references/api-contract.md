@@ -119,6 +119,40 @@ Fluxo paralelo ao pedido: o cliente pede um orçamento (sem pagar na hora), o ad
 | PATCH | `/api/admin/settings` | *(platformAdmin)* Atualiza qualquer campo acima — cor, logo (URL), banners, textos do site, rodapé, pedido mínimo, regra de frete |
 | POST | `/api/admin/settings/logo` | *(platformAdmin)* Upload da logo (multipart), retorna URL |
 
+## Empresas (multi-tenant, só o operador da plataforma)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/admin/companies` | *(platformOwner — só o admin da empresa 1)* Lista todas as empresas-tenant da plataforma |
+| POST | `/api/admin/companies` | *(platformOwner)* Cria empresa nova + `store_settings` padrão — calcula `companyNumber` (prefixo do SKU) e `ecommerceType` (`wholesale` default) |
+| PATCH | `/api/admin/companies/:id` | *(platformOwner)* Edita nome/domínio/domínio do admin/ativo |
+
+## Equipe (login "staff", acesso restrito por aba)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/admin/team-members` | *(qualquer admin autenticado da empresa)* Lista os `staff` da própria empresa — usado tanto pra gerenciar equipe (platformAdmin) quanto pra escolher responsável num card de Atividades (staff também precisa ver) |
+| POST | `/api/admin/team-members` | *(platformAdmin)* Cria login `staff` (`name, email, password, permissions: string[], department?`) — `permissions` nunca pode incluir `empresas`/`configuracoes` |
+| PATCH | `/api/admin/team-members/:id` | *(platformAdmin)* Edita nome/permissões/ativo/cargo de um `staff` da própria empresa |
+| GET | `/api/admin/staff-sectors` | *(platformAdmin)* Lista o cadastro de cargos/setores (texto livre, só sugestão pra evitar erro de digitação) |
+| POST | `/api/admin/staff-sectors` | *(platformAdmin)* Cadastra um setor novo — `422 DUPLICATE_SECTOR` se o nome já existe na empresa |
+| DELETE | `/api/admin/staff-sectors/:id` | *(platformAdmin)* Remove um setor do cadastro |
+
+## Gestão de Atividades (quadro de reengajamento — requer permissão `atividades`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/admin/activity-clients` | Lista clientes/leads do quadro da própria empresa |
+| POST | `/api/admin/activity-clients` | Cadastra cliente/lead (`customerId?, name, phone?`) — `customerId` linka a um `Customer` real; ausente = lead |
+| PATCH | `/api/admin/activity-clients/:id` | Edita saúde RAG (`health, healthReason?`), `nextContactAt`, nome/telefone |
+| GET | `/api/admin/activity-outcomes` | Lista os status de conclusão configurados pela empresa |
+| POST | `/api/admin/activity-outcomes` | *(platformAdmin)* Cadastra um status novo (ex: "Convertido em venda") |
+| PATCH | `/api/admin/activity-outcomes/:id` | *(platformAdmin)* Edita nome/ordem/ativo |
+| GET | `/api/admin/activities` | Lista cards, filtros `?column=&assignedToAdminId=&clientId=&cardNumber=` |
+| POST | `/api/admin/activities` | Cria card (`clientId, title, description?, assignedToAdminId, priority?`) — `cardNumber` sequencial por empresa gerado pelo backend (`next_activity_number`), `createdByAdminId` vem do token |
+| PATCH | `/api/admin/activities/:id` | Move/edita card — mover pra `column: "done"` **exige** `outcomeId` no mesmo patch, senão `422 OUTCOME_REQUIRED`; seta `completedAt` automaticamente |
+| POST | `/api/admin/activities/photos` | Upload de imagem anexada a um card (multipart), retorna URL |
+
 ## Notas de implementação
 
 - Endpoints `admin/*` exigem token de usuário com `role: platformAdmin | vendorAdmin` — o backend decide o mecanismo de autorização, mas o `api-client` deve prever um client separado (`adminApiClient`) que sempre manda o token do usuário admin e deixa claro, por tipo, que o resultado pode vir filtrado por fornecedor quando o papel for `vendorAdmin`.
