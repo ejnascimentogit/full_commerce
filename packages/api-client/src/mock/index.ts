@@ -3,11 +3,13 @@ import type {
   CreateOrderInput,
   CreatePromotionInput,
   CreateProductInput,
+  CreateTeamMemberInput,
   Paginated,
   ProductQuery,
   RegisterInput,
   UpdatePromotionInput,
   UpdateProductInput,
+  UpdateTeamMemberInput,
 } from "../types";
 import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
 import {
@@ -19,6 +21,16 @@ import {
 import { createRegion as createRegionStore, listRegions, updateRegion as updateRegionStore } from "./regions-store";
 import { getSettings, updateSettings } from "./settings-store";
 import { createPromotion as createPromotionStore, listPromotions, updatePromotion as updatePromotionStore } from "./promotions-store";
+import {
+  createTeamMember as createTeamMemberStore,
+  listTeamMembers,
+  updateTeamMember as updateTeamMemberStore,
+} from "./team-members-store";
+import {
+  createStaffSector as createStaffSectorStore,
+  deleteStaffSector as deleteStaffSectorStore,
+  listStaffSectors,
+} from "./staff-sectors-store";
 import {
   advanceOrderStatus as advanceOrderStatusStore,
   findAllOrders,
@@ -316,6 +328,36 @@ export const mockApiClient: ApiClient = {
 
   async updateCompany(): Promise<Company> {
     throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async getTeamMembers(): Promise<AdminUser[]> {
+    await delay();
+    return listTeamMembers();
+  },
+
+  async createTeamMember(input: CreateTeamMemberInput): Promise<AdminUser> {
+    await delay(300);
+    return createTeamMemberStore(input);
+  },
+
+  async updateTeamMember(id: string, patch: UpdateTeamMemberInput): Promise<AdminUser> {
+    await delay(300);
+    return updateTeamMemberStore(id, patch);
+  },
+
+  async getStaffSectors() {
+    await delay();
+    return listStaffSectors();
+  },
+
+  async createStaffSector(name: string) {
+    await delay(200);
+    return createStaffSectorStore(name);
+  },
+
+  async deleteStaffSector(id: string) {
+    await delay(200);
+    deleteStaffSectorStore(id);
   },
 
   async createProduct(input: CreateProductInput): Promise<Product> {

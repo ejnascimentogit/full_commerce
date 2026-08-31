@@ -3,7 +3,24 @@ export type DocumentType = "cpf" | "cnpj";
 /** Hierarquia real de pagamento, nessa ordem de exibição: PIX, Débito, Crédito (à vista ou parcelado — ver StoreSettings), Dinheiro à vista. */
 export type PaymentMethod = "pix" | "debit" | "credit" | "cash";
 
-export type AdminRole = "platformAdmin" | "vendorAdmin";
+export type AdminRole = "platformAdmin" | "vendorAdmin" | "staff";
+
+/** Chaves de seção usadas tanto no menu do admin quanto no array `permissions` de um staff. */
+export type AdminPermissionKey =
+  | "produtos"
+  | "pedidos"
+  | "clientes"
+  | "financeiro"
+  | "promocoes"
+  | "departamentos"
+  | "fornecedores"
+  | "atividades";
+
+/** Cadastro livre de setores/cargos (ex: "Vendedor", "Financeiro", "Televendas") — usado como opções fixas no cadastro de equipe, pra evitar erro de digitação. Não afeta permissões. */
+export interface StaffSector {
+  id: string;
+  name: string;
+}
 
 export interface AdminUser {
   id: string;
@@ -13,6 +30,12 @@ export interface AdminUser {
   vendorId?: string; // presente só para vendorAdmin — escopa o que ele enxerga
   /** true só para o admin da empresa 1 (quem opera a plataforma) — só ele vê a tela Empresas e pode cadastrar novos clientes. */
   isPlatformOwner?: boolean;
+  /** presente só para role "staff" — quais seções do admin essa pessoa pode acessar. platformAdmin sempre tem acesso total e ignora isso. */
+  permissions?: AdminPermissionKey[];
+  /** presente só para role "staff" — login desativado não consegue mais autenticar. */
+  active?: boolean;
+  /** presente só para role "staff" — rótulo livre (ex: "Vendedor", "Financeiro", "Televendas"), só pra identificar a pessoa na lista. Não afeta permissões. */
+  department?: string;
 }
 
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */

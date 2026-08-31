@@ -101,7 +101,9 @@ async function requireAdmin(c: Context) {
   const user = await bearerUser(c);
   if (!user) throw new ApiError(401, "UNAUTHENTICATED");
   const { data } = await eco().from("admin_users").select("*").eq("auth_user_id", user.id).maybeSingle();
-  if (!data) throw new ApiError(401, "UNAUTHENTICATED");
+  // active === false só existe pra login "staff" desativado pelo dono da empresa —
+  // platformAdmin/vendorAdmin nunca têm essa coluna setada como false.
+  if (!data || data.active === false) throw new ApiError(401, "UNAUTHENTICATED");
   return data;
 }
 
@@ -111,6 +113,29 @@ async function requireAdmin(c: Context) {
 async function requirePlatformOwner(c: Context) {
   const admin = await requireAdmin(c);
   if (admin.company_id !== DEMO_COMPANY_ID) throw new ApiError(403, "FORBIDDEN");
+  return admin;
+}
+
+// Dono da própria empresa (platformAdmin, qualquer empresa) — não confundir com
+// requirePlatformOwner acima, que é só o operador da plataforma (empresa 1).
+// Usado pra ações que só o dono de cada empresa pode fazer sobre a própria
+// equipe (staff), como criar/editar login de vendedor/financeiro.
+async function requirePlatformAdmin(c: Context) {
+  const admin = await requireAdmin(c);
+  if (admin.role !== "platformAdmin") throw new ApiError(403, "FORBIDDEN");
+  return admin;
+}
+
+// Gate de acesso por aba pra login "staff" (vendedor/financeiro) — só adiciona
+// restrição pro papel novo "staff"; platformAdmin e vendorAdmin mantêm
+// exatamente o acesso que já tinham antes dessa função existir. Um staff sem a
+// permissão listada em `permissions` recebe 403, não só fica escondido no menu.
+async function requirePermission(c: Context, key: string) {
+  const admin = await requireAdmin(c);
+  if (admin.role === "staff") {
+    if (Array.isArray(admin.permissions) && admin.permissions.includes(key)) return admin;
+    throw new ApiError(403, "FORBIDDEN");
+  }
   return admin;
 }
 
@@ -196,6 +221,9 @@ function mapAdminUser(u: Record<string, unknown>) {
     role: u.role,
     vendorId: u.vendor_id ?? undefined,
     isPlatformOwner: u.company_id === DEMO_COMPANY_ID,
+    permissions: u.permissions ?? [],
+    active: u.active ?? true,
+    department: u.department ?? undefined,
   };
 }
 
@@ -1143,7 +1171,7 @@ app.patch("/regions/:id", async (c) => {
 // ---------- Admin: clientes ----------
 
 app.get("/admin/customers", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePermission(c, "clientes");
   const { data: customers, error } = await eco().from("customers").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const results = await Promise.all(
@@ -1181,7 +1209,7 @@ app.patch("/admin/customers/:id", async (c) => {
 // ---------- Admin: pedidos e orçamentos ----------
 
 app.get("/admin/orders", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePermission(c, "pedidos");
   const status = c.req.query("status");
   let query = eco()
     .from("orders")
@@ -1600,6 +1628,103 @@ app.patch("/admin/companies/:id", async (c) => {
   const { data, error } = await eco().from("companies").update(row).eq("id", c.req.param("id")).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapCompany(data));
+});
+
+// ---------- Admin: equipe (login "staff", acesso restrito por aba) ----------
+
+app.get("/admin/team-members", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { data, error } = await eco()
+    .from("admin_users")
+    .select("*")
+    .eq("company_id", admin.company_id)
+    .eq("role", "staff")
+    .order("created_at", { ascending: false });
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapAdminUser));
+});
+
+app.post("/admin/team-members", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { name, email, password, permissions, department } = await c.req.json();
+  if (!name || !email || !password) throw new ApiError(422, "INVALID_INPUT", "Nome, e-mail e senha são obrigatórios.");
+
+  const { data: created, error: createError } = await db().auth.admin.createUser({ email, password, email_confirm: true });
+  if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
+
+  const { data: staffUser, error } = await eco()
+    .from("admin_users")
+    .insert({
+      company_id: admin.company_id,
+      auth_user_id: created.user.id,
+      name,
+      email,
+      role: "staff",
+      permissions: permissions ?? [],
+      active: true,
+      department: department || null,
+    })
+    .select("*")
+    .single();
+  if (error) {
+    await db().auth.admin.deleteUser(created.user.id);
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+  return c.json(mapAdminUser(staffUser));
+});
+
+app.patch("/admin/team-members/:id", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const patch = await c.req.json();
+  const row: Record<string, unknown> = {};
+  if ("name" in patch) row.name = patch.name;
+  if ("permissions" in patch) row.permissions = patch.permissions;
+  if ("active" in patch) row.active = patch.active;
+  if ("department" in patch) row.department = patch.department || null;
+  const { data, error } = await eco()
+    .from("admin_users")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .eq("role", "staff")
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapAdminUser(data));
+});
+
+// Cadastro livre de setores/cargos (ex: "Vendedor", "Financeiro") — só pra
+// popular o dropdown de Cargo/Setor da equipe com opções fixas, evitando erro
+// de digitação. Não tem relação de chave estrangeira com admin_users.department
+// (que continua sendo texto livre) — é só a lista de sugestões.
+app.get("/admin/staff-sectors", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { data, error } = await eco().from("staff_sectors").select("*").eq("company_id", admin.company_id).order("name");
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map((s) => ({ id: s.id, name: s.name })));
+});
+
+app.post("/admin/staff-sectors", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { name } = await c.req.json();
+  if (!name?.trim()) throw new ApiError(422, "INVALID_INPUT", "Nome é obrigatório.");
+  const { data, error } = await eco()
+    .from("staff_sectors")
+    .insert({ company_id: admin.company_id, name: name.trim() })
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new ApiError(422, "DUPLICATE_SECTOR", "Já existe um setor com esse nome.");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+  return c.json({ id: data.id, name: data.name });
+});
+
+app.delete("/admin/staff-sectors/:id", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { error } = await eco().from("staff_sectors").delete().eq("id", c.req.param("id")).eq("company_id", admin.company_id);
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.body(null, 204);
 });
 
 Deno.serve(app.fetch);

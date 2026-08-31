@@ -1,5 +1,6 @@
 import type {
   Address,
+  AdminPermissionKey,
   AdminUser,
   Category,
   Company,
@@ -12,9 +13,25 @@ import type {
   PaymentMethod,
   Product,
   Promotion,
+  StaffSector,
   StoreSettings,
   Vendor,
 } from "@ecommerce/types";
+
+export interface CreateTeamMemberInput {
+  name: string;
+  email: string;
+  password: string;
+  permissions: AdminPermissionKey[];
+  department?: string;
+}
+
+export interface UpdateTeamMemberInput {
+  name?: string;
+  permissions?: AdminPermissionKey[];
+  active?: boolean;
+  department?: string;
+}
 
 export interface RegisterAddressInput {
   street: string;
@@ -123,6 +140,13 @@ export interface ApiClient {
   getCompanies(): Promise<Company[]>;
   createCompany(input: { name: string; slug: string; ecommerceType?: EcommerceType }): Promise<Company>;
   updateCompany(id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }): Promise<Company>;
+  /** Equipe (login "staff", acesso restrito por aba) — só platformAdmin pode chamar, backend rejeita os outros com 403. */
+  getTeamMembers(): Promise<AdminUser[]>;
+  createTeamMember(input: CreateTeamMemberInput): Promise<AdminUser>;
+  updateTeamMember(id: string, patch: UpdateTeamMemberInput): Promise<AdminUser>;
+  getStaffSectors(): Promise<StaffSector[]>;
+  createStaffSector(name: string): Promise<StaffSector>;
+  deleteStaffSector(id: string): Promise<void>;
   createProduct(input: CreateProductInput): Promise<Product>;
   updateProduct(id: string, patch: UpdateProductInput): Promise<Product>;
   /** Todos os produtos (qualquer status), pro admin gerenciar — diferente de getProducts, que só traz "active" pro catálogo público. Escopo (platformAdmin: todos · vendorAdmin: só o próprio) é resolvido pelo backend a partir do token, não por parâmetro. */

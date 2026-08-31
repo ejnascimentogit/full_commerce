@@ -1,14 +1,16 @@
-import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, EcommerceType, Order, OrderStatus, Product, Promotion, StoreSettings, Vendor } from "@ecommerce/types";
+import type { Address, AdminUser, Category, Company, Customer, DeliveryRegion, EcommerceType, Order, OrderStatus, Product, Promotion, StaffSector, StoreSettings, Vendor } from "@ecommerce/types";
 import type {
   ApiClient,
   CreateOrderInput,
   CreatePromotionInput,
   CreateProductInput,
+  CreateTeamMemberInput,
   Paginated,
   ProductQuery,
   RegisterInput,
   UpdatePromotionInput,
   UpdateProductInput,
+  UpdateTeamMemberInput,
 } from "../types";
 
 const CUSTOMER_TOKEN_KEY = "ecommerce.rest.customerToken";
@@ -196,6 +198,16 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<Company>("/api/admin/companies", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateCompany: (id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }) =>
       request<Company>(`/api/admin/companies/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    getTeamMembers: () => request<AdminUser[]>("/api/admin/team-members", { tokenKey: ADMIN_TOKEN_KEY }),
+    createTeamMember: (input: CreateTeamMemberInput) =>
+      request<AdminUser>("/api/admin/team-members", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    updateTeamMember: (id: string, patch: UpdateTeamMemberInput) =>
+      request<AdminUser>(`/api/admin/team-members/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    getStaffSectors: () => request<StaffSector[]>("/api/admin/staff-sectors", { tokenKey: ADMIN_TOKEN_KEY }),
+    createStaffSector: (name: string) =>
+      request<StaffSector>("/api/admin/staff-sectors", { method: "POST", body: JSON.stringify({ name }), tokenKey: ADMIN_TOKEN_KEY }),
+    deleteStaffSector: (id: string) =>
+      request<void>(`/api/admin/staff-sectors/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
     uploadLogo: async (file: File) => {
       const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
       return data.url;

@@ -6,6 +6,7 @@ import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerc
 import type { Banner, FooterLink, FooterSettings, PaymentMethod, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { RegionsSection } from "@/components/RegionsSection";
+import { TeamSection } from "@/components/TeamSection";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 export default function ConfiguracoesPage() {
@@ -850,6 +851,7 @@ export default function ConfiguracoesPage() {
       </section>
 
       <RegionsSection />
+      <TeamSection />
     </AdminShell>
   );
 }

@@ -3,20 +3,30 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import type { AdminPermissionKey } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 // Sem domínio próprio ainda (pendência conhecida) — quando tiver, só trocar aqui.
 const STOREFRONT_URL = "https://fullcommerce-storefront.ejnascimento1.workers.dev";
 
-const NAV = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  platformOnly?: boolean;
+  ownerOnly?: boolean;
+  permissionKey?: AdminPermissionKey;
+}
+
+const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/produtos", label: "Produtos", icon: "📦" },
-  { href: "/pedidos", label: "Pedidos", icon: "🧾" },
-  { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true },
-  { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true },
-  { href: "/promocoes", label: "Promoções", icon: "🏷️" },
-  { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true },
-  { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true },
+  { href: "/produtos", label: "Produtos", icon: "📦", permissionKey: "produtos" },
+  { href: "/pedidos", label: "Pedidos", icon: "🧾", permissionKey: "pedidos" },
+  { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true, permissionKey: "clientes" },
+  { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true, permissionKey: "financeiro" },
+  { href: "/promocoes", label: "Promoções", icon: "🏷️", permissionKey: "promocoes" },
+  { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true, permissionKey: "departamentos" },
+  { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true, permissionKey: "fornecedores" },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
   { href: "/empresas", label: "Empresas", icon: "🏢", ownerOnly: true },
   { href: "/ajuda", label: "Ajuda", icon: "❓" },
@@ -31,15 +41,34 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
+  const visibleNav = user
+    ? NAV.filter((item) => {
+        if (item.ownerOnly) return !!user.isPlatformOwner;
+        if (user.role === "staff") {
+          // Configurações/Empresas nunca são concedíveis a staff, mesmo sem permissionKey.
+          if (item.platformOnly && !item.permissionKey) return false;
+          if (!item.permissionKey) return true; // Dashboard, Ajuda — sempre visíveis
+          return (user.permissions ?? []).includes(item.permissionKey);
+        }
+        if (item.platformOnly) return user.role === "platformAdmin";
+        return true;
+      })
+    : [];
+
+  // Dashboard mostra faturamento/pedidos da empresa toda — staff sem permissão de
+  // "pedidos" não consegue nem carregar essa tela (backend recusa), então manda
+  // direto pra primeira seção que a pessoa realmente pode acessar.
+  useEffect(() => {
+    if (loading || !user || user.role !== "staff" || pathname !== "/") return;
+    if (!(user.permissions ?? []).includes("pedidos")) {
+      const fallback = visibleNav.find((item) => item.href !== "/")?.href ?? "/ajuda";
+      router.replace(fallback);
+    }
+  }, [loading, user, pathname, router, visibleNav]);
+
   if (loading || !user) {
     return <div className="min-h-screen flex items-center justify-center text-slate-500">Carregando...</div>;
   }
-
-  const visibleNav = NAV.filter((item) => {
-    if (item.ownerOnly) return !!user.isPlatformOwner;
-    if (item.platformOnly) return user.role === "platformAdmin";
-    return true;
-  });
 
   return (
     <div className="min-h-screen flex">
@@ -76,7 +105,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="px-5 py-4 border-t border-slate-800 text-sm">
           <p className="font-medium text-white">{user.name}</p>
-          <p className="text-xs text-slate-400 mb-2">{user.role === "platformAdmin" ? "Plataforma" : "Fornecedor"}</p>
+          <p className="text-xs text-slate-400 mb-2">
+            {user.role === "platformAdmin" ? "Plataforma" : user.role === "staff" ? "Equipe" : "Fornecedor"}
+          </p>
           <button type="button" onClick={() => logout()} className="text-slate-400 hover:text-white text-xs">
             Sair
           </button>
