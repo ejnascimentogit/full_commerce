@@ -178,10 +178,16 @@ export const ADMIN_FAQ: FaqEntry[] = [
       'Na tela de login do admin, clique em "Esqueci minha senha" e informe seu e-mail — você recebe um link pra definir uma senha nova. Ninguém consegue trocar sua senha só sabendo seu e-mail.',
   },
   {
-    question: "Qual a diferença entre platformAdmin e vendorAdmin?",
-    keywords: ["platformadmin", "vendoradmin", "papel", "permissao", "permissão"],
+    question: "Qual a diferença entre platformAdmin, vendorAdmin e staff?",
+    keywords: ["platformadmin", "vendoradmin", "staff", "papel", "permissao", "permissão"],
     answer:
-      "platformAdmin é o dono da loja e vê tudo. vendorAdmin é um fornecedor e só vê os próprios produtos e os pedidos que contêm produtos dele.",
+      "platformAdmin é o dono da loja e vê tudo. vendorAdmin é um fornecedor e só vê os próprios produtos e os pedidos que contêm produtos dele. staff é um login de equipe (vendedor, financeiro etc.) que só acessa as abas que você marcar em Configurações → Equipe — nunca vê Empresas nem Configurações.",
+  },
+  {
+    question: "Como crio um login pra vendedor, financeiro etc.?",
+    keywords: ["equipe", "vendedor", "financeiro", "televendas", "login", "cargo", "setor", "permissao", "permissão"],
+    answer:
+      'Em Configurações → Equipe, clique em "+ Adicionar pessoa" — preencha nome, e-mail, senha inicial, o cargo/setor (opcional, cadastrável na hora) e marque quais abas essa pessoa pode acessar. Ela loga com o próprio e-mail e só vê o que foi marcado; dá pra ativar/desativar e mudar as permissões depois, a qualquer momento.',
   },
   {
     question: "Como funciona o endereço comercial do cliente?",
