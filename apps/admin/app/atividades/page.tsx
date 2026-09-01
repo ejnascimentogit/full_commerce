@@ -167,7 +167,7 @@ export default function AtividadesPage() {
                   const activity = activities.find((a) => a.id === activityId);
                   if (activity && activity.column !== col.key) moveActivity(activity, col.key);
                 }}
-                className={`bg-slate-50 border rounded-lg p-3 min-h-[300px] ${dragOverColumn === col.key ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-200"}`}
+                className={`bg-slate-100 border rounded-lg p-3 min-h-[300px] ${dragOverColumn === col.key ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-300"}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-semibold text-slate-700">{col.label}</h2>
@@ -182,7 +182,7 @@ export default function AtividadesPage() {
                         key={activity.id}
                         draggable
                         onDragStart={(e) => e.dataTransfer.setData("text/activity-id", activity.id)}
-                        className={`bg-white border border-slate-200 border-l-4 ${PRIORITY_COLOR[activity.priority]} rounded-md p-3 shadow-sm cursor-grab active:cursor-grabbing`}
+                        className={`bg-white border border-slate-200 border-l-4 ${PRIORITY_COLOR[activity.priority]} rounded-md p-3 shadow-md hover:shadow-lg transition-shadow cursor-grab active:cursor-grabbing`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-mono text-slate-400">#{activity.cardNumber}</span>
