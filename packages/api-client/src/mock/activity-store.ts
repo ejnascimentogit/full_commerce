@@ -97,6 +97,7 @@ export function createActivity(input: {
   description?: string;
   assignedToAdminId: string;
   priority?: Activity["priority"];
+  expectedResolutionAt?: string;
   createdByAdminId: string;
 }): Activity {
   const activities = readAll<Activity>(ACTIVITIES_KEY);
@@ -110,6 +111,7 @@ export function createActivity(input: {
     priority: input.priority ?? "none",
     createdByAdminId: input.createdByAdminId,
     assignedToAdminId: input.assignedToAdminId,
+    expectedResolutionAt: input.expectedResolutionAt,
     imageUrls: [],
     createdAt: new Date().toISOString(),
   };
@@ -118,11 +120,12 @@ export function createActivity(input: {
   return activity;
 }
 
-export function updateActivity(id: string, patch: Partial<Activity>): Activity {
+export function updateActivity(id: string, patch: Partial<Omit<Activity, "expectedResolutionAt">> & { expectedResolutionAt?: string | null }): Activity {
   const activities = readAll<Activity>(ACTIVITIES_KEY);
   const index = activities.findIndex((a) => a.id === id);
   if (index === -1) throw new Error(`Activity not found: ${id}`);
-  const next = { ...activities[index], ...patch };
+  const next = { ...activities[index], ...patch } as Activity;
+  if (patch.expectedResolutionAt === null) next.expectedResolutionAt = undefined;
   if (patch.column === "done") next.completedAt = new Date().toISOString();
   else if (patch.column) next.completedAt = undefined;
   activities[index] = next;

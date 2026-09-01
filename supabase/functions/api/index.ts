@@ -1816,6 +1816,7 @@ function mapActivity(r: Record<string, unknown>) {
     createdByAdminId: r.created_by_admin_id,
     assignedToAdminId: r.assigned_to_admin_id,
     outcomeId: r.outcome_id ?? undefined,
+    expectedResolutionAt: r.expected_resolution_at ?? undefined,
     imageUrls: r.image_urls ?? [],
     createdAt: r.created_at,
     completedAt: r.completed_at ?? undefined,
@@ -1949,6 +1950,7 @@ app.post("/admin/activities", async (c) => {
       priority: input.priority ?? "none",
       created_by_admin_id: admin.id,
       assigned_to_admin_id: input.assignedToAdminId,
+      expected_resolution_at: input.expectedResolutionAt || null,
     })
     .select("*")
     .single();
@@ -1972,6 +1974,7 @@ app.patch("/admin/activities/:id", async (c) => {
   if ("priority" in patch) row.priority = patch.priority;
   if ("imageUrls" in patch) row.image_urls = patch.imageUrls;
   if ("outcomeId" in patch) row.outcome_id = patch.outcomeId || null;
+  if ("expectedResolutionAt" in patch) row.expected_resolution_at = patch.expectedResolutionAt || null;
   if ("column" in patch) {
     row.column = patch.column;
     row.completed_at = patch.column === "done" ? new Date().toISOString() : null;

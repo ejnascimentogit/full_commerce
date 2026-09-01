@@ -394,6 +394,8 @@ export interface Activity {
   assignedToAdminId: string;
   /** Preenchido só quando column === "done" — exigido antes de mover pra Concluído. */
   outcomeId?: string;
+  /** Data prevista pra resolver (opcional) — útil pra SAC/reclamações, onde o cliente quer saber se tem prazo. */
+  expectedResolutionAt?: string;
   imageUrls: string[];
   createdAt: string;
   completedAt?: string;

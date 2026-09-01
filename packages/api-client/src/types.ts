@@ -177,6 +177,7 @@ export interface ApiClient {
     description?: string;
     assignedToAdminId: string;
     priority?: Activity["priority"];
+    expectedResolutionAt?: string;
   }): Promise<Activity>;
   updateActivity(
     id: string,
@@ -188,6 +189,7 @@ export interface ApiClient {
       priority: Activity["priority"];
       outcomeId: string;
       imageUrls: string[];
+      expectedResolutionAt: string | null;
     }>,
   ): Promise<Activity>;
   uploadActivityImage(file: File): Promise<string>;

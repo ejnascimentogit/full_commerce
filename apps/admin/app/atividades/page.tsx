@@ -219,6 +219,12 @@ export default function AtividadesPage() {
                         </div>
                         <p className="text-sm font-medium text-slate-900">{activity.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{client?.name ?? "Cliente removido"}</p>
+                        {activity.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{activity.description}</p>}
+                        {activity.expectedResolutionAt && (
+                          <p className="text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 mt-1.5 inline-block">
+                            ⏱ Previsão: {new Date(activity.expectedResolutionAt + "T00:00:00").toLocaleDateString("pt-BR")}
+                          </p>
+                        )}
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{PRIORITY_LABEL[activity.priority]}</span>
                           {assignee && <span className="text-[10px] bg-slate-800 text-white px-1.5 py-0.5 rounded">{assignee.name}</span>}
@@ -338,6 +344,7 @@ function CreateActivityModal({
   const [description, setDescription] = useState("");
   const [assignedToAdminId, setAssignedToAdminId] = useState(people[0]?.id ?? "");
   const [priority, setPriority] = useState<ActivityPriority>("none");
+  const [expectedResolutionAt, setExpectedResolutionAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -366,7 +373,14 @@ function CreateActivityModal({
         setSubmitting(false);
         return;
       }
-      await apiClient.createActivity({ clientId: resolvedClientId, title: title.trim(), description: description.trim() || undefined, assignedToAdminId, priority });
+      await apiClient.createActivity({
+        clientId: resolvedClientId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        assignedToAdminId,
+        priority,
+        expectedResolutionAt: expectedResolutionAt || undefined,
+      });
       onCreated();
     } catch {
       setError("Não foi possível criar a atividade.");
@@ -460,6 +474,17 @@ function CreateActivityModal({
           </div>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Previsão de solução (opcional)</label>
+          <input
+            type="date"
+            value={expectedResolutionAt}
+            onChange={(e) => setExpectedResolutionAt(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+          <p className="text-xs text-slate-400 mt-1">Útil pra dizer ao cliente até quando ele pode esperar uma resposta.</p>
+        </div>
+
         {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
@@ -492,12 +517,19 @@ function ActivityDetailModal({
   const [description, setDescription] = useState(activity.description ?? "");
   const [assignedToAdminId, setAssignedToAdminId] = useState(activity.assignedToAdminId);
   const [priority, setPriority] = useState<ActivityPriority>(activity.priority);
+  const [expectedResolutionAt, setExpectedResolutionAt] = useState(activity.expectedResolutionAt ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    const updated = await apiClient.updateActivity(activity.id, { title: title.trim(), description: description.trim() || undefined, assignedToAdminId, priority });
+    const updated = await apiClient.updateActivity(activity.id, {
+      title: title.trim(),
+      description: description.trim() || undefined,
+      assignedToAdminId,
+      priority,
+      expectedResolutionAt: expectedResolutionAt || null,
+    });
     setSaving(false);
     onUpdated(updated);
   }
@@ -572,6 +604,16 @@ function ActivityDetailModal({
               <option value="red">Urgente</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Previsão de solução</label>
+          <input
+            type="date"
+            value={expectedResolutionAt}
+            onChange={(e) => setExpectedResolutionAt(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
         </div>
 
         <button type="button" onClick={handleSave} disabled={saving} className="w-full bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
