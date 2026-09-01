@@ -37,6 +37,13 @@ export function isOverdue(activity: Activity): boolean {
   return new Date(activity.expectedResolutionAt + "T23:59:59").getTime() < Date.now();
 }
 
+// Só chamar quando isOverdue(activity) for true — quantos dias já passaram
+// desde o fim do dia da previsão de solução.
+function daysOverdue(activity: Activity): number {
+  const due = new Date(activity.expectedResolutionAt + "T23:59:59").getTime();
+  return Math.max(1, Math.ceil((Date.now() - due) / (24 * 60 * 60 * 1000)));
+}
+
 export default function AtividadesPage() {
   const { user } = useAdminAuth();
   const router = useRouter();
@@ -249,10 +256,13 @@ export default function AtividadesPage() {
                           </p>
                         )}
                         {activity.expectedResolutionAt && (
-                          <p
-                            className={`text-[10px] rounded px-1.5 py-0.5 mt-1.5 inline-block ${overdue ? "text-red-700 bg-red-50 font-semibold" : "text-amber-700 bg-amber-50"}`}
-                          >
-                            {overdue ? "⚠ Atrasado — previsão era" : "⏱ Previsão:"} {new Date(activity.expectedResolutionAt + "T00:00:00").toLocaleDateString("pt-BR")}
+                          <p className="text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 mt-1 inline-block mr-1">
+                            ⏱ Previsão: {new Date(activity.expectedResolutionAt + "T00:00:00").toLocaleDateString("pt-BR")}
+                          </p>
+                        )}
+                        {overdue && (
+                          <p className="text-[10px] text-red-700 bg-red-50 font-semibold rounded px-1.5 py-0.5 mt-1 inline-block">
+                            ⚠ {daysOverdue(activity)} dia{daysOverdue(activity) === 1 ? "" : "s"} em atraso
                           </p>
                         )}
                         <div className="flex items-center justify-between mt-2">
