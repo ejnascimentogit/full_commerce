@@ -42,6 +42,7 @@ export default function AtividadesPage() {
   const [dragOverColumn, setDragOverColumn] = useState<ActivityColumn | null>(null);
   const [pendingComplete, setPendingComplete] = useState<Activity | null>(null);
   const [pendingOutcomeId, setPendingOutcomeId] = useState("");
+  const [openActivity, setOpenActivity] = useState<Activity | null>(null);
 
   const canAccess = user?.role === "platformAdmin" || (user?.role === "staff" && (user.permissions ?? []).includes("atividades"));
 
@@ -182,10 +183,12 @@ export default function AtividadesPage() {
                         key={activity.id}
                         draggable
                         onDragStart={(e) => e.dataTransfer.setData("text/activity-id", activity.id)}
+                        onClick={() => setOpenActivity(activity)}
                         className={`bg-white border border-slate-200 border-l-4 ${PRIORITY_COLOR[activity.priority]} rounded-md p-3 shadow-md hover:shadow-lg transition-shadow cursor-grab active:cursor-grabbing`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-mono text-slate-400">#{activity.cardNumber}</span>
+                          {activity.imageUrls.length > 0 && <span className="text-[10px] text-slate-400">📎 {activity.imageUrls.length}</span>}
                         </div>
                         <p className="text-sm font-medium text-slate-900">{activity.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{client?.name ?? "Cliente removido"}</p>
@@ -193,6 +196,20 @@ export default function AtividadesPage() {
                           <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{PRIORITY_LABEL[activity.priority]}</span>
                           {assignee && <span className="text-[10px] bg-slate-800 text-white px-1.5 py-0.5 rounded">{assignee.name}</span>}
                         </div>
+                        {/* Alternativa ao arrastar — em notebook/trackpad o drag nativo do navegador
+                            costuma ser difícil de acertar, então sempre dá pra mover pelo seletor. */}
+                        <select
+                          value={activity.column}
+                          onChange={(e) => moveActivity(activity, e.target.value as ActivityColumn)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full mt-2 border border-slate-200 rounded-md px-2 py-1 text-xs bg-slate-50 text-slate-600"
+                        >
+                          {COLUMNS.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     );
                   })}
@@ -212,6 +229,19 @@ export default function AtividadesPage() {
           onClose={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);
+            refresh();
+          }}
+        />
+      )}
+
+      {openActivity && (
+        <ActivityDetailModal
+          activity={openActivity}
+          client={clientById.get(openActivity.clientId)}
+          people={people}
+          onClose={() => setOpenActivity(null)}
+          onUpdated={(updated) => {
+            setOpenActivity(updated);
             refresh();
           }}
         />
@@ -414,6 +444,147 @@ function CreateActivityModal({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ActivityDetailModal({
+  activity,
+  client,
+  people,
+  onClose,
+  onUpdated,
+}: {
+  activity: Activity;
+  client?: ActivityClient;
+  people: AdminUser[];
+  onClose: () => void;
+  onUpdated: (updated: Activity) => void;
+}) {
+  const [title, setTitle] = useState(activity.title);
+  const [description, setDescription] = useState(activity.description ?? "");
+  const [assignedToAdminId, setAssignedToAdminId] = useState(activity.assignedToAdminId);
+  const [priority, setPriority] = useState<ActivityPriority>(activity.priority);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const updated = await apiClient.updateActivity(activity.id, { title: title.trim(), description: description.trim() || undefined, assignedToAdminId, priority });
+    setSaving(false);
+    onUpdated(updated);
+  }
+
+  async function addImages(files: File[]) {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map((f) => apiClient.uploadActivityImage(f)));
+      const updated = await apiClient.updateActivity(activity.id, { imageUrls: [...activity.imageUrls, ...urls] });
+      onUpdated(updated);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeImage(url: string) {
+    const updated = await apiClient.updateActivity(activity.id, { imageUrls: activity.imageUrls.filter((u) => u !== url) });
+    onUpdated(updated);
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => f !== null);
+    if (files.length > 0) {
+      e.preventDefault();
+      addImages(files);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 overflow-y-auto" onPaste={handlePaste}>
+      <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900">
+            Card #{activity.cardNumber} <span className="text-slate-400 font-normal">· {client?.name ?? "Cliente removido"}</span>
+          </h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700">
+            ✕
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Título</label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Responsável</label>
+            <select value={assignedToAdminId} onChange={(e) => setAssignedToAdminId(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Prioridade</label>
+            <select value={priority} onChange={(e) => setPriority(e.target.value as ActivityPriority)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
+              <option value="none">Sem prioridade</option>
+              <option value="blue">Normal</option>
+              <option value="amber">Atenção</option>
+              <option value="red">Urgente</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="button" onClick={handleSave} disabled={saving} className="w-full bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
+          {saving ? "Salvando..." : "Salvar alterações"}
+        </button>
+
+        <div className="border-t border-slate-100 pt-4">
+          <label className="block text-sm font-medium text-slate-700 mb-2">Imagens (prints, fotos que o cliente mandou)</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {activity.imageUrls.map((url) => (
+              <div key={url} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element -- URL vinda do storage/data-uri, não do next/image loader */}
+                <img src={url} alt="Anexo" className="w-16 h-16 object-cover rounded-md border border-slate-200" />
+                <button
+                  type="button"
+                  onClick={() => removeImage(url)}
+                  className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <label className="block text-xs text-brand-600 border border-dashed border-brand-300 rounded-md px-3 py-3 text-center cursor-pointer hover:bg-brand-50">
+            {uploading ? "Enviando..." : "+ Adicionar do computador, ou cole (Ctrl+V) um print aqui"}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={uploading}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                addImages(files);
+              }}
+              className="hidden"
+            />
+          </label>
+        </div>
+      </div>
     </div>
   );
 }
