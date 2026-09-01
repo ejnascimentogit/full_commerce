@@ -946,7 +946,7 @@ export default function ConfiguracoesPage() {
       </div>
         </div>
 
-        <div className="hidden lg:block sticky top-6 self-start w-full max-w-2xl bg-white border border-slate-200 shadow-md rounded-lg p-5 max-h-[calc(100vh-3rem)] overflow-y-auto">
+        <div className="hidden lg:block sticky top-6 self-start w-full max-w-2xl bg-white border border-slate-200 shadow-md rounded-lg p-5">
           <h2 className="font-semibold text-slate-900 mb-3">Ajuda das configurações</h2>
           <input
             value={helpSearch}

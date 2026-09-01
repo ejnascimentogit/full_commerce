@@ -72,7 +72,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex">
+    // h-screen (não min-h-screen) de propósito: <main> abaixo precisa de uma altura
+    // travada pro overflow-auto dele virar um scroll de verdade, em vez de deixar a
+    // página inteira crescer e quem rola ser o documento — isso não só fazia o menu
+    // lateral rolar junto (sem ninguém notar em telas curtas), como quebrava o
+    // "position: sticky" de qualquer coisa dentro do <main> (o navegador só sabe
+    // recalcular a posição sticky quando o próprio ancestral com overflow rola).
+    <div className="h-screen flex">
       <aside className="w-60 bg-slate-900 text-slate-200 flex flex-col shrink-0">
         <div className="px-5 py-5 text-lg font-bold text-white border-b border-slate-800">
           full<span className="text-brand-500">commerce</span>
