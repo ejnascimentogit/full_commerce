@@ -24,6 +24,19 @@ const PRIORITY_COLOR: Record<ActivityPriority, string> = {
 
 const PRIORITY_LABEL: Record<ActivityPriority, string> = { none: "Sem prioridade", red: "Urgente", amber: "Atenção", blue: "Normal" };
 
+function daysOpen(activity: Activity): number {
+  const start = new Date(activity.createdAt).getTime();
+  return Math.max(0, Math.floor((Date.now() - start) / (24 * 60 * 60 * 1000)));
+}
+
+// Atraso: já passou da previsão de solução e ainda não foi concluído. A
+// comparação é só por data (sem hora), então usa o fim do dia da previsão —
+// um card com previsão pra "hoje" só vira atraso amanhã.
+export function isOverdue(activity: Activity): boolean {
+  if (activity.column === "done" || !activity.expectedResolutionAt) return false;
+  return new Date(activity.expectedResolutionAt + "T23:59:59").getTime() < Date.now();
+}
+
 export default function AtividadesPage() {
   const { user } = useAdminAuth();
   const router = useRouter();
@@ -125,13 +138,22 @@ export default function AtividadesPage() {
     refresh();
   }
 
+  const overdueCount = useMemo(() => activities.filter(isOverdue).length, [activities]);
+
   if (!canAccess) return null;
 
   return (
     <AdminShell>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Atividades</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900">Atividades</h1>
+            {overdueCount > 0 && (
+              <span className="text-xs font-semibold bg-red-100 text-red-700 px-2.5 py-1 rounded-full">
+                ⚠ {overdueCount} em atraso
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 mt-1">Arraste os cards entre as colunas conforme o atendimento avança.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -205,13 +227,14 @@ export default function AtividadesPage() {
                   {items.map((activity) => {
                     const client = clientById.get(activity.clientId);
                     const assignee = personById.get(activity.assignedToAdminId);
+                    const overdue = isOverdue(activity);
                     return (
                       <div
                         key={activity.id}
                         draggable
                         onDragStart={(e) => e.dataTransfer.setData("text/activity-id", activity.id)}
                         onClick={() => setOpenActivity(activity)}
-                        className={`bg-white border border-slate-200 border-l-4 ${PRIORITY_COLOR[activity.priority]} rounded-md p-3 shadow-md hover:shadow-lg transition-shadow cursor-grab active:cursor-grabbing`}
+                        className={`bg-white border border-slate-200 border-l-4 ${overdue ? "border-l-red-600" : PRIORITY_COLOR[activity.priority]} rounded-md p-3 shadow-md hover:shadow-lg transition-shadow cursor-grab active:cursor-grabbing`}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-mono text-slate-400">#{activity.cardNumber}</span>
@@ -220,9 +243,16 @@ export default function AtividadesPage() {
                         <p className="text-sm font-medium text-slate-900">{activity.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{client?.name ?? "Cliente removido"}</p>
                         {activity.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{activity.description}</p>}
+                        {activity.column !== "done" && (
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            {daysOpen(activity)} dia{daysOpen(activity) === 1 ? "" : "s"} em aberto
+                          </p>
+                        )}
                         {activity.expectedResolutionAt && (
-                          <p className="text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 mt-1.5 inline-block">
-                            ⏱ Previsão: {new Date(activity.expectedResolutionAt + "T00:00:00").toLocaleDateString("pt-BR")}
+                          <p
+                            className={`text-[10px] rounded px-1.5 py-0.5 mt-1.5 inline-block ${overdue ? "text-red-700 bg-red-50 font-semibold" : "text-amber-700 bg-amber-50"}`}
+                          >
+                            {overdue ? "⚠ Atrasado — previsão era" : "⏱ Previsão:"} {new Date(activity.expectedResolutionAt + "T00:00:00").toLocaleDateString("pt-BR")}
                           </p>
                         )}
                         <div className="flex items-center justify-between mt-2">

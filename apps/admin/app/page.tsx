@@ -1,22 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
-import type { Order, OrderStatus, Product } from "@ecommerce/types";
+import type { Activity, Order, OrderStatus, Product } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
+import { isOverdue } from "@/app/atividades/page";
 
 export default function DashboardPage() {
   const { user } = useAdminAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+
+  const canAccessAtividades = user?.role === "platformAdmin" || (user?.role === "staff" && (user.permissions ?? []).includes("atividades"));
 
   useEffect(() => {
     if (!user) return;
     const vendorId = user.role === "vendorAdmin" ? user.vendorId : undefined;
     apiClient.getProducts({ vendorId, pageSize: 200 }).then((r) => setProducts(r.items));
     apiClient.getAdminOrders({ vendorId }).then(setOrders);
+    if (canAccessAtividades) apiClient.getActivities().then(setActivities);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const overdueActivities = activities.filter(isOverdue).length;
 
   const pendingDelivery = orders.filter((o) => o.status === "PREPARING" || o.status === "OUT_FOR_DELIVERY").length;
   const revenue = orders.reduce((sum, o) => sum + o.total, 0);
@@ -52,10 +61,19 @@ export default function DashboardPage() {
     <AdminShell>
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Dashboard</h1>
 
-      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+      <div className={`grid sm:grid-cols-3 ${canAccessAtividades ? "lg:grid-cols-4" : ""} gap-4 mb-8`}>
         <Stat label="Produtos" value={products.length} />
         <Stat label="Pedidos" value={orders.length} />
         <Stat label="Aguardando entrega" value={pendingDelivery} />
+        {canAccessAtividades && (
+          <Link
+            href="/atividades"
+            className={`rounded-lg p-5 border transition-colors ${overdueActivities > 0 ? "bg-red-50 border-red-200 hover:bg-red-100" : "bg-white border-slate-200 hover:bg-slate-50"}`}
+          >
+            <p className={`text-sm ${overdueActivities > 0 ? "text-red-700" : "text-slate-500"}`}>Atividades em atraso</p>
+            <p className={`text-2xl font-bold ${overdueActivities > 0 ? "text-red-700" : "text-slate-900"}`}>{overdueActivities}</p>
+          </Link>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-6">
