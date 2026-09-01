@@ -362,7 +362,7 @@ export default function ConfiguracoesPage() {
     <AdminShell>
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Configurações</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,720px)_1fr] gap-6 items-start">
         <div className="min-w-0">
       <section id="cor-marca" className={sectionClass("cor-marca", "max-w-xl mt-0")}>
         <h2 className="font-semibold text-slate-900 mb-3">Cor da marca</h2>
@@ -946,7 +946,7 @@ export default function ConfiguracoesPage() {
       </div>
         </div>
 
-        <div className="hidden lg:block sticky top-6 self-start bg-white border border-slate-200 shadow-md rounded-lg p-4 max-h-[calc(100vh-3rem)] overflow-y-auto">
+        <div className="hidden lg:block sticky top-6 self-start w-full max-w-2xl bg-white border border-slate-200 shadow-md rounded-lg p-5 max-h-[calc(100vh-3rem)] overflow-y-auto">
           <h2 className="font-semibold text-slate-900 mb-3">Ajuda das configurações</h2>
           <input
             value={helpSearch}
