@@ -28,14 +28,18 @@ export interface CreateTeamMemberInput {
   email: string;
   password: string;
   permissions: AdminPermissionKey[];
-  department?: string;
+  sectorId?: string;
+  isSupervisor?: boolean;
+  isManager?: boolean;
 }
 
 export interface UpdateTeamMemberInput {
   name?: string;
   permissions?: AdminPermissionKey[];
   active?: boolean;
-  department?: string;
+  sectorId?: string | null;
+  isSupervisor?: boolean;
+  isManager?: boolean;
 }
 
 export interface RegisterAddressInput {
@@ -151,6 +155,7 @@ export interface ApiClient {
   updateTeamMember(id: string, patch: UpdateTeamMemberInput): Promise<AdminUser>;
   getStaffSectors(): Promise<StaffSector[]>;
   createStaffSector(name: string): Promise<StaffSector>;
+  updateStaffSector(id: string, patch: Partial<{ name: string; seesAll: boolean }>): Promise<StaffSector>;
   deleteStaffSector(id: string): Promise<void>;
 
   // ---------- Gestão de Atividades ----------

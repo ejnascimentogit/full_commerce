@@ -224,6 +224,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getStaffSectors: () => request<StaffSector[]>("/api/admin/staff-sectors", { tokenKey: ADMIN_TOKEN_KEY }),
     createStaffSector: (name: string) =>
       request<StaffSector>("/api/admin/staff-sectors", { method: "POST", body: JSON.stringify({ name }), tokenKey: ADMIN_TOKEN_KEY }),
+    updateStaffSector: (id, patch) =>
+      request<StaffSector>(`/api/admin/staff-sectors/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     deleteStaffSector: (id: string) =>
       request<void>(`/api/admin/staff-sectors/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
 

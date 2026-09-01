@@ -24,10 +24,19 @@ export function listStaffSectors(): StaffSector[] {
 
 export function createStaffSector(name: string): StaffSector {
   const sectors = readAll();
-  const sector: StaffSector = { id: `sector-${Date.now()}`, name };
+  const sector: StaffSector = { id: `sector-${Date.now()}`, name, seesAll: false };
   sectors.push(sector);
   writeAll(sectors);
   return sector;
+}
+
+export function updateStaffSector(id: string, patch: Partial<StaffSector>): StaffSector {
+  const sectors = readAll();
+  const index = sectors.findIndex((s) => s.id === id);
+  if (index === -1) throw new Error(`Staff sector not found: ${id}`);
+  sectors[index] = { ...sectors[index], ...patch };
+  writeAll(sectors);
+  return sectors[index];
 }
 
 export function deleteStaffSector(id: string): void {

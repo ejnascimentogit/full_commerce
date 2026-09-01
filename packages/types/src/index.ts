@@ -16,10 +16,12 @@ export type AdminPermissionKey =
   | "fornecedores"
   | "atividades";
 
-/** Cadastro livre de setores/cargos (ex: "Vendedor", "Financeiro", "Televendas") — usado como opções fixas no cadastro de equipe, pra evitar erro de digitação. Não afeta permissões. */
+/** Setor/cargo (ex: "Financeiro", "Televendas") — cadastrado pelo platformAdmin em Configurações. Estrutural: governa quem vê o quê em Atividades (ver AdminUser.sectorId/isSupervisor). */
 export interface StaffSector {
   id: string;
   name: string;
+  /** true = qualquer pessoa desse setor enxerga Atividades de TODOS os setores (uso: Diretoria/visão executiva), não só o próprio. */
+  seesAll: boolean;
 }
 
 export interface AdminUser {
@@ -34,8 +36,12 @@ export interface AdminUser {
   permissions?: AdminPermissionKey[];
   /** presente só para role "staff" — login desativado não consegue mais autenticar. */
   active?: boolean;
-  /** presente só para role "staff" — rótulo livre (ex: "Vendedor", "Financeiro", "Televendas"), só pra identificar a pessoa na lista. Não afeta permissões. */
-  department?: string;
+  /** presente só para role "staff" — setor/cargo da pessoa (ver StaffSector). Governa quem ela enxerga em Atividades, além do rótulo exibido na lista. */
+  sectorId?: string;
+  /** presente só para role "staff" — supervisor do próprio setor enxerga as Atividades de todo mundo do mesmo setor, não só as próprias. */
+  isSupervisor?: boolean;
+  /** presente só para role "staff" — gerente enxerga Atividades de TODOS os setores, igual a um setor "vê tudo" (ex: Diretoria), mas concedido pessoa a pessoa em vez de depender do setor. */
+  isManager?: boolean;
 }
 
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */

@@ -139,6 +139,30 @@ async function requirePermission(c: Context, key: string) {
   return admin;
 }
 
+// Hierarquia de visibilidade em Atividades: platformAdmin e quem é de um setor
+// "vê tudo" (ex: Diretoria) não têm restrição (retorna null); supervisor do
+// próprio setor vê todo mundo do mesmo setor; qualquer outro staff só vê as
+// próprias atividades. vendorAdmin (sem sector_id) cai no caso "só as próprias"
+// por segurança — ele não deveria acessar essa rota de qualquer forma (o menu
+// já esconde), mas se acessar direto não vê nada de ninguém.
+async function visibleAssigneeIds(admin: Record<string, unknown>): Promise<string[] | null> {
+  if (admin.role === "platformAdmin") return null;
+  // Gerente vê tudo igual à diretoria, mas concedido pessoa a pessoa — não
+  // depende do setor da própria pessoa (por isso essa checagem vem antes de
+  // olhar o sector_id, diferente do is_supervisor abaixo que é escopado ao setor).
+  if (admin.is_manager) return null;
+  if (!admin.sector_id) return [admin.id as string];
+  const { data: sector } = await eco().from("staff_sectors").select("sees_all").eq("id", admin.sector_id as string).maybeSingle();
+  if (sector?.sees_all) return null;
+  if (!admin.is_supervisor) return [admin.id as string];
+  const { data: sectorMates } = await eco()
+    .from("admin_users")
+    .select("id")
+    .eq("company_id", admin.company_id as string)
+    .eq("sector_id", admin.sector_id as string);
+  return (sectorMates ?? []).map((m) => m.id as string);
+}
+
 async function signInAndGetToken(email: string, password: string) {
   const { data, error } = await db().auth.signInWithPassword({ email, password });
   if (error || !data.session) throw new ApiError(401, "INVALID_CREDENTIALS");
@@ -223,8 +247,14 @@ function mapAdminUser(u: Record<string, unknown>) {
     isPlatformOwner: u.company_id === DEMO_COMPANY_ID,
     permissions: u.permissions ?? [],
     active: u.active ?? true,
-    department: u.department ?? undefined,
+    sectorId: u.sector_id ?? undefined,
+    isSupervisor: u.is_supervisor ?? false,
+    isManager: u.is_manager ?? false,
   };
+}
+
+function mapStaffSector(s: Record<string, unknown>) {
+  return { id: s.id, name: s.name, seesAll: s.sees_all ?? false };
 }
 
 function mapCompany(c: Record<string, unknown>) {
@@ -1649,7 +1679,7 @@ app.get("/admin/team-members", async (c) => {
 
 app.post("/admin/team-members", async (c) => {
   const admin = await requirePlatformAdmin(c);
-  const { name, email, password, permissions, department } = await c.req.json();
+  const { name, email, password, permissions, sectorId, isSupervisor, isManager } = await c.req.json();
   if (!name || !email || !password) throw new ApiError(422, "INVALID_INPUT", "Nome, e-mail e senha são obrigatórios.");
 
   const { data: created, error: createError } = await db().auth.admin.createUser({ email, password, email_confirm: true });
@@ -1665,7 +1695,9 @@ app.post("/admin/team-members", async (c) => {
       role: "staff",
       permissions: permissions ?? [],
       active: true,
-      department: department || null,
+      sector_id: sectorId || null,
+      is_supervisor: isSupervisor ?? false,
+      is_manager: isManager ?? false,
     })
     .select("*")
     .single();
@@ -1683,7 +1715,9 @@ app.patch("/admin/team-members/:id", async (c) => {
   if ("name" in patch) row.name = patch.name;
   if ("permissions" in patch) row.permissions = patch.permissions;
   if ("active" in patch) row.active = patch.active;
-  if ("department" in patch) row.department = patch.department || null;
+  if ("sectorId" in patch) row.sector_id = patch.sectorId || null;
+  if ("isSupervisor" in patch) row.is_supervisor = patch.isSupervisor;
+  if ("isManager" in patch) row.is_manager = patch.isManager;
   const { data, error } = await eco()
     .from("admin_users")
     .update(row)
@@ -1696,15 +1730,16 @@ app.patch("/admin/team-members/:id", async (c) => {
   return c.json(mapAdminUser(data));
 });
 
-// Cadastro livre de setores/cargos (ex: "Vendedor", "Financeiro") — só pra
-// popular o dropdown de Cargo/Setor da equipe com opções fixas, evitando erro
-// de digitação. Não tem relação de chave estrangeira com admin_users.department
-// (que continua sendo texto livre) — é só a lista de sugestões.
+// Setor/cargo — estrutural (não é só rótulo): governa quem vê o quê em
+// Atividades (ver GET /admin/activities). Leitura liberada pra qualquer admin
+// autenticado da empresa (staff precisa saber os setores existentes pra
+// filtrar Atividades, se enxergar mais de um) — só criar/editar/apagar é
+// exclusivo do platformAdmin.
 app.get("/admin/staff-sectors", async (c) => {
-  const admin = await requirePlatformAdmin(c);
+  const admin = await requireAdmin(c);
   const { data, error } = await eco().from("staff_sectors").select("*").eq("company_id", admin.company_id).order("name");
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json((data ?? []).map((s) => ({ id: s.id, name: s.name })));
+  return c.json((data ?? []).map(mapStaffSector));
 });
 
 app.post("/admin/staff-sectors", async (c) => {
@@ -1720,7 +1755,27 @@ app.post("/admin/staff-sectors", async (c) => {
     if (error.code === "23505") throw new ApiError(422, "DUPLICATE_SECTOR", "Já existe um setor com esse nome.");
     throw new ApiError(500, "DB_ERROR", error.message);
   }
-  return c.json({ id: data.id, name: data.name });
+  return c.json(mapStaffSector(data));
+});
+
+app.patch("/admin/staff-sectors/:id", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const patch = await c.req.json();
+  const row: Record<string, unknown> = {};
+  if ("name" in patch) row.name = patch.name;
+  if ("seesAll" in patch) row.sees_all = patch.seesAll;
+  const { data, error } = await eco()
+    .from("staff_sectors")
+    .update(row)
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new ApiError(422, "DUPLICATE_SECTOR", "Já existe um setor com esse nome.");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+  return c.json(mapStaffSector(data));
 });
 
 app.delete("/admin/staff-sectors/:id", async (c) => {
@@ -1859,7 +1914,9 @@ app.patch("/admin/activity-outcomes/:id", async (c) => {
 
 app.get("/admin/activities", async (c) => {
   const admin = await requirePermission(c, "atividades");
+  const visibleIds = await visibleAssigneeIds(admin);
   let query = eco().from("activities").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
+  if (visibleIds) query = query.in("assigned_to_admin_id", visibleIds);
   const column = c.req.query("column");
   const assignedToAdminId = c.req.query("assignedToAdminId");
   const clientId = c.req.query("clientId");

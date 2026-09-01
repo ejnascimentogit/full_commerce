@@ -46,6 +46,7 @@ import {
   createStaffSector as createStaffSectorStore,
   deleteStaffSector as deleteStaffSectorStore,
   listStaffSectors,
+  updateStaffSector as updateStaffSectorStore,
 } from "./staff-sectors-store";
 import {
   createActivity as createActivityStore,
@@ -380,6 +381,11 @@ export const mockApiClient: ApiClient = {
   async createStaffSector(name: string) {
     await delay(200);
     return createStaffSectorStore(name);
+  },
+
+  async updateStaffSector(id, patch) {
+    await delay(200);
+    return updateStaffSectorStore(id, patch);
   },
 
   async deleteStaffSector(id: string) {

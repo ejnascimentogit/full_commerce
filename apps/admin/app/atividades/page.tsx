@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Activity, ActivityClient, ActivityColumn, ActivityOutcome, ActivityPriority, AdminUser, Customer } from "@ecommerce/types";
+import type { Activity, ActivityClient, ActivityColumn, ActivityOutcome, ActivityPriority, AdminUser, Customer, StaffSector } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -32,10 +32,12 @@ export default function AtividadesPage() {
   const [outcomes, setOutcomes] = useState<ActivityOutcome[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [people, setPeople] = useState<AdminUser[]>([]);
+  const [sectors, setSectors] = useState<StaffSector[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [filterAssignee, setFilterAssignee] = useState("");
+  const [filterSector, setFilterSector] = useState("");
   const [search, setSearch] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
@@ -51,15 +53,20 @@ export default function AtividadesPage() {
   }, [user, canAccess, router]);
 
   function refresh() {
-    Promise.all([apiClient.getActivityClients(), apiClient.getActivityOutcomes(), apiClient.getActivities(), apiClient.getTeamMembers()]).then(
-      ([c, o, a, staff]) => {
-        setClients(c);
-        setOutcomes(o.filter((x) => x.active));
-        setActivities(a);
-        setPeople(user && user.role === "platformAdmin" ? [{ ...user, id: user.id }, ...staff] : staff);
-        setLoading(false);
-      },
-    );
+    Promise.all([
+      apiClient.getActivityClients(),
+      apiClient.getActivityOutcomes(),
+      apiClient.getActivities(),
+      apiClient.getTeamMembers(),
+      apiClient.getStaffSectors(),
+    ]).then(([c, o, a, staff, sec]) => {
+      setClients(c);
+      setOutcomes(o.filter((x) => x.active));
+      setActivities(a);
+      setPeople(user && user.role === "platformAdmin" ? [{ ...user, id: user.id }, ...staff] : staff);
+      setSectors(sec);
+      setLoading(false);
+    });
     // Só quem também tem acesso a Clientes consegue buscar cliente real — se não tiver,
     // a lista fica vazia e o formulário só permite cadastrar lead novo, sem quebrar a tela.
     apiClient
@@ -75,10 +82,20 @@ export default function AtividadesPage() {
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const personById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
+  const sectorById = useMemo(() => new Map(sectors.map((s) => [s.id, s])), [sectors]);
+
+  // Filtro de setor só faz sentido pra quem enxerga mais de um setor —
+  // platformAdmin, gerente, ou quem está num setor "vê tudo" (ex: Diretoria).
+  const ownSectorSeesAll = user?.sectorId ? sectorById.get(user.sectorId)?.seesAll : false;
+  const hasBroadVisibility = user?.role === "platformAdmin" || user?.isManager || ownSectorSeesAll;
 
   const filtered = useMemo(() => {
     return activities.filter((a) => {
       if (filterAssignee && a.assignedToAdminId !== filterAssignee) return false;
+      if (filterSector) {
+        const assigneeSectorId = personById.get(a.assignedToAdminId)?.sectorId;
+        if (assigneeSectorId !== filterSector) return false;
+      }
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         const client = clientById.get(a.clientId);
@@ -89,7 +106,7 @@ export default function AtividadesPage() {
       }
       return true;
     });
-  }, [activities, filterAssignee, search, clientById]);
+  }, [activities, filterAssignee, filterSector, search, clientById, personById]);
 
   async function moveActivity(activity: Activity, column: ActivityColumn) {
     if (column === "done") {
@@ -145,6 +162,16 @@ export default function AtividadesPage() {
             </option>
           ))}
         </select>
+        {hasBroadVisibility && (
+          <select value={filterSector} onChange={(e) => setFilterSector(e.target.value)} className="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
+            <option value="">Todos os setores</option>
+            {sectors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading ? (

@@ -24,7 +24,9 @@ export function TeamSection() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [department, setDepartment] = useState("");
+  const [sectorId, setSectorId] = useState("");
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  const [isManager, setIsManager] = useState(false);
   const [newSector, setNewSector] = useState("");
   const [permissions, setPermissions] = useState<AdminPermissionKey[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +38,8 @@ export function TeamSection() {
   }
 
   useEffect(refresh, []);
+
+  const sectorById = new Map(sectors.map((s) => [s.id, s]));
 
   async function handleAddSector() {
     if (!newSector.trim()) return;
@@ -49,6 +53,11 @@ export function TeamSection() {
     refresh();
   }
 
+  async function toggleSectorSeesAll(sector: StaffSector) {
+    await apiClient.updateStaffSector(sector.id, { seesAll: !sector.seesAll });
+    refresh();
+  }
+
   function togglePermission(key: AdminPermissionKey) {
     setPermissions((prev) => (prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]));
   }
@@ -58,11 +67,13 @@ export function TeamSection() {
     setError(null);
     setSubmitting(true);
     try {
-      await apiClient.createTeamMember({ name, email, password, permissions, department: department.trim() || undefined });
+      await apiClient.createTeamMember({ name, email, password, permissions, sectorId: sectorId || undefined, isSupervisor, isManager });
       setName("");
       setEmail("");
       setPassword("");
-      setDepartment("");
+      setSectorId("");
+      setIsSupervisor(false);
+      setIsManager(false);
       setPermissions([]);
       setShowForm(false);
       refresh();
@@ -85,6 +96,21 @@ export function TeamSection() {
     refresh();
   }
 
+  async function updateMemberSector(member: AdminUser, newSectorId: string) {
+    await apiClient.updateTeamMember(member.id, { sectorId: newSectorId || null });
+    refresh();
+  }
+
+  async function toggleMemberSupervisor(member: AdminUser) {
+    await apiClient.updateTeamMember(member.id, { isSupervisor: !(member.isSupervisor ?? false) });
+    refresh();
+  }
+
+  async function toggleMemberManager(member: AdminUser) {
+    await apiClient.updateTeamMember(member.id, { isManager: !(member.isManager ?? false) });
+    refresh();
+  }
+
   return (
     <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
       <div className="flex items-center justify-between mb-1">
@@ -98,7 +124,8 @@ export function TeamSection() {
         </button>
       </div>
       <p className="text-sm text-slate-500 mb-4">
-        Logins de vendedor, financeiro etc. — cada um vê só as abas marcadas abaixo, nunca Empresas ou Configurações.
+        Logins de vendedor, financeiro etc. — cada um vê só as abas marcadas abaixo, nunca Empresas ou Configurações. O setor e o nível (usuário,
+        supervisor, gerente) controlam o que a pessoa vê dentro de Atividades.
       </p>
 
       {showForm && (
@@ -120,16 +147,13 @@ export function TeamSection() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Cargo/Setor (opcional)</label>
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Sem cargo/setor</option>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Setor</label>
+            <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
+              <option value="">Sem setor</option>
               {sectors.map((s) => (
-                <option key={s.id} value={s.name}>
+                <option key={s.id} value={s.id}>
                   {s.name}
+                  {s.seesAll ? " (vê tudo)" : ""}
                 </option>
               ))}
             </select>
@@ -147,8 +171,16 @@ export function TeamSection() {
             {sectors.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {sectors.map((s) => (
-                  <span key={s.id} className="flex items-center gap-1 bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full">
+                  <span key={s.id} className="flex items-center gap-1.5 bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full">
                     {s.name}
+                    <button
+                      type="button"
+                      onClick={() => toggleSectorSeesAll(s)}
+                      title="Marcar esse setor como visão total (ex: Diretoria) — qualquer pessoa dele enxerga Atividades de todos os setores"
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${s.seesAll ? "bg-brand-600 text-white" : "bg-white border border-slate-300 text-slate-500"}`}
+                    >
+                      vê tudo
+                    </button>
                     <button type="button" onClick={() => handleRemoveSector(s.id)} className="text-slate-400 hover:text-red-600">
                       ✕
                     </button>
@@ -156,6 +188,16 @@ export function TeamSection() {
                 ))}
               </div>
             )}
+          </div>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={isSupervisor} onChange={(e) => setIsSupervisor(e.target.checked)} />
+              É supervisor (vê todo o setor)
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={isManager} onChange={(e) => setIsManager(e.target.checked)} />
+              É gerente (vê todos os setores)
+            </label>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Senha inicial</label>
@@ -199,10 +241,7 @@ export function TeamSection() {
           <div key={member.id} className="border border-slate-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <p className="font-medium text-slate-900">
-                  {member.name}
-                  {member.department && <span className="ml-2 text-xs font-normal text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">{member.department}</span>}
-                </p>
+                <p className="font-medium text-slate-900">{member.name}</p>
                 <p className="text-xs text-slate-500">{member.email}</p>
               </div>
               <button
@@ -213,6 +252,33 @@ export function TeamSection() {
                 {(member.active ?? true) ? "Ativo" : "Desativado"}
               </button>
             </div>
+
+            <div className="flex items-center gap-3 mb-3">
+              <select
+                value={member.sectorId ?? ""}
+                onChange={(e) => updateMemberSector(member, e.target.value)}
+                className="border border-slate-300 rounded-md px-2 py-1 text-xs bg-white"
+              >
+                <option value="">Sem setor</option>
+                {sectors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input type="checkbox" checked={member.isSupervisor ?? false} onChange={() => toggleMemberSupervisor(member)} />
+                Supervisor
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input type="checkbox" checked={member.isManager ?? false} onChange={() => toggleMemberManager(member)} />
+                Gerente
+              </label>
+              {member.sectorId && sectorById.get(member.sectorId)?.seesAll && (
+                <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded-full">setor vê tudo</span>
+              )}
+            </div>
+
             <div className="flex flex-wrap gap-1.5">
               {ALL_PERMISSIONS.map((key) => {
                 const has = (member.permissions ?? []).includes(key);

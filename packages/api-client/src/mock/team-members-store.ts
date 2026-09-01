@@ -22,7 +22,14 @@ export function listTeamMembers(): AdminUser[] {
   return readAll();
 }
 
-export function createTeamMember(input: { name: string; email: string; permissions: AdminUser["permissions"]; department?: string }): AdminUser {
+export function createTeamMember(input: {
+  name: string;
+  email: string;
+  permissions: AdminUser["permissions"];
+  sectorId?: string;
+  isSupervisor?: boolean;
+  isManager?: boolean;
+}): AdminUser {
   const members = readAll();
   const member: AdminUser = {
     id: `staff-${Date.now()}`,
@@ -31,18 +38,32 @@ export function createTeamMember(input: { name: string; email: string; permissio
     role: "staff",
     permissions: input.permissions ?? [],
     active: true,
-    department: input.department || undefined,
+    sectorId: input.sectorId || undefined,
+    isSupervisor: input.isSupervisor ?? false,
+    isManager: input.isManager ?? false,
   };
   members.push(member);
   writeAll(members);
   return member;
 }
 
-export function updateTeamMember(id: string, patch: Partial<Pick<AdminUser, "name" | "permissions" | "active" | "department">>): AdminUser {
+export function updateTeamMember(
+  id: string,
+  patch: Partial<{
+    name: string;
+    permissions: AdminUser["permissions"];
+    active: boolean;
+    sectorId: string | null;
+    isSupervisor: boolean;
+    isManager: boolean;
+  }>,
+): AdminUser {
   const members = readAll();
   const index = members.findIndex((m) => m.id === id);
   if (index === -1) throw new Error(`Team member not found: ${id}`);
-  members[index] = { ...members[index], ...patch };
+  const next = { ...members[index], ...patch };
+  if (patch.sectorId === null) next.sectorId = undefined;
+  members[index] = next as AdminUser;
   writeAll(members);
   return members[index];
 }
