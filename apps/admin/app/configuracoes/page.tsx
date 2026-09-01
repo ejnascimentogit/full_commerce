@@ -10,9 +10,72 @@ import { TeamSection } from "@/components/TeamSection";
 import { ActivityOutcomesSection } from "@/components/ActivityOutcomesSection";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
+// Usado tanto pra buscar (título + explicação) quanto pra montar o painel de
+// ajuda à direita — uma explicação mais completa que o resumo de 1 linha que
+// já fica embaixo de cada título dentro da seção.
+const CONFIG_SECTIONS = [
+  {
+    id: "cor-marca",
+    title: "Cor da marca",
+    help: "Escolha uma cor e o sistema deriva automaticamente os tons mais claros (fundo, hover) e mais escuros usados em botões, links e destaques em toda a loja e no admin — não precisa configurar cada tom na mão.",
+  },
+  {
+    id: "promocoes",
+    title: "Promoções e cupons",
+    help: 'Interruptor geral do checkout. Desligado, nenhuma promoção ou cupom aplica desconto — mas nada é apagado, só fica suspenso. Útil pra pausar descontos rapidamente sem mexer nas promoções já cadastradas em "Promoções".',
+  },
+  {
+    id: "logo",
+    title: "Logo",
+    help: "Envie uma imagem pra substituir o nome em texto no cabeçalho da loja. Sem logo, o nome definido em Textos do site aparece no lugar.",
+  },
+  {
+    id: "carrossel",
+    title: "Carrossel da home",
+    help: "Banners que giram no topo da página inicial da loja. Reordene com as setas, ative/desative sem apagar, e adicione um link opcional (ex: uma categoria ou promoção).",
+  },
+  {
+    id: "textos-site",
+    title: "Textos do site",
+    help: "Nome da loja, título de destaque da home e os selos (ícone + texto curto) exibidos logo abaixo — tudo editável sem precisar mexer em código.",
+  },
+  {
+    id: "rodape",
+    title: "Rodapé",
+    help: "Razão social, CNPJ, endereço, contato de suporte, formas de pagamento aceitas, links de ajuda e redes sociais — tudo que aparece no rodapé da loja pro cliente.",
+  },
+  {
+    id: "pedidos-frete",
+    title: "Pedidos e frete",
+    help: "Pedido mínimo (opcional), regra de frete grátis pra CNPJ, valor do frete padrão, e se dá pra ajustar a quantidade de um item depois que o pedido já saiu pra entrega.",
+  },
+  {
+    id: "pagamento",
+    title: "Pagamento",
+    help: "Quais formas de pagamento o cliente vê no checkout, a chave Pix pra gerar o QR Code, e as regras de parcelamento no cartão (máximo de parcelas, valor mínimo, quantas saem sem juros).",
+  },
+  {
+    id: "rota",
+    title: "Rota (zonas de entrega)",
+    help: "Cadastre as zonas de entrega e os bairros que cada uma atende — é isso que resolve automaticamente a região de cada cliente pelo endereço, sem precisar de seletor manual.",
+  },
+  {
+    id: "equipe",
+    title: "Equipe",
+    help: 'Crie logins de vendedor, financeiro etc. com acesso restrito só às abas que você marcar, mais o setor e o nível (usuário, supervisor, gerente) que controla o que a pessoa vê em Atividades.',
+  },
+  {
+    id: "status-atividades",
+    title: "Status de conclusão de atividades",
+    help: 'A lista de resultados possíveis ao concluir um card em Atividades — ex: "Convertido em venda", "Cobrança resolvida". Aparece no momento de mover um card pra Concluído.',
+  },
+];
+
 export default function ConfiguracoesPage() {
   const { user } = useAdminAuth();
   const router = useRouter();
+  const [helpSearch, setHelpSearch] = useState("");
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [brandColor, setBrandColor] = useState("#1d4ed8");
   const [savingColor, setSavingColor] = useState(false);
@@ -261,6 +324,25 @@ export default function ConfiguracoesPage() {
     refresh();
   }
 
+  function goToSection(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightedId(id);
+    setTimeout(() => setHighlightedId((current) => (current === id ? null : current)), 2000);
+  }
+
+  // Aplicado em toda seção — sombra/contorno mais forte de propósito (era só
+  // "border-slate-200" antes, ficava difícil distinguir um bloco do outro) e
+  // um destaque temporário (ring) quando a pessoa acabou de chegar ali pela busca.
+  function sectionClass(id: string, maxWidth: string) {
+    const ring = highlightedId === id ? "ring-2 ring-brand-400 ring-offset-2" : "";
+    return `bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 ${maxWidth} transition-shadow ${ring}`;
+  }
+
+  const filteredSections =
+    helpSearch.trim().length === 0
+      ? CONFIG_SECTIONS
+      : CONFIG_SECTIONS.filter((s) => `${s.title} ${s.help}`.toLowerCase().includes(helpSearch.trim().toLowerCase()));
+
   if (user?.role !== "platformAdmin" || !settings || !siteCopy || !footer) return null;
 
   const COLOR_PRESETS = [
@@ -280,7 +362,9 @@ export default function ConfiguracoesPage() {
     <AdminShell>
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Configurações</h1>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+        <div className="min-w-0">
+      <section id="cor-marca" className={sectionClass("cor-marca", "max-w-xl mt-0")}>
         <h2 className="font-semibold text-slate-900 mb-3">Cor da marca</h2>
         <p className="text-sm text-slate-500 mb-3">
           Uma cor só — os outros tons (fundo claro, hover, etc.) são derivados automaticamente.
@@ -321,7 +405,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl">
+      <section id="promocoes" className={sectionClass("promocoes", "max-w-xl")}>
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-slate-900">Promoções e cupons</h2>
@@ -343,7 +427,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mb-6 max-w-xl">
+      <section id="logo" className={sectionClass("logo", "max-w-xl")}>
         <h2 className="font-semibold text-slate-900 mb-3">Logo</h2>
         <div className="flex items-center gap-4">
           {settings.logoUrl ? (
@@ -368,7 +452,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 max-w-2xl">
+      <section id="carrossel" className={sectionClass("carrossel", "max-w-2xl")}>
         <h2 className="font-semibold text-slate-900 mb-3">Carrossel da home</h2>
 
         <div className="space-y-3 mb-4">
@@ -430,7 +514,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
+      <section id="textos-site" className={sectionClass("textos-site", "max-w-2xl")}>
         <h2 className="font-semibold text-slate-900 mb-1">Textos do site</h2>
         <p className="text-sm text-slate-500 mb-4">
           Nome da loja, título de destaque da home e os 3 selos — troque à vontade, sem precisar mexer em código.
@@ -499,7 +583,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
+      <section id="rodape" className={sectionClass("rodape", "max-w-2xl")}>
         <h2 className="font-semibold text-slate-900 mb-1">Rodapé</h2>
         <p className="text-sm text-slate-500 mb-4">
           Razão social/CNPJ/endereço, contato de suporte e redes sociais exibidos no rodapé da loja.
@@ -648,7 +732,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-xl">
+      <section id="pedidos-frete" className={sectionClass("pedidos-frete", "max-w-xl")}>
         <h2 className="font-semibold text-slate-900 mb-1">Pedidos e frete</h2>
         <p className="text-sm text-slate-500 mb-4">
           Por padrão a loja não tem pedido mínimo e o frete é grátis pra CNPJ — os dois são só o ponto de partida,
@@ -727,7 +811,7 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-xl">
+      <section id="pagamento" className={sectionClass("pagamento", "max-w-xl")}>
         <h2 className="font-semibold text-slate-900 mb-1">Pagamento</h2>
         <p className="text-sm text-slate-500 mb-4">
           Configure a chave Pix da loja pra gerar o QR Code no checkout, e as regras de parcelamento no cartão.
@@ -851,9 +935,41 @@ export default function ConfiguracoesPage() {
         </div>
       </section>
 
-      <RegionsSection />
-      <TeamSection />
-      <ActivityOutcomesSection />
+      <div id="rota" className={highlightedId === "rota" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
+        <RegionsSection />
+      </div>
+      <div id="equipe" className={highlightedId === "equipe" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
+        <TeamSection />
+      </div>
+      <div id="status-atividades" className={highlightedId === "status-atividades" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
+        <ActivityOutcomesSection />
+      </div>
+        </div>
+
+        <div className="hidden lg:block sticky top-6 self-start bg-white border border-slate-200 shadow-md rounded-lg p-4 max-h-[calc(100vh-3rem)] overflow-y-auto">
+          <h2 className="font-semibold text-slate-900 mb-3">Ajuda das configurações</h2>
+          <input
+            value={helpSearch}
+            onChange={(e) => setHelpSearch(e.target.value)}
+            placeholder="Buscar configuração..."
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mb-3"
+          />
+          <div className="space-y-1">
+            {filteredSections.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => goToSection(s.id)}
+                className="w-full text-left px-3 py-2 rounded-md hover:bg-slate-50 border border-transparent hover:border-slate-200"
+              >
+                <p className="text-sm font-medium text-slate-800">{s.title}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{s.help}</p>
+              </button>
+            ))}
+            {filteredSections.length === 0 && <p className="text-sm text-slate-500 px-3">Nenhuma configuração encontrada.</p>}
+          </div>
+        </div>
+      </div>
     </AdminShell>
   );
 }

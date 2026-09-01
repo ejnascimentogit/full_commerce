@@ -27,7 +27,7 @@ export function ActivityOutcomesSection() {
   }
 
   return (
-    <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
+    <section className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
       <h2 className="font-semibold text-slate-900 mb-1">Status de conclusão de atividades</h2>
       <p className="text-sm text-slate-500 mb-4">
         O que significa "concluído" num card de Atividades — ex: "Convertido em venda", "Cobrança resolvida". Aparece quando alguém move um card pra

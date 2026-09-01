@@ -112,7 +112,7 @@ export function TeamSection() {
   }
 
   return (
-    <section className="bg-white border border-slate-200 rounded-lg p-5 mt-6 max-w-2xl">
+    <section className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-semibold text-slate-900">Equipe</h2>
         <button
