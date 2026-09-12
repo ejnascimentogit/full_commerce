@@ -51,6 +51,18 @@ Loja e admin publicados no **Cloudflare Workers** via adapter OpenNext (`wrangle
 
 Observability (Logs + Traces) ativado nos dois Workers para acompanhar erros em produção.
 
+## Testes e CI
+
+O projeto tem testes unitários (**Vitest**) para as regras de negócio puras de `packages/api-client` — frete (`calculateShipping`, `calculateOrderTotals`, roteirização por bairro), cupom/promoção (`isPromotionActive`, `findPromotionByCoupon`, `calculatePromotionDiscount`), CEP (`formatCep`, `lookupCep`) e validação de CPF/CNPJ (`isValidCPF`, `isValidCNPJ`, formatação) — em `packages/api-client/src/*.test.ts`.
+
+```bash
+npm run test   # roda a suíte inteira (raiz do monorepo)
+```
+
+Um workflow de **GitHub Actions** (`.github/workflows/ci.yml`) roda automaticamente em todo `push` e `pull request` para a branch `main`: instala as dependências (`npm ci`), roda os testes (`npm run test`), o typecheck (`tsc --noEmit`) de `apps/admin` e `apps/storefront`, e o `next build` dos dois apps (funciona sem nenhum segredo real porque, sem `NEXT_PUBLIC_API_MODE=rest` definido, os apps usam o modo mock — ver "Estado atual" acima).
+
+**Regra a manter**: toda nova função de regra de negócio pura (validação, cálculo, etc.) adicionada em `packages/api-client` deve vir acompanhada do teste unitário correspondente. O CI precisa estar verde antes de mergear na `main`.
+
 ## Contas de acesso
 
 **Nos sites publicados** (backend real) — não existem contas prontas: crie a sua em **"Criar conta de administrador"** (admin) ou **"Criar uma conta"** (loja). Os dados ficam salvos de verdade no Supabase, acessíveis de qualquer navegador/dispositivo.
