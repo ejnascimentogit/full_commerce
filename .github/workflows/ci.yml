@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Testes, typecheck e build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instala dependências (npm ci, monorepo inteiro)
+        run: npm ci
+
+      - name: Testes unitários (Vitest — regras puras de packages/api-client)
+        run: npm run test
+
+      - name: Typecheck — apps/admin
+        run: npx tsc --noEmit -p apps/admin
+
+      - name: Typecheck — apps/storefront
+        run: npx tsc --noEmit -p apps/storefront
+
+      # Os dois apps rodam com NEXT_PUBLIC_API_MODE=mock por padrão quando a
+      # variável não está definida (ver DOCUMENTACAO.md) — nesse modo eles usam
+      # localStorage/dados de exemplo, sem chamar Supabase/Cloudflare, então o
+      # build funciona em CI sem nenhum segredo real. Se um dia o build passar
+      # a exigir env vars reais (ex: para testar o modo `rest`), configure-as
+      # como Secrets do repositório e referencie via ${{ secrets.NOME_DO_SECRET }}
+      # — nunca com o valor real escrito aqui.
+      - name: Build — apps/admin
+        run: npm run build -w apps/admin
+
+      - name: Build — apps/storefront
+        run: npm run build -w apps/storefront
