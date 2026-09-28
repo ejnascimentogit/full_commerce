@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
-import type { Customer, DeliveryRegion } from "@ecommerce/types";
+import type { AdminUser, Customer, DeliveryRegion } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ export default function ClientesPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [regions, setRegions] = useState<DeliveryRegion[]>([]);
+  const [staff, setStaff] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -27,6 +28,7 @@ export default function ClientesPage() {
   useEffect(() => {
     refresh();
     apiClient.getRegions({ includeInactive: true }).then(setRegions);
+    apiClient.getTeamMembers().then(setStaff);
   }, []);
 
   if (user?.role !== "platformAdmin") return null;
@@ -124,6 +126,7 @@ export default function ClientesPage() {
       {editing && (
         <EditCustomerModal
           customer={editing}
+        staff={staff}
           regions={regions}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -139,11 +142,13 @@ export default function ClientesPage() {
 function EditCustomerModal({
   customer,
   regions,
+  staff,
   onClose,
   onSaved,
 }: {
   customer: Customer;
   regions: DeliveryRegion[];
+  staff: AdminUser[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -155,6 +160,13 @@ function EditCustomerModal({
   const [preferredPaymentMethod, setPreferredPaymentMethod] = useState(customer.preferredPaymentMethod ?? "");
   const [status, setStatus] = useState(customer.status);
   const [saving, setSaving] = useState(false);
+    const [assignedStaffId, setAssignedStaffId] = useState(customer.assignedStaffId ?? "");
+
+    const staffOptions = staff.some((m) => m.id === customer.assignedStaffId)
+      ? staff
+      : customer.assignedStaffId
+        ? [...staff, { id: customer.assignedStaffId, name: "(pessoa removida da equipe)" } as AdminUser]
+        : staff;
 
   // Endereço de entrega (o padrão) e endereço comercial (o próximo "outro" que
   // achar) são os dois editáveis aqui — escritório e CD/depósito costumam ser
@@ -204,6 +216,7 @@ function EditCustomerModal({
       referenceCode: referenceCode || undefined,
       preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
       status,
+      assignedStaffId: assignedStaffId || undefined,
     });
     if (defaultAddress) {
       await apiClient.updateCustomerAddress(defaultAddress.id, addressPayload);
@@ -413,6 +426,24 @@ function EditCustomerModal({
             </select>
             <p className="text-xs text-slate-400 mt-1">
               Útil pra clientes que já vêm do ERP da empresa com a condição pré-definida.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Vendedor vinculado</label>
+            <select
+              value={assignedStaffId}
+              onChange={(e) => setAssignedStaffId(e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="">Sem vendedor vinculado</option>
+              {staffOptions.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Usado pelas Atividades Automaticas quando o modo de atribuicao for "Vendedor vinculado ao cliente" (ver Configuracoes).
             </p>
           </div>
           <div>

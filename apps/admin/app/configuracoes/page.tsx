@@ -8,6 +8,7 @@ import { AdminShell } from "@/components/AdminShell";
 import { RegionsSection } from "@/components/RegionsSection";
 import { TeamSection } from "@/components/TeamSection";
 import { ActivityOutcomesSection } from "@/components/ActivityOutcomesSection";
+import { AtividadesAutomaticasSection } from "@/components/AtividadesAutomaticasSection";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 // Usado tanto pra buscar (título + explicação) quanto pra montar o painel de
@@ -68,6 +69,11 @@ const CONFIG_SECTIONS = [
     id: "status-atividades",
     title: "Status de conclusão de atividades",
     help: 'A lista de resultados possíveis ao concluir um card em Atividades — ex: "Convertido em venda", "Cobrança resolvida". Aparece no momento de mover um card pra Concluído.',
+  },
+  {
+    id: "atividades-automaticas",
+    title: "Atividades Automaticas",
+    help: "Liga a geracao automatica de cards em Atividades para orcamento parado, cliente inativo e cadastro sem compra, define os prazos de cada gatilho e como distribuir os cards gerados entre a equipe.",
   },
 ];
 
@@ -943,6 +949,9 @@ export default function ConfiguracoesPage() {
       </div>
       <div id="status-atividades" className={highlightedId === "status-atividades" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
         <ActivityOutcomesSection />
+      </div>
+      <div id="atividades-automaticas" className={highlightedId === "atividades-automaticas" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
+        <AtividadesAutomaticasSection />
       </div>
         </div>
 
