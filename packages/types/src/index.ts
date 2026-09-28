@@ -93,6 +93,8 @@ export interface Customer {
   referenceCode?: string;
   /** Definida pelo admin (ex: cliente que já vem com condição fixada no ERP da empresa) — pré-seleciona a aba no checkout, mas continua editável pelo cliente lá. */
   preferredPaymentMethod?: PaymentMethod;
+  /** Vendedor/atendente (AdminUser role "staff") vinculado a este cliente -- usado pelo modo de atribuicao "vendedor_vinculado" das Atividades Automaticas (ver StoreSettings.atividadeAutoModoAtribuicao). Ausente = sem vendedor vinculado, cai pro comportamento manual pra esse cliente especifico. */
+  assignedStaffId?: string;
   createdAt: string;
   status: "active" | "inactive";
 }
@@ -389,6 +391,22 @@ export interface StoreSettings {
 
   /** Desligado (padrão): depois que o pedido sai para entrega ou é entregue, a mercadoria já deixou o estoque e a nota fiscal já foi emitida — não dá mais pra ajustar quantidade. Ligar aqui libera o ajuste mesmo nesses status. */
   allowAdjustmentsAfterDispatch: boolean;
+
+  // ---------- Atividades Automaticas ----------
+  // Ver .claude/skills/ecommerce/references/atividades-automaticas-implementacao.md.
+  // Gerado 1x/dia por ecommerce.gerar_atividades_automaticas() (pg_cron), nao por
+  // uma Edge Function -- estes campos so configuram o que a funcao SQL le.
+
+  /** Kill switch -- comeca desligado de proposito (nasce false ate a empresa configurar os prazos/atribuicao e ligar). */
+  atividadeAutoAtivo: boolean;
+  /** Dias sem pedido novo (a partir do ultimo pedido) pra considerar um cliente "inativo" (gatilho 2). */
+  atividadeAutoClienteInativoDias: number;
+  /** Dias desde o cadastro, sem nenhum pedido, pra considerar "cadastrado sem compra" (gatilho 3). */
+  atividadeAutoCadastroSemCompraDias: number;
+  /** Como resolver o responsavel (assignedToAdminId) de uma Activity criada automaticamente -- vale igualmente pros 3 gatilhos. */
+  atividadeAutoModoAtribuicao: "manual" | "vendedor_vinculado" | "round_robin_todos" | "round_robin_subconjunto";
+  /** Lista de AdminUser.id elegiveis pro rodizio quando o modo e "round_robin_subconjunto". Ignorado nos outros modos. */
+  atividadeAutoSubconjuntoIds?: string[];
 }
 
 // ---------- Gestão de Atividades ----------
@@ -430,8 +448,10 @@ export interface Activity {
   description?: string;
   column: ActivityColumn;
   priority: ActivityPriority;
-  createdByAdminId: string;
-  assignedToAdminId: string;
+  /** Ausente em cards gerados pela automacao (ver sourceType) -- sempre presente em cards criados manualmente pelo formulario. */
+  createdByAdminId?: string;
+  /** Ausente quando o modo de atribuicao da automacao e "manual" (ou "vendedor_vinculado" sem vendedor vinculado ao cliente) -- o card nasce sem responsavel e alguem da equipe assume depois. */
+  assignedToAdminId?: string;
   /** Preenchido só quando column === "done" — exigido antes de mover pra Concluído. */
   outcomeId?: string;
   /** Data prevista pra resolver (opcional) — útil pra SAC/reclamações, onde o cliente quer saber se tem prazo. */
@@ -439,4 +459,8 @@ export interface Activity {
   imageUrls: string[];
   createdAt: string;
   completedAt?: string;
+  /** Presente so em cards criados por ecommerce.gerar_atividades_automaticas() (pg_cron) -- identifica qual dos 3 gatilhos gerou o card. Ausente = card criado manualmente. */
+  sourceType?: "quote_stalled" | "customer_inactive" | "no_purchase";
+  /** Junto com sourceType, aponta pra origem exata (quotes.id ou customers.id) -- usado pela propria funcao de geracao pra nao duplicar um card aberto pra mesma origem. */
+  sourceRefId?: string;
 }

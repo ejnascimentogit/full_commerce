@@ -48,6 +48,12 @@ function seedSettings(): StoreSettings {
     monthlyInterestRate: 0,
     enabledPaymentMethods: ["pix", "debit", "credit", "cash"],
     allowAdjustmentsAfterDispatch: false,
+    // Atividades Automaticas -- kill switch comeca desligado (mesmo default do
+    // backend real, ver ecommerce.gerar_atividades_automaticas).
+    atividadeAutoAtivo: false,
+    atividadeAutoClienteInativoDias: 30,
+    atividadeAutoCadastroSemCompraDias: 15,
+    atividadeAutoModoAtribuicao: "round_robin_todos",
   };
 }
 

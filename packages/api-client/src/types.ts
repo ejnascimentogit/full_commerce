@@ -234,7 +234,7 @@ export interface ApiClient {
   /** Editar cadastro de cliente (nome, telefone, região, cód. de referência, status) — só platformAdmin. */
   updateCustomer(
     id: string,
-    patch: Partial<Pick<Customer, "name" | "phone" | "businessName" | "regionId" | "referenceCode" | "preferredPaymentMethod" | "status">>,
+    patch: Partial<Pick<Customer, "name" | "phone" | "businessName" | "regionId" | "referenceCode" | "preferredPaymentMethod" | "status" | "assignedStaffId">>,
   ): Promise<Customer>;
   /** Cria um endereço pro cliente (ex: cadastro veio sem endereço) — só platformAdmin. */
   createCustomerAddress(customerId: string, input: Omit<Address, "id">): Promise<Address>;

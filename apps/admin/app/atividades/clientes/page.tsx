@@ -157,7 +157,7 @@ export default function AtividadesClientesPage() {
                       <span className="text-xs text-slate-400">#{a.cardNumber}</span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {a.completedAt?.slice(0, 10)} · {personById.get(a.assignedToAdminId)?.name ?? "?"} ·{" "}
+                      {a.completedAt?.slice(0, 10)} · {personById.get(a.assignedToAdminId ?? "")?.name ?? "?"} ·{" "}
                       {a.outcomeId ? outcomeById.get(a.outcomeId)?.name ?? "?" : "sem resultado"}
                     </p>
                   </div>
