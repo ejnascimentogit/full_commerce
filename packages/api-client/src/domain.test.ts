@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { DeliveryRegion, Product, Promotion } from "@ecommerce/types";
+import type { DeliveryRegion, Product, Promotion, QuoteItem } from "@ecommerce/types";
 import {
+  buildOrderItemFromQuoteItem,
   calculateOrderTotals,
   calculatePromotionDiscount,
   calculateShipping,
@@ -9,6 +10,19 @@ import {
   matchRegionByNeighborhood,
 } from "./domain";
 import type { PromotionCartLine, ShippingSettings } from "./domain";
+
+function buildQuoteItem(overrides: Partial<QuoteItem> = {}): QuoteItem {
+  return {
+    productId: "p1",
+    vendorId: "v1",
+    name: "Item de Orçamento",
+    sku: "SKU-1",
+    unitType: "un",
+    quantity: 3,
+    referenceUnitPrice: 12.5,
+    ...overrides,
+  };
+}
 
 function buildProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -86,6 +100,32 @@ describe("calculateOrderTotals", () => {
   it("frete grátis (shipping = 0) não é somado", () => {
     const totals = calculateOrderTotals([{ estimatedSubtotal: 50 } as any], 0);
     expect(totals.total).toBe(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Orçamentos — conversão de QuoteItem (preço já congelado) em OrderItem
+// ---------------------------------------------------------------------------
+
+describe("buildOrderItemFromQuoteItem", () => {
+  it("usa o referenceUnitPrice congelado no orçamento, não busca preço vivo de produto", () => {
+    const item = buildOrderItemFromQuoteItem(buildQuoteItem({ quantity: 3, referenceUnitPrice: 12.5 }));
+    expect(item).toEqual({
+      productId: "p1",
+      vendorId: "v1",
+      name: "Item de Orçamento",
+      sku: "SKU-1",
+      unitType: "un",
+      unitPrice: 12.5,
+      quantity: 3,
+      estimatedSubtotal: 37.5,
+    });
+  });
+
+  it("cai para preço 0 quando referenceUnitPrice está ausente (dado legado)", () => {
+    const item = buildOrderItemFromQuoteItem(buildQuoteItem({ referenceUnitPrice: undefined, quantity: 2 }));
+    expect(item.unitPrice).toBe(0);
+    expect(item.estimatedSubtotal).toBe(0);
   });
 });
 

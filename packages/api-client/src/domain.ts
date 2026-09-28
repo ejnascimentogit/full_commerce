@@ -1,4 +1,4 @@
-import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, PaymentMethod, Product, Promotion } from "@ecommerce/types";
+import type { Customer, DeliveryRegion, Order, OrderItem, OrderStatus, PaymentMethod, Product, Promotion, QuoteItem } from "@ecommerce/types";
 
 // Pure business-rule functions — no React, no fetch, no storage. Shared by every
 // app (storefront, mobile, admin) so the rules from the ecommerce skill (frete
@@ -35,6 +35,25 @@ export function buildOrderItem(product: Product, quantity: number): OrderItem {
     unitPrice,
     quantity,
     estimatedSubtotal,
+  };
+}
+
+// Converte um item de orçamento (preço/sku/fornecedor já congelados no
+// momento em que o orçamento foi criado, ver Quote/QuoteItem) num OrderItem
+// pronto pra gravar num pedido — usado na conversão orçamento -> pedido
+// (loja e mock). Diferente de buildOrderItem, não busca preço vivo de
+// produto: o preço já foi congelado em QuoteItem.referenceUnitPrice.
+export function buildOrderItemFromQuoteItem(item: QuoteItem): OrderItem {
+  const unitPrice = item.referenceUnitPrice ?? 0;
+  return {
+    productId: item.productId,
+    vendorId: item.vendorId,
+    name: item.name,
+    sku: item.sku,
+    unitType: item.unitType,
+    unitPrice,
+    quantity: item.quantity,
+    estimatedSubtotal: unitPrice * item.quantity,
   };
 }
 

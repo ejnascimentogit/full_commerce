@@ -18,6 +18,8 @@ import type {
   PaymentMethod,
   Product,
   Promotion,
+  Quote,
+  QuoteStatus,
   StaffSector,
   StoreSettings,
   Vendor,
@@ -83,6 +85,11 @@ export interface CreateOrderInput {
   couponCode?: string;
 }
 
+export interface CreateQuoteInput {
+  items: { productId: string; quantity: number }[];
+  note?: string;
+}
+
 export interface RegisterInput {
   name: string;
   email: string;
@@ -136,6 +143,16 @@ export interface ApiClient {
   advanceOrderStatus(id: string, status: OrderStatus): Promise<Order>;
   /** Ajuste feito na separação (peso variável, falta de estoque): grava a quantidade realmente enviada por item e recalcula subtotal/total do pedido. estimatedSubtotal original fica preservado pra comparação. */
   updateOrderItems(id: string, adjustments: { productId: string; finalQuantity: number }[]): Promise<Order>;
+
+  // ---------- Orçamentos (cliente) ----------
+  /** Pede um orçamento sem compromisso — mesma lista de itens do carrinho, sem endereço/forma de pagamento ainda (ver .claude/skills/ecommerce/references/orcamento-implementacao.md). */
+  createQuote(input: CreateQuoteInput): Promise<Quote>;
+  /** Lista os próprios orçamentos do cliente logado. */
+  getQuotes(): Promise<Quote[]>;
+  /** Confirma/anexa o endereço de entrega pra um orçamento já aceito (status "accepted") — addressId de um endereço já cadastrado OU address com os dados de um endereço novo, criado na hora. Só depois disso convertQuoteToOrder funciona. */
+  confirmQuoteAddress(id: string, input: { addressId: string } | { address: Omit<Address, "id"> }): Promise<Quote>;
+  /** Converte o orçamento em Order de verdade — exige endereço já confirmado (ou addressId informado aqui) e a forma de pagamento. Recusa se o orçamento não estiver "accepted" ou já tiver sido convertido. */
+  convertQuoteToOrder(id: string, input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number }): Promise<Order>;
 
   // Admin (painel) — platformAdmin enxerga tudo, vendorAdmin só o próprio vendorId
   /** Autocadastro do dono da loja como platformAdmin — separado das contas demo do seed. */
@@ -204,6 +221,14 @@ export interface ApiClient {
   getAdminOrders(params?: { status?: OrderStatus; vendorId?: string }): Promise<Order[]>;
   /** Detalhe de um pedido pelo admin — diferente de getOrder, que é escopado ao cliente logado na loja. */
   getAdminOrder(id: string): Promise<Order>;
+
+  // ---------- Orçamentos (admin) ----------
+  /** Todos os orçamentos da empresa (qualquer status) — só platformAdmin. */
+  getAdminQuotes(): Promise<Quote[]>;
+  /** Responde (status "quoted" + quotedTotal + responseNote?) ou recusa (status "rejected") um orçamento. */
+  respondAdminQuote(id: string, patch: Partial<{ status: QuoteStatus; quotedTotal: number; responseNote: string }>): Promise<Quote>;
+  /** Mesma conversão de convertQuoteToOrder, disparada pelo vendedor em nome do cliente (ex: fechou a venda por telefone) — não exige ser o dono do orçamento. */
+  convertAdminQuoteToOrder(id: string, input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number }): Promise<Order>;
   /** Lista todos os clientes cadastrados — só platformAdmin. */
   getAdminCustomers(): Promise<Customer[]>;
   /** Editar cadastro de cliente (nome, telefone, região, cód. de referência, status) — só platformAdmin. */

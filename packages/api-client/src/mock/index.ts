@@ -3,6 +3,7 @@ import type {
   CreateOrderInput,
   CreatePromotionInput,
   CreateProductInput,
+  CreateQuoteInput,
   CreateTeamMemberInput,
   Paginated,
   ProductQuery,
@@ -22,9 +23,13 @@ import type {
   Customer,
   DeliveryRegion,
   Order,
+  OrderItem,
   OrderStatus,
+  PaymentMethod,
   Product,
   Promotion,
+  Quote,
+  QuoteItem,
   StoreSettings,
   Vendor,
 } from "@ecommerce/types";
@@ -69,7 +74,16 @@ import {
   updateOrderItems as updateOrderItemsStore,
 } from "./orders-store";
 import {
+  findAllQuotes as findAllQuotesStore,
+  findQuoteById as findQuoteByIdStore,
+  findQuotesByCustomer as findQuotesByCustomerStore,
+  nextQuoteNumber,
+  saveQuote as saveQuoteStore,
+  updateQuote as updateQuoteStore,
+} from "./quotes-store";
+import {
   buildOrderItem,
+  buildOrderItemFromQuoteItem,
   calculateOrderTotals,
   calculatePromotionDiscount,
   calculateShipping,
@@ -77,6 +91,7 @@ import {
   getBestSellingProducts,
   isPromotionActive,
   matchRegionByNeighborhood,
+  unitPriceOf,
 } from "../domain";
 import { isValidDocument } from "../documents";
 import {
@@ -102,6 +117,65 @@ import { resizeImageToDataUrl } from "./image";
 import { createVendor as createVendorStore, listVendors, updateVendor as updateVendorStore } from "./vendors-store";
 
 const delay = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Espelha convertQuoteToOrderInternal do backend real (supabase/functions/api/index.ts)
+// — mesma máquina de estados (só converte a partir de "accepted", trava contra
+// conversão duplicada via convertedOrderId, endereço obrigatório) — pra mock e
+// rest se comportarem de forma idêntica. Compartilhada pelas duas rotas
+// (cliente e admin), só muda quem chama e como o customerId é resolvido.
+function convertQuoteToOrderMock(
+  quoteId: string,
+  customerId: string,
+  input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number },
+): Order {
+  const quote = findQuoteByIdStore(quoteId);
+  if (!quote || quote.customerId !== customerId) throw new Error("NOT_FOUND");
+  if (quote.convertedOrderId) throw new Error("QUOTE_ALREADY_CONVERTED");
+  if (quote.status !== "accepted") throw new Error("QUOTE_NOT_ACCEPTED");
+
+  const finalAddressId = input.addressId ?? quote.addressId;
+  if (!finalAddressId) throw new Error("ADDRESS_REQUIRED");
+  const customer = findCustomerById(customerId);
+  if (!customer) throw new Error("NOT_FOUND");
+  const address = customer.addresses.find((a) => a.id === finalAddressId);
+  if (!address) throw new Error("ADDRESS_NOT_FOUND");
+
+  const items: OrderItem[] = quote.items.map(buildOrderItemFromQuoteItem);
+  const referenceSubtotal = items.reduce((sum, i) => sum + i.estimatedSubtotal, 0);
+  // Mesma decisão do backend real: quotedTotal (negociado pelo vendedor) é a
+  // fonte da verdade do subtotal do pedido quando presente, não a soma "de
+  // tabela" dos itens — ver comentário equivalente em convertQuoteToOrderInternal.
+  const subtotal = quote.quotedTotal ?? referenceSubtotal;
+
+  const settings = getSettings();
+  const shipping = calculateShipping(customer, settings);
+  const total = Math.max(0, subtotal) + shipping;
+  const now = new Date().toISOString();
+
+  const order: Order = {
+    id: `order-${Date.now()}`,
+    orderNumber: nextOrderNumber(),
+    customerId: customer.id,
+    items,
+    shippingAddress: address,
+    regionId: customer.regionId,
+    paymentMethod: input.paymentMethod,
+    installments: input.paymentMethod === "credit" ? input.installments : undefined,
+    subtotal,
+    discount: 0,
+    shipping,
+    total,
+    status: "PAID",
+    statusHistory: [
+      { status: "PENDING", changedAt: now },
+      { status: "PAID", changedAt: now },
+    ],
+    createdAt: now,
+  };
+  const saved = saveOrder(order);
+  updateQuoteStore(quote.id, { convertedOrderId: saved.id, status: "converted", addressId: finalAddressId });
+  return saved;
+}
 
 export const mockApiClient: ApiClient = {
   async getRegions(params): Promise<DeliveryRegion[]> {
@@ -304,6 +378,70 @@ export const mockApiClient: ApiClient = {
     return order;
   },
 
+  async createQuote(input: CreateQuoteInput): Promise<Quote> {
+    await delay(300);
+    const customerId = getSessionCustomerId();
+    if (!customerId) throw new Error("UNAUTHENTICATED");
+    const items: QuoteItem[] = input.items.map(({ productId, quantity }) => {
+      const product = findProductById(productId);
+      if (!product) throw new Error(`Product not found: ${productId}`);
+      return {
+        productId: product.id,
+        vendorId: product.vendorId,
+        name: product.name,
+        sku: product.sku,
+        unitType: product.unitType,
+        quantity,
+        referenceUnitPrice: unitPriceOf(product),
+      };
+    });
+    const quote: Quote = {
+      id: `quote-${Date.now()}`,
+      quoteNumber: nextQuoteNumber(),
+      customerId,
+      status: "requested",
+      note: input.note,
+      createdAt: new Date().toISOString(),
+      items,
+    };
+    return saveQuoteStore(quote);
+  },
+
+  async getQuotes(): Promise<Quote[]> {
+    await delay();
+    const customerId = getSessionCustomerId();
+    if (!customerId) return [];
+    return findQuotesByCustomerStore(customerId);
+  },
+
+  async confirmQuoteAddress(id, input): Promise<Quote> {
+    await delay(300);
+    const customerId = getSessionCustomerId();
+    if (!customerId) throw new Error("UNAUTHENTICATED");
+    const quote = findQuoteByIdStore(id);
+    if (!quote || quote.customerId !== customerId) throw new Error("NOT_FOUND");
+    if (quote.status !== "accepted") throw new Error("QUOTE_NOT_ACCEPTED");
+
+    let addressId: string;
+    if ("addressId" in input) {
+      const customer = findCustomerById(customerId);
+      const address = customer?.addresses.find((a) => a.id === input.addressId);
+      if (!address) throw new Error("ADDRESS_NOT_FOUND");
+      addressId = address.id;
+    } else {
+      const created = createCustomerAddressStore(customerId, input.address);
+      addressId = created.id;
+    }
+    return updateQuoteStore(id, { addressId });
+  },
+
+  async convertQuoteToOrder(id, input): Promise<Order> {
+    await delay(400);
+    const customerId = getSessionCustomerId();
+    if (!customerId) throw new Error("UNAUTHENTICATED");
+    return convertQuoteToOrderMock(id, customerId, input);
+  },
+
   async registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser> {
     await delay(300);
     const user = createAdminUser(input);
@@ -484,6 +622,25 @@ export const mockApiClient: ApiClient = {
     const order = findOrderById(id);
     if (!order) throw new Error("NOT_FOUND");
     return order;
+  },
+
+  async getAdminQuotes(): Promise<Quote[]> {
+    await delay();
+    return findAllQuotesStore();
+  },
+
+  async respondAdminQuote(id, patch): Promise<Quote> {
+    await delay(300);
+    const row: Partial<Quote> = { ...patch };
+    if (patch.status === "quoted") row.quotedAt = new Date().toISOString();
+    return updateQuoteStore(id, row);
+  },
+
+  async convertAdminQuoteToOrder(id, input): Promise<Order> {
+    await delay(400);
+    const quote = findQuoteByIdStore(id);
+    if (!quote) throw new Error("NOT_FOUND");
+    return convertQuoteToOrderMock(id, quote.customerId, input);
   },
 
   async getAdminCustomers(): Promise<Customer[]> {
