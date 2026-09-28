@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { apiClient, calculateShipping, packageLabels, unitPriceOf } from "@ecommerce/api-client";
 import type { Category, Product, StoreSettings } from "@ecommerce/types";
 import { Header } from "@/components/Header";
@@ -12,10 +13,12 @@ import { useAuth } from "@/lib/auth-context";
 export default function CarrinhoPage() {
   const { lines, setQuantity, removeItem } = useCart();
   const { customer } = useAuth();
+  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Record<string, Product>>({});
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requestingQuote, setRequestingQuote] = useState(false);
 
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
@@ -48,6 +51,22 @@ export default function CarrinhoPage() {
   const total = subtotal + (shipping ?? 0);
   const minOrderValue = settings?.minOrderValue;
   const belowMinimum = Boolean(minOrderValue && subtotal < minOrderValue);
+
+  async function handleRequestQuote() {
+    if (!customer) {
+      router.push("/conta/entrar?redirect=/carrinho");
+      return;
+    }
+    setRequestingQuote(true);
+    try {
+      const quote = await apiClient.createQuote({
+        items: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+      });
+      router.push(`/orcamento/${quote.id}`);
+    } finally {
+      setRequestingQuote(false);
+    }
+  }
 
   return (
     <>
@@ -170,6 +189,14 @@ export default function CarrinhoPage() {
                 Finalizar compra
               </Link>
             )}
+            <button
+              type="button"
+              onClick={handleRequestQuote}
+              disabled={requestingQuote}
+              className="block w-full text-center bg-white border border-brand-200 text-brand-600 font-semibold rounded-md py-2.5 hover:bg-brand-50 disabled:opacity-50"
+            >
+              {requestingQuote ? "Pedindo orcamento..." : "Pedir orcamento (sem compromisso)"}
+            </button>
           </aside>
         </div>
       )}
