@@ -1,69 +1,71 @@
-# Atividades automaticas - orcamento, carrinho abandonado e cliente inativo
+# Atividades automaticas - orcamento parado e cliente inativo
 
-**Status: nao implementado - pendencia documentada e revisada em 2026-09-16.**
+**Status: nao implementado - pendencia documentada, revisada em 2026-09-28.**
 
-> Este documento substitui a primeira versao (2026-09-12) do mesmo tema, incorporando decisoes de negocio tomadas depois: a ligacao com o fluxo de Orcamento (`/quotes`) e um segundo criterio de cliente parado (cadastrado sem nunca comprar). Ainda e especificacao (aspiracional, nao codigo) de uma extensao do modulo de Gestao de Atividades (ver "Gestao de Atividades" em SKILL.md e api-contract.md), no modelo `wholesale`. Nao confundir com Carrinhos Abandonados do tipo `televendas` (televendas.md) - conceitos homonimos, contextos diferentes.
+> Terceira revisao deste documento (anteriores: 2026-09-12, 2026-09-16). Nesta revisao, um agente leu o codigo real do backend de orcamentos e do fluxo de carrinho/login, confirmando e simplificando pontos que antes eram suposicao. Ver tambem `.claude/skills/ecommerce/references/orcamento-implementacao.md`, o plano concreto de implementacao da pendencia "Telas de orcamento" (rotas, arquivos, migracao) que motivou esta revisao.
 
-## Funil de conversao: Orcamento -> Pre-pedido -> Pedido
+## Contexto
 
-Hoje o backend de `/quotes` (orcamentos) ja existe, mas nao tem nenhuma tela - nem no admin, nem no storefront. A visao de funil combinada com a geracao automatica de atividades ficou assim:
+Hoje toda `Activity` (card do quadro de reengajamento) nasce de uma acao manual de alguem da equipe. Nao existe nenhum gatilho automatico. A ideia registrada aqui: gatilhos que, quando disparados, criam uma `Activity` automaticamente.
 
-**Estagio 1 - Orcamento**: cadastro leve - nome, e-mail, telefone. E o que `/quotes` ja modela. Baixa friccao, pensado pra capturar intencao de compra o quanto antes.
+## Confirmado: nao existe carrinho anonimo
 
-**Estagio 2 - Carrinho / Pre-pedido**: o cliente completa o cadastro - endereco + CPF (necessarios pra frete e emissao fiscal/PIX, respectivamente). So nesse ponto o orcamento vira um pre-pedido de verdade.
+Investigacao direta no codigo confirmou: login e exigido antes de qualquer item entrar no carrinho. `apps/storefront/components/AddToCartBar.tsx` e `apps/storefront/components/ProductCard.tsx` chamam `requireLogin()`/checam `customer` antes de `addItem`; `apps/storefront/lib/cart-context.tsx` zera o estado sem `customer.id`, e a chave do localStorage e `ecommerce.carts.${customerId}`, sem fallback anonimo. Ou seja, o cenario "carrinho de visitante sem nenhum contato" nao existe hoje - nao precisa ser tratado como gatilho.
 
-**Conversao em pedido**: a acao de "virar pedido" precisa existir nos dois lados da plataforma:
-- **Storefront**: o proprio cliente completa o cadastro e confirma, criando o `Order`.
-- **Admin**: o vendedor faz essa mesma conversao em nome do cliente - cobre venda por telefone, ou ajudar um cliente que comecou e nao terminou sozinho.
+## Correcao importante: nao existe "cadastro leve" separado de "cadastro completo"
 
-Isso significa que a antiga pendencia "telas de orcamento (backend pronto, falta UI)" cresce de escopo: nao e so uma tela de listagem, e a tela de conversao nos dois lados.
+A versao anterior deste documento descrevia um funil em 2 estagios (Orcamento = cadastro leve nome/e-mail/telefone; Pre-pedido = cadastro completo com endereco+CPF). **Isso nao bate com o backend real**: `POST /quotes` exige `requireCustomer` (cliente ja autenticado), e `/api/auth/register` ja exige `documentType`, `document` (CPF/CNPJ) e ao menos um endereco no cadastro. Ou seja, todo cliente que consegue criar um orcamento ja tem CPF e endereco cadastrados - nao existe hoje nenhum caminho de orcamento por lead/visitante sem conta.
 
-## Os quatro gatilhos automaticos
+Na pratica, "completar o pedido" depois do orcamento nao e preencher dado novo obrigatorio - e so escolher/confirmar qual endereco (dentre os ja cadastrados, ou um novo) usar para aquela compra especifica, e a forma de pagamento.
+
+## Gatilho unico: orcamento parado
+
+Os antigos gatilhos "orcamento parado" e "pre-pedido parado" viram um so, porque o contato do cliente ja existe desde a criacao do orcamento, independente de qual passo ele esta:
+
+**Regra**: orcamento criado e nao convertido em `Order` ate o dia seguinte.
+
+Titulo/descricao da Activity pode variar conforme o estagio (`status` do orcamento - ver `orcamento-implementacao.md`): se ainda nao foi respondido pelo vendedor, se ja foi respondido mas o cliente nao confirmou endereco, ou se o endereco ja foi confirmado e falta so a forma de pagamento - mas e sempre o mesmo gatilho, mesma tabela, mesmo mecanismo.
+
+## Os tres gatilhos automaticos (era quatro)
 
 | # | Gatilho | Regra | Depende de dado que falta? |
 |---|---|---|---|
-| 1 | Orcamento parado | Criado e nao virou pre-pedido/pedido ate o dia seguinte | Nao - `/quotes` ja persiste no backend |
-| 2 | Pre-pedido parado | Endereco/CPF completos, mas nao virou `Order` ate o dia seguinte | Depende de como o pre-pedido e modelado (ver Pre-requisitos, item a) |
-| 3 | Cliente inativo | Ja comprou ao menos 1 vez; ultima compra ha **X dias** | Nao - `Order` ja e persistido; falta so o campo de configuracao de X |
-| 4 | Cadastrado sem compra | Nunca comprou; **Y dias** desde o cadastro | Nao - `Customer` ja e persistido; falta so o campo de configuracao de Y |
+| 1 | Orcamento parado | Criado e nao virou `Order` ate o dia seguinte | Nao - decidido: reaproveitar `quotes`, ver `orcamento-implementacao.md` |
+| 2 | Cliente inativo | Ja comprou ao menos 1 vez; ultima compra ha X dias (configuravel por empresa) | Nao |
+| 3 | Cadastrado sem compra | Nunca comprou; Y dias desde o cadastro (configuravel por empresa) | Nao |
 
-**X e Y sao configuraveis por empresa, nao fixos no codigo** - cada tenant define sua propria regra de negocio (pode ser 30, 60, 90+ dias). Precisa de uma tela de configuracao nova (mesmo padrao de outras configs do projeto - um `<input type="number">` por empresa, provavelmente em `store_settings` ou tabela equivalente).
+X e Y sao configuraveis por empresa, nao fixos no codigo - precisa de uma tela de configuracao nova (candidato natural: `store_settings`).
 
-Quando qualquer gatilho dispara: gera uma `Activity` automaticamente, titulo/descricao indicando o motivo e o cliente/orcamento envolvido - mesmo padrao descrito na versao anterior deste documento (raia sugerida: `urgent`).
+## Atribuicao - uma unica regra para os tres gatilhos
 
-## Atribuicao - uma unica regra para os quatro gatilhos
+A empresa escolhe um modo, que vale igualmente para os 3 gatilhos:
 
-A empresa escolhe **um modo**, que vale igualmente para os 4 gatilhos acima:
-
-1. **Manual** - supervisor/gerente decide quem atende. **UI ainda em aberto**: arrastar o card em cima do vendedor (interacao nova, mais trabalho de construir) ou reaproveitar o dropdown de "Responsavel" que ja existe hoje ao criar uma Activity (mais simples, sem UI nova).
-2. **Vendedor vinculado ao cliente** - direto pro vendedor cadastrado no `Customer`. **Nao viavel hoje**: nao existe esse campo no schema (so existe `Customer.regionId`, que e roteirizacao/entrega, e `vendorId` de produto, que e fornecedor - nada a ver com vendedor/atendente). Precisa de um campo novo, ex: `Customer.assignedStaffId`.
-3. **Round-robin entre todos os atendentes** - viavel sem mudanca de schema, so precisa de lista de `people` elegiveis + criterio de rotacao.
-4. **Round-robin entre um subconjunto** - mesma mecanica do item 3, mas a empresa escolhe manualmente quais pessoas entram no rodizio (precisa de uma lista configuravel, ex: array de staff ids em alguma config).
+1. **Manual** - supervisor/gerente decide quem atende. UI ainda em aberto: arrastar o card em cima do vendedor, ou reaproveitar o dropdown de "Responsavel" que ja existe hoje.
+2. **Vendedor vinculado ao cliente** - nao existe esse campo no schema hoje (so `Customer.regionId`, que e roteirizacao, e `vendorId` de produto, que e fornecedor). Precisa de campo novo, ex: `Customer.assignedStaffId`.
+3. **Round-robin entre todos os atendentes** - viavel sem mudanca de schema.
+4. **Round-robin entre um subconjunto** - mesma mecanica do item 3, lista configuravel de quem entra no rodizio.
 
 ## Pre-requisitos tecnicos
 
-**(a) Modelagem do pre-pedido (gatilho 2) ainda em aberto.** Duas formas de resolver, nenhuma decidida:
-   - Reaproveitar a propria tabela de `quotes`, com um status/campo indicando "endereco e CPF completos, aguardando confirmacao" - evita criar uma entidade nova, mas mistura dois conceitos (orcamento leve vs. pre-pedido) na mesma tabela.
-   - Criar uma entidade propria de pre-pedido - mais claro conceitualmente, mais trabalho de schema.
-   - Em qualquer um dos dois casos, o problema original de "carrinho e so client-side/localStorage" (identificado na primeira versao deste documento) deixa de ser bloqueante - o funil agora entra no backend ja no Estagio 1 (Orcamento), entao nao depende mais de persistir um "carrinho" cru antes disso.
+**(a) Modelagem do orcamento parado: DECIDIDO.** Reaproveitar a tabela `quotes` com colunas aditivas (`address_id`, `converted_order_id`) e status estendido. Ver `orcamento-implementacao.md` para o plano completo de rotas/arquivos/migracao.
 
-**(b) `POST /api/admin/activities` precisa aceitar criacao sem responsavel definido**, ou ganhar um caminho de criacao diferente pro sistema (automacao, nao uma pessoa pelo formulario) - necessario pra qualquer um dos 4 modos de atribuicao, ja que nenhum deles tem uma pessoa preenchendo o formulario manualmente na hora da criacao.
+**(b) `POST /api/admin/activities` precisa aceitar criacao sem responsavel definido**, ou ganhar um caminho de criacao diferente para o sistema (automacao, nao uma pessoa pelo formulario).
 
-**(c) Mecanismo de execucao periodica (cron/scheduled job)** - confirmado que nao existe hoje: nenhum Cron Trigger configurado nos 4 `wrangler.jsonc`, nenhuma Supabase Edge Function agendada. Precisa escolher um (Cloudflare Cron Trigger chamando endpoint dedicado, ou `pg_cron` no Postgres).
+**(c) Mecanismo de execucao periodica (cron/scheduled job)** - confirmado que nao existe hoje: nenhum Cron Trigger configurado nos 4 `wrangler.jsonc`, nenhuma Supabase Edge Function agendada.
 
-**(d) Telas de conversao de orcamento** (storefront + admin, ver secao do funil acima) - sem isso, a Atividade gerada pelos gatilhos 1 e 2 avisa que algo esta parado, mas ninguem tem onde agir de fato.
+**(d) Telas de conversao de orcamento** (storefront + admin) - sem isso, a Activity gerada avisa que algo esta parado, mas ninguem tem onde agir de fato. Ver `orcamento-implementacao.md`.
 
-**(e) Tela de configuracao nova** - X dias (cliente inativo), Y dias (cadastrado sem compra), modo de atribuicao escolhido, e a lista de pessoas elegiveis quando o modo for "subconjunto". Provavelmente uma secao nova em Configuracoes da empresa, mesmo padrao de outras configs ja existentes no projeto.
+**(e) Tela de configuracao nova** - X dias, Y dias, modo de atribuicao, lista de pessoas elegiveis quando o modo for "subconjunto".
 
 ## Nota relacionada, fora do escopo desta spec: PIX com valor travado
 
-Levantado na mesma conversa, mas e uma preocupacao do fluxo de **pagamento** do pedido confirmado, nao da geracao de Atividades em si - registrando aqui so pra nao perder o contexto. Hoje o projeto nao tem gateway de pagamento real integrado (pendencia conhecida a parte). Quando for implementado, a recomendacao e usar PIX dinamico (QR/Copia e Cola gerado por pedido via um PSP - Mercado Pago, Efi, Asaas, PagSeguro etc.), com o valor exato do pedido embutido no payload, em vez de uma chave PIX fixa + valor digitado pelo cliente - evita erro de valor e permite confirmacao automatica do pagamento via webhook, vinculado ao pedido certo.
+Quando o gateway de pagamento real for implementado (pendencia separada), a recomendacao e usar PIX dinamico (QR/Copia e Cola gerado por pedido via um PSP), com o valor exato do pedido embutido no payload, em vez de chave PIX fixa + valor digitado - evita erro de valor e permite confirmacao automatica via webhook.
 
 ## Fora de escopo por enquanto
 
-- Qualquer implementacao de codigo - este documento e so a especificacao da pendencia.
-- Escolha entre as duas formas de modelar o pre-pedido (item a dos pre-requisitos).
+- Qualquer implementacao de codigo - ver `orcamento-implementacao.md` para o plano de implementacao.
+- Numero exato de dias para "cliente inativo"/"sem compra".
 - UI final do modo de atribuicao manual (arrastar vs. dropdown).
-- PSP a escolher pro PIX dinamico (nem e parte central desta spec).
+- PSP a escolher pro PIX dinamico.
 - Notificacao (push/e-mail/WhatsApp) para quem recebe o card automatico.
 - Qualquer coisa relacionada ao tipo `televendas`.

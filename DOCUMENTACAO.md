@@ -126,3 +126,4 @@ Cada `Company` cadastrada em **Empresas** roda isolada (produtos, clientes, conf
 - [ ] Extrato de pagamento e integração real com gateway (cartão/PIX) — o fluxo de checkout já está pronto para plugar
 - [ ] Implementar o tipo de e-commerce `televendas` (campo `Company.ecommerceType`, entidade `Installment`, telas Central de Vendas/Carrinhos Abandonados/Potencial de Recompra) — especificação pronta em `televendas.md`, código ainda não iniciado
 - [ ] Domínio próprio (o pendente combinado antes era usar DuckDNS) apontando para os Workers, em vez do `*.workers.dev`
+- [ ] Geracao automatica de Atividades para orcamentos parados e clientes inativos, com atribuicao configuravel - spec revisada em `.claude/skills/ecommerce/references/atividades-automaticas.md`, plano de implementacao das telas de orcamento em `.claude/skills/ecommerce/references/orcamento-implementacao.md`
