@@ -83,14 +83,23 @@ Convenção de resposta de erro (usada em qualquer endpoint abaixo):
 
 ## Orçamentos (sem compromisso de compra)
 
-Fluxo paralelo ao pedido: o cliente pede um orçamento (sem pagar na hora), o admin responde com um valor, o cliente decide depois. Ainda sem tela no storefront/admin — endpoints já existem no backend, prontos para quando a UI for construída.
+Fluxo paralelo ao pedido: o cliente pede um orçamento (sem pagar na hora), o admin responde com um valor, o cliente decide depois. Reaproveita `quotes`/`quote_items` em vez de ser uma entidade separada — ver `.claude/skills/ecommerce/references/orcamento-implementacao.md`.
+
+**Máquina de estados** (`Quote.status`): `requested` (criado pelo cliente) → `quoted` (vendedor respondeu com `quotedTotal`, via `PATCH /api/admin/quotes/:id`) → `accepted` (cliente aceitou o preço — hoje só uma transição de `status`, sem rota dedicada) → [`POST /api/quotes/:id/address` confirma `addressId`] → `converted` (via `POST /api/quotes/:id/convert` ou `POST /api/admin/quotes/:id/convert`, preenche `convertedOrderId`). `rejected`/`expired` são terminais alternativos a partir de `requested`/`quoted`.
+
+Ainda sem tela no storefront/admin — endpoints já existem no backend, prontos para quando a UI for construída (ver `orcamento-implementacao.md`, Parte 2).
 
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/api/quotes` | *(cliente)* Cria pedido de orçamento (`items: {productId, quantity}[], note?`) |
+| POST | `/api/quotes` | *(cliente)* Cria pedido de orçamento (`items: {productId, quantity}[], note?`) — `status` nasce `requested` |
 | GET | `/api/quotes` | *(cliente)* Lista os próprios orçamentos |
-| GET | `/api/admin/quotes` | *(platformAdmin)* Lista todos os orçamentos pendentes/respondidos |
+| POST | `/api/quotes/:id/address` | *(cliente, dono do orçamento)* Confirma/anexa o endereço de entrega — só permitido com `status === "accepted"`. Body: `{ addressId }` (endereço já cadastrado do próprio cliente) **ou** `{ address: {...} }` (dados de um endereço novo, mesmo formato de `POST /api/auth/register`, criado na hora e vinculado). Atualiza `quotes.addressId` |
+| POST | `/api/quotes/:id/convert` | *(cliente, dono do orçamento)* Converte em `Order` de verdade, reaproveitando os `quote_items` (preço/sku/fornecedor já congelados) — `quotedTotal` (quando presente) vira o `subtotal` do pedido, não a soma "de tabela" dos itens. Body: `{ addressId?, paymentMethod, installments? }` — `addressId` é opcional se já foi confirmado via `POST /api/quotes/:id/address`. Recusa com `422 QUOTE_NOT_ACCEPTED` se `status !== "accepted"`, `422 QUOTE_ALREADY_CONVERTED` se `convertedOrderId` já estiver preenchido (trava contra conversão duplicada), `422 ADDRESS_REQUIRED`/`422 ADDRESS_NOT_FOUND` se faltar endereço válido. Sucesso marca `status: "converted"` e preenche `convertedOrderId` |
+| GET | `/api/admin/quotes` | *(platformAdmin)* Lista todos os orçamentos da empresa (qualquer status) |
 | PATCH | `/api/admin/quotes/:id` | *(platformAdmin)* Responde (`status: "quoted", quotedTotal, responseNote?`) ou recusa (`status: "rejected"`) |
+| POST | `/api/admin/quotes/:id/convert` | *(platformAdmin)* Mesma conversão de `POST /api/quotes/:id/convert`, disparada pelo vendedor em nome do cliente (ex: fechou a venda por telefone) — mesmo body e mesmas validações, só não exige que o admin seja o dono do orçamento (exige só que pertença à empresa dele) |
+
+Campos de `Quote` expostos pelo backend (via `mapQuote()`): `id, quoteNumber, customerId, status, note?, quotedTotal?, quotedAt?, responseNote?, addressId?, convertedOrderId?, createdAt, items[]` — `addressId`/`convertedOrderId` são os dois campos novos (colunas `quotes.address_id`/`quotes.converted_order_id`).
 
 ## Pagamento
 

@@ -13,6 +13,7 @@ import type {
   OrderStatus,
   Product,
   Promotion,
+  Quote,
   StaffSector,
   StoreSettings,
   Vendor,
@@ -22,6 +23,7 @@ import type {
   CreateOrderInput,
   CreatePromotionInput,
   CreateProductInput,
+  CreateQuoteInput,
   CreateTeamMemberInput,
   Paginated,
   ProductQuery,
@@ -149,6 +151,14 @@ function createRestApiClient(baseUrl: string): ApiClient {
     updateOrderItems: (id: string, adjustments: { productId: string; finalQuantity: number }[]) =>
       request<Order>(`/api/admin/orders/${id}/items`, { method: "PATCH", body: JSON.stringify({ items: adjustments }), tokenKey: ADMIN_TOKEN_KEY }),
 
+    createQuote: (input: CreateQuoteInput) =>
+      request<Quote>("/api/quotes", { method: "POST", body: JSON.stringify(input), tokenKey: CUSTOMER_TOKEN_KEY }),
+    getQuotes: () => request<Quote[]>("/api/quotes", { tokenKey: CUSTOMER_TOKEN_KEY }),
+    confirmQuoteAddress: (id: string, input) =>
+      request<Quote>(`/api/quotes/${id}/address`, { method: "POST", body: JSON.stringify(input), tokenKey: CUSTOMER_TOKEN_KEY }),
+    convertQuoteToOrder: (id: string, input) =>
+      request<Order>(`/api/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: CUSTOMER_TOKEN_KEY }),
+
     registerAdmin: async (input: { name: string; email: string; password: string }) => {
       const { token, adminUser } = await request<{ token: string; adminUser: AdminUser }>("/api/admin/auth/register", {
         method: "POST",
@@ -194,6 +204,11 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getAdminOrder: (id) => {
       return request<Order>(`/api/admin/orders/${id}`, { tokenKey: ADMIN_TOKEN_KEY });
     },
+    getAdminQuotes: () => request<Quote[]>("/api/admin/quotes", { tokenKey: ADMIN_TOKEN_KEY }),
+    respondAdminQuote: (id, patch) =>
+      request<Quote>(`/api/admin/quotes/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    convertAdminQuoteToOrder: (id, input) =>
+      request<Order>(`/api/admin/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
     updateCustomer: (id, patch) =>
       request<Customer>(`/api/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),

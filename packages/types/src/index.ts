@@ -234,6 +234,46 @@ export interface OrderItemAdjustment {
   changedAt: string;
 }
 
+// ---------- Orçamentos ----------
+// Reaproveita a mesma noção de "pedido ainda não fechado" em vez de ser uma
+// entidade totalmente separada — ver .claude/skills/ecommerce/references/orcamento-implementacao.md.
+// Máquina de estados: requested -> quoted (vendedor respondeu com quotedTotal)
+// -> accepted (cliente aceitou o preço) -> [confirma endereço, addressId
+// preenchido] -> converted (convertedOrderId preenchido). rejected/expired são
+// terminais alternativos, alcançáveis a partir de requested/quoted.
+export type QuoteStatus = "requested" | "quoted" | "accepted" | "rejected" | "expired" | "converted";
+
+export interface QuoteItem {
+  productId: string;
+  vendorId: string;
+  name: string;
+  sku: string;
+  unitType: UnitType;
+  quantity: number;
+  /** Preço de tabela do produto no momento em que o orçamento foi criado — congelado, não muda se o preço do produto mudar depois. Ausente só deveria acontecer por dado legado. */
+  referenceUnitPrice?: number;
+}
+
+export interface Quote {
+  id: string;
+  quoteNumber: string;
+  customerId: string;
+  status: QuoteStatus;
+  /** Texto livre do cliente ao pedir o orçamento (ex: "preciso pra sexta-feira"). */
+  note?: string;
+  /** Preenchido pelo vendedor em PATCH /admin/quotes/:id — é o valor acordado com o cliente, vira o subtotal do pedido na conversão (ver convertQuoteToOrderInternal no backend), mesmo que diferente da soma dos referenceUnitPrice. */
+  quotedTotal?: number;
+  quotedAt?: string;
+  /** Texto livre do vendedor ao responder (ex: motivo da recusa, condição do orçamento). */
+  responseNote?: string;
+  /** Endereço de entrega confirmado pelo cliente (POST /quotes/:id/address) — só preenchido a partir do status "accepted". */
+  addressId?: string;
+  /** Pedido gerado pela conversão (POST /quotes/:id/convert ou POST /admin/quotes/:id/convert) — presente só quando status === "converted"; também serve de trava contra conversão duplicada. */
+  convertedOrderId?: string;
+  createdAt: string;
+  items: QuoteItem[];
+}
+
 export type PaymentStatus = "pending" | "approved" | "refused" | "refunded";
 
 export interface Payment {

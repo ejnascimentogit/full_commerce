@@ -427,6 +427,8 @@ function mapQuote(q: Record<string, unknown>, items: Record<string, unknown>[]) 
     quotedTotal: q.quoted_total != null ? Number(q.quoted_total) : undefined,
     quotedAt: q.quoted_at ?? undefined,
     responseNote: q.response_note ?? undefined,
+    addressId: q.address_id ?? undefined,
+    convertedOrderId: q.converted_order_id ?? undefined,
     createdAt: q.created_at,
     items: items.map((i) => ({
       productId: i.product_id,
@@ -513,6 +515,183 @@ function calculatePromotionDiscount(
   if (promotion.type === "percentage") return Math.round(eligibleSubtotal * (Number(promotion.value) / 100) * 100) / 100;
   if (promotion.type === "fixed" || promotion.type === "coupon") return Math.min(Number(promotion.value), eligibleSubtotal);
   return 0;
+}
+
+// Extraído de POST /orders — cálculo de frete/desconto/total a partir de um
+// subtotal já pronto (subtotal em si é responsabilidade de quem chama, porque
+// o carrinho normal soma preço vivo de produto e a conversão de orçamento usa
+// o valor já congelado em quotes/quote_items — ver convertQuoteToOrderInternal
+// abaixo). `promotionLines` só é necessário quando `couponCode` é informado
+// (a checagem de elegibilidade da promoção por categoria/fornecedor/produto).
+async function calculateOrderTotals(
+  companyId: string,
+  documentType: string,
+  subtotal: number,
+  couponCode: string | null | undefined,
+  promotionLines: { product: Record<string, unknown>; subtotal: number }[],
+): Promise<{ discount: number; shipping: number; total: number; appliedPromotion: Record<string, unknown> | null }> {
+  const { data: settings } = await eco().from("store_settings").select("*").eq("company_id", companyId).single();
+  if (settings.min_order_value && subtotal < Number(settings.min_order_value)) throw new ApiError(422, "BELOW_MIN_ORDER_VALUE");
+
+  let discount = 0;
+  let shipping = calculateShipping(documentType, settings);
+  let appliedPromotion: Record<string, unknown> | null = null;
+  if (couponCode && settings.promotions_enabled) {
+    const { data: promotion } = await eco()
+      .from("promotions")
+      .select("*")
+      .eq("company_id", companyId)
+      .ilike("coupon_code", couponCode.trim())
+      .maybeSingle();
+    if (promotion && isPromotionActive(promotion)) {
+      appliedPromotion = promotion;
+      if (promotion.type === "freeShipping") shipping = 0;
+      else discount = calculatePromotionDiscount(promotion, promotionLines, subtotal);
+    }
+  }
+  const total = Math.max(0, subtotal - discount) + shipping;
+  return { discount, shipping, total, appliedPromotion };
+}
+
+// Extraído de POST /orders — grava orders/order_items/order_status_history.
+// `items` já vem no formato de linha pronta pra `order_items` (mesmo shape que
+// `buildOrderItem()` devolve), faltando só `company_id`/`order_id` (preenchidos
+// aqui na hora do insert).
+async function insertOrder(params: {
+  companyId: string;
+  customerId: string;
+  items: Record<string, unknown>[];
+  shippingAddress: Record<string, unknown>;
+  regionId?: string | null;
+  paymentMethod: string;
+  installments?: number | null;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  total: number;
+  couponCode?: string | null;
+}): Promise<Record<string, unknown>> {
+  const { data: orderNumberRow } = await eco().rpc("next_order_number");
+  const orderNumber = orderNumberRow as unknown as string;
+  const now = new Date().toISOString();
+
+  const { data: order, error: orderError } = await eco()
+    .from("orders")
+    .insert({
+      company_id: params.companyId,
+      order_number: orderNumber,
+      customer_id: params.customerId,
+      shipping_address: params.shippingAddress,
+      region_id: params.regionId ?? null,
+      payment_method: params.paymentMethod,
+      installments: params.paymentMethod === "credit" ? params.installments ?? null : null,
+      subtotal: params.subtotal,
+      discount: params.discount,
+      shipping: params.shipping,
+      total: params.total,
+      status: "PAID",
+      coupon_code: params.couponCode ?? null,
+    })
+    .select("*")
+    .single();
+  if (orderError) throw new ApiError(500, "DB_ERROR", orderError.message);
+
+  await eco()
+    .from("order_items")
+    .insert(params.items.map((i) => ({ ...i, company_id: params.companyId, order_id: order.id })));
+  await eco()
+    .from("order_status_history")
+    .insert([
+      { company_id: params.companyId, order_id: order.id, status: "PENDING", changed_at: now },
+      { company_id: params.companyId, order_id: order.id, status: "PAID", changed_at: now },
+    ]);
+  return order;
+}
+
+// Converte um orçamento (`quotes`) já aceito (`status = 'accepted'`) num
+// `Order` de verdade, reaproveitando os `quote_items` (preço/sku/fornecedor já
+// congelados no momento do orçamento) em vez de buscar preço vivo de produto —
+// diferente do carrinho normal. Compartilhada por `POST /quotes/:id/convert`
+// (cliente) e `POST /admin/quotes/:id/convert` (vendedor em nome do cliente) —
+// só muda quem chama e como o dono do orçamento é resolvido, a lógica de
+// conversão em si é uma só, pra nunca divergir entre os dois caminhos.
+async function convertQuoteToOrderInternal(
+  quoteId: string,
+  companyId: string,
+  customerId: string,
+  paymentMethod: string,
+  installments: number | null | undefined,
+  addressIdInput: string | null | undefined,
+): Promise<Record<string, unknown>> {
+  const { data: quote } = await eco().from("quotes").select("*").eq("id", quoteId).eq("company_id", companyId).maybeSingle();
+  if (!quote || quote.customer_id !== customerId) throw new ApiError(404, "NOT_FOUND");
+  if (quote.converted_order_id) throw new ApiError(422, "QUOTE_ALREADY_CONVERTED");
+  if (quote.status !== "accepted") throw new ApiError(422, "QUOTE_NOT_ACCEPTED");
+
+  // address_id pode já estar confirmado (via POST /quotes/:id/address) ou vir
+  // junto no mesmo payload da conversão — qualquer um dos dois caminhos serve,
+  // mas se vier explícito aqui precisa mesmo assim pertencer a esse cliente.
+  const finalAddressId = addressIdInput ?? (quote.address_id as string | null);
+  if (!finalAddressId) throw new ApiError(422, "ADDRESS_REQUIRED");
+  const { data: address } = await eco().from("addresses").select("*").eq("id", finalAddressId).eq("customer_id", customerId).maybeSingle();
+  if (!address) throw new ApiError(422, "ADDRESS_NOT_FOUND");
+
+  const { data: customer } = await eco().from("customers").select("*").eq("id", customerId).maybeSingle();
+  if (!customer) throw new ApiError(404, "NOT_FOUND");
+
+  const { data: quoteItems } = await eco().from("quote_items").select("*").eq("quote_id", quote.id);
+  if (!quoteItems || quoteItems.length === 0) throw new ApiError(422, "QUOTE_EMPTY");
+
+  const items = quoteItems.map((qi) => {
+    const unitPrice = Number(qi.reference_unit_price ?? 0);
+    const quantity = Number(qi.quantity);
+    return {
+      product_id: qi.product_id,
+      vendor_id: qi.vendor_id,
+      name: qi.name,
+      sku: qi.sku,
+      unit_type: qi.unit_type,
+      unit_price: unitPrice,
+      quantity,
+      estimated_subtotal: unitPrice * quantity,
+    };
+  });
+  const referenceSubtotal = items.reduce((sum, i) => sum + i.estimated_subtotal, 0);
+  // O valor acordado com o cliente é `quoted_total` (definido pelo vendedor em
+  // PATCH /admin/quotes/:id) — quando presente, é ele que vira o subtotal do
+  // pedido (o vendedor pode ter negociado um valor diferente da soma "de
+  // tabela" dos itens); os itens do pedido continuam guardando o preço de
+  // referência individual de cada um, só o total do pedido reflete o valor
+  // negociado. Sem `quoted_total` (não deveria acontecer pra um orçamento já
+  // `accepted`, mas por segurança), cai pra soma dos preços de referência.
+  const subtotal = quote.quoted_total != null ? Number(quote.quoted_total) : referenceSubtotal;
+
+  const { discount, shipping, total } = await calculateOrderTotals(companyId, customer.document_type as string, subtotal, null, []);
+
+  const order = await insertOrder({
+    companyId,
+    customerId: customer.id as string,
+    items,
+    shippingAddress: mapAddress(address),
+    regionId: customer.region_id as string | null,
+    paymentMethod,
+    installments,
+    subtotal,
+    discount,
+    shipping,
+    total,
+    couponCode: null,
+  });
+
+  const { error: quoteUpdateError } = await eco()
+    .from("quotes")
+    .update({ converted_order_id: order.id, status: "converted", address_id: finalAddressId })
+    .eq("id", quote.id);
+  if (quoteUpdateError) throw new ApiError(500, "DB_ERROR", quoteUpdateError.message);
+
+  const { data: fullItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
+  return mapOrder({ ...order, order_status_history: history }, fullItems ?? [], await fetchOrderAdjustments(order.id as string));
 }
 
 // Promoções sem código de cupom são "automáticas": aplicam sozinhas, sem o
@@ -812,68 +991,33 @@ app.post("/orders", async (c) => {
     return buildOrderItem(product, i.quantity, autoPromotions);
   });
   const subtotal = items.reduce((sum: number, i: { estimated_subtotal: number }) => sum + i.estimated_subtotal, 0);
+  const promotionLines = items.map((it: { product_id: string; estimated_subtotal: number }) => ({
+    product: productById.get(it.product_id)!,
+    subtotal: it.estimated_subtotal,
+  }));
 
-  const { data: settings } = await eco().from("store_settings").select("*").eq("company_id", customer.company_id).single();
-  if (settings.min_order_value && subtotal < Number(settings.min_order_value)) throw new ApiError(422, "BELOW_MIN_ORDER_VALUE");
+  const { discount, shipping, total, appliedPromotion } = await calculateOrderTotals(
+    customer.company_id,
+    customer.document_type,
+    subtotal,
+    input.couponCode,
+    promotionLines,
+  );
 
-  let discount = 0;
-  let shipping = calculateShipping(customer.document_type, settings);
-  let appliedPromotion: Record<string, unknown> | null = null;
-  if (input.couponCode && settings.promotions_enabled) {
-    const { data: promotion } = await eco()
-      .from("promotions")
-      .select("*")
-      .eq("company_id", customer.company_id)
-      .ilike("coupon_code", input.couponCode.trim())
-      .maybeSingle();
-    if (promotion && isPromotionActive(promotion)) {
-      appliedPromotion = promotion;
-      if (promotion.type === "freeShipping") shipping = 0;
-      else {
-        const lines = items.map((it: { product_id: string; estimated_subtotal: number }) => ({
-          product: productById.get(it.product_id)!,
-          subtotal: it.estimated_subtotal,
-        }));
-        discount = calculatePromotionDiscount(promotion, lines, subtotal);
-      }
-    }
-  }
-  const total = Math.max(0, subtotal - discount) + shipping;
-
-  const { data: orderNumberRow } = await eco().rpc("next_order_number");
-  const orderNumber = orderNumberRow as unknown as string;
-  const now = new Date().toISOString();
-
-  const { data: order, error: orderError } = await eco()
-    .from("orders")
-    .insert({
-      company_id: customer.company_id,
-      order_number: orderNumber,
-      customer_id: customer.id,
-      shipping_address: mapAddress(address),
-      region_id: customer.region_id,
-      payment_method: input.paymentMethod,
-      installments: input.paymentMethod === "credit" ? input.installments ?? null : null,
-      subtotal,
-      discount,
-      shipping,
-      total,
-      status: "PAID",
-      coupon_code: appliedPromotion ? input.couponCode : null,
-    })
-    .select("*")
-    .single();
-  if (orderError) throw new ApiError(500, "DB_ERROR", orderError.message);
-
-  await eco()
-    .from("order_items")
-    .insert(items.map((i: Record<string, unknown>) => ({ ...i, company_id: customer.company_id, order_id: order.id })));
-  await eco()
-    .from("order_status_history")
-    .insert([
-      { company_id: customer.company_id, order_id: order.id, status: "PENDING", changed_at: now },
-      { company_id: customer.company_id, order_id: order.id, status: "PAID", changed_at: now },
-    ]);
+  const order = await insertOrder({
+    companyId: customer.company_id,
+    customerId: customer.id,
+    items,
+    shippingAddress: mapAddress(address),
+    regionId: customer.region_id,
+    paymentMethod: input.paymentMethod,
+    installments: input.installments,
+    subtotal,
+    discount,
+    shipping,
+    total,
+    couponCode: appliedPromotion ? input.couponCode : null,
+  });
   if (appliedPromotion) {
     await eco()
       .from("promotions")
@@ -955,6 +1099,68 @@ app.get("/quotes", async (c) => {
     }),
   );
   return c.json(results);
+});
+
+// Cliente confirma/anexa o endereço de entrega pra um orçamento já aceito
+// (status = 'accepted') — só depois disso POST /quotes/:id/convert consegue
+// converter em pedido de verdade. Aceita `addressId` (endereço já cadastrado
+// desse cliente) OU `address` (dados de um endereço novo, mesmo formato usado
+// em /auth/register e /admin/customers/:id/addresses), criando-o na hora.
+app.post("/quotes/:id/address", async (c) => {
+  const customer = await requireCustomer(c);
+  const input = await c.req.json();
+  const { data: quote } = await eco().from("quotes").select("*").eq("id", c.req.param("id")).eq("customer_id", customer.id).maybeSingle();
+  if (!quote) throw new ApiError(404, "NOT_FOUND");
+  if (quote.status !== "accepted") throw new ApiError(422, "QUOTE_NOT_ACCEPTED");
+
+  let addressId: string;
+  if (input.addressId) {
+    const { data: address } = await eco().from("addresses").select("id").eq("id", input.addressId).eq("customer_id", customer.id).maybeSingle();
+    if (!address) throw new ApiError(422, "ADDRESS_NOT_FOUND");
+    addressId = address.id as string;
+  } else if (input.address) {
+    if (input.address.isDefault) {
+      await eco().from("addresses").update({ is_default: false }).eq("customer_id", customer.id);
+    }
+    const { data: created, error } = await eco()
+      .from("addresses")
+      .insert({
+        company_id: customer.company_id,
+        customer_id: customer.id,
+        ...toAddressRow(input.address),
+        is_default: input.address.isDefault ?? false,
+        label: input.address.label ?? null,
+      })
+      .select("*")
+      .single();
+    if (error) throw new ApiError(500, "DB_ERROR", error.message);
+    addressId = created.id as string;
+  } else {
+    throw new ApiError(422, "ADDRESS_REQUIRED");
+  }
+
+  const { data: updated, error } = await eco().from("quotes").update({ address_id: addressId }).eq("id", quote.id).select("*").single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  const { data: items } = await eco().from("quote_items").select("*").eq("quote_id", quote.id);
+  return c.json(mapQuote(updated, items ?? []));
+});
+
+// Converte o orçamento em `Order` de verdade — ver convertQuoteToOrderInternal.
+// `addressId` no corpo é opcional: o endereço já pode ter sido confirmado via
+// POST /quotes/:id/address; se vier aqui também, precisa bater com esse
+// mesmo cliente (checado dentro da função compartilhada).
+app.post("/quotes/:id/convert", async (c) => {
+  const customer = await requireCustomer(c);
+  const input = await c.req.json();
+  const order = await convertQuoteToOrderInternal(
+    c.req.param("id"),
+    customer.company_id,
+    customer.id,
+    input.paymentMethod,
+    input.installments,
+    input.addressId,
+  );
+  return c.json(order);
 });
 
 // ---------- Auth do admin ----------
@@ -1379,6 +1585,27 @@ app.patch("/admin/quotes/:id", async (c) => {
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const { data: items } = await eco().from("quote_items").select("*").eq("quote_id", quote.id);
   return c.json(mapQuote(quote, items ?? []));
+});
+
+// Mesma conversão de POST /quotes/:id/convert, só que disparada pelo vendedor
+// em nome do cliente (ex: fechou a venda por telefone) — não exige que o
+// admin seja o dono do orçamento, só que o orçamento pertença à empresa dele.
+// Reaproveita a mesma função interna, então as duas rotas nunca divergem na
+// lógica de conversão em si, só na autenticação/autorização.
+app.post("/admin/quotes/:id/convert", async (c) => {
+  const admin = await requireAdmin(c);
+  const input = await c.req.json();
+  const { data: quote } = await eco().from("quotes").select("customer_id").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
+  if (!quote) throw new ApiError(404, "NOT_FOUND");
+  const order = await convertQuoteToOrderInternal(
+    c.req.param("id"),
+    admin.company_id,
+    quote.customer_id as string,
+    input.paymentMethod,
+    input.installments,
+    input.addressId,
+  );
+  return c.json(order);
 });
 
 // ---------- Admin: configurações ----------
