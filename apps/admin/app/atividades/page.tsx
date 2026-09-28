@@ -113,7 +113,7 @@ export default function AtividadesPage() {
     return activities.filter((a) => {
       if (filterAssignee && a.assignedToAdminId !== filterAssignee) return false;
       if (filterSector) {
-        const assigneeSectorId = personById.get(a.assignedToAdminId)?.sectorId;
+        const assigneeSectorId = personById.get(a.assignedToAdminId ?? "")?.sectorId;
         if (assigneeSectorId !== filterSector) return false;
       }
       if (search.trim()) {
@@ -233,7 +233,7 @@ export default function AtividadesPage() {
                 <div className="space-y-2">
                   {items.map((activity) => {
                     const client = clientById.get(activity.clientId);
-                    const assignee = personById.get(activity.assignedToAdminId);
+                    const assignee = personById.get(activity.assignedToAdminId ?? "");
                     const overdue = isOverdue(activity);
                     return (
                       <div

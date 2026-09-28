@@ -53,11 +53,12 @@ export default function AtividadesDesempenhoPage() {
   const byPerson = useMemo(() => {
     const map = new Map<string, { person?: AdminUser; total: number; byOutcome: Map<string, number> }>();
     for (const a of completedInRange) {
-      const entry = map.get(a.assignedToAdminId) ?? { person: personById.get(a.assignedToAdminId), total: 0, byOutcome: new Map() };
+    const assigneeId = a.assignedToAdminId ?? "";
+      const entry = map.get(assigneeId) ?? { person: personById.get(assigneeId), total: 0, byOutcome: new Map() };
       entry.total += 1;
       const outcomeName = a.outcomeId ? outcomeById.get(a.outcomeId)?.name ?? "Sem resultado" : "Sem resultado";
       entry.byOutcome.set(outcomeName, (entry.byOutcome.get(outcomeName) ?? 0) + 1);
-      map.set(a.assignedToAdminId, entry);
+      map.set(assigneeId, entry);
     }
     return [...map.entries()].sort((a, b) => b[1].total - a[1].total);
   }, [completedInRange, personById, outcomeById]);

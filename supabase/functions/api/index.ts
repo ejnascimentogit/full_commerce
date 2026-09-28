@@ -232,6 +232,7 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
     code: c.code ?? undefined,
     referenceCode: c.reference_code ?? undefined,
     preferredPaymentMethod: c.preferred_payment_method ?? undefined,
+      assignedStaffId: c.assigned_staff_id ?? undefined,
     createdAt: c.created_at,
     status: c.status,
   };
@@ -370,6 +371,15 @@ function mapSettings(s: Record<string, unknown>) {
     monthlyInterestRate: Number(s.monthly_interest_rate),
     enabledPaymentMethods: s.enabled_payment_methods ?? ["pix", "debit", "credit", "cash"],
     allowAdjustmentsAfterDispatch: s.allow_adjustments_after_dispatch,
+    // Atividades Automaticas (ver ecommerce.gerar_atividades_automaticas / atividades-automaticas-implementacao.md).
+    // atividade_auto_round_robin_cursor NAO e exposto aqui de proposito -- e estado
+    // interno so da funcao SQL do cron avancar o rodizio, nao um dado de configuracao
+    // que a tela deva mostrar/editar.
+    atividadeAutoAtivo: s.atividade_auto_ativo ?? false,
+    atividadeAutoClienteInativoDias: s.atividade_auto_cliente_inativo_dias ?? 30,
+    atividadeAutoCadastroSemCompraDias: s.atividade_auto_cadastro_sem_compra_dias ?? 15,
+    atividadeAutoModoAtribuicao: s.atividade_auto_modo_atribuicao ?? "round_robin_todos",
+    atividadeAutoSubconjuntoIds: s.atividade_auto_subconjunto_ids ?? undefined,
   };
 }
 
@@ -1430,6 +1440,7 @@ app.patch("/admin/customers/:id", async (c) => {
   if ("referenceCode" in patch) row.reference_code = patch.referenceCode;
   if ("preferredPaymentMethod" in patch) row.preferred_payment_method = patch.preferredPaymentMethod || null;
   if ("status" in patch) row.status = patch.status;
+    if ("assignedStaffId" in patch) row.assigned_staff_id = patch.assignedStaffId || null;
   const { data: customer, error } = await eco()
     .from("customers")
     .update(row)
@@ -1632,6 +1643,13 @@ app.patch("/settings", async (c) => {
   if ("monthlyInterestRate" in patch) row.monthly_interest_rate = patch.monthlyInterestRate;
   if ("enabledPaymentMethods" in patch) row.enabled_payment_methods = patch.enabledPaymentMethods;
   if ("allowAdjustmentsAfterDispatch" in patch) row.allow_adjustments_after_dispatch = patch.allowAdjustmentsAfterDispatch;
+  // Atividades Automaticas -- atividadeAutoRoundRobinCursor de proposito NAO
+  // entra aqui (ver mapSettings): e estado interno do cron, nao configuracao.
+  if ("atividadeAutoAtivo" in patch) row.atividade_auto_ativo = patch.atividadeAutoAtivo;
+  if ("atividadeAutoClienteInativoDias" in patch) row.atividade_auto_cliente_inativo_dias = patch.atividadeAutoClienteInativoDias;
+  if ("atividadeAutoCadastroSemCompraDias" in patch) row.atividade_auto_cadastro_sem_compra_dias = patch.atividadeAutoCadastroSemCompraDias;
+  if ("atividadeAutoModoAtribuicao" in patch) row.atividade_auto_modo_atribuicao = patch.atividadeAutoModoAtribuicao;
+  if ("atividadeAutoSubconjuntoIds" in patch) row.atividade_auto_subconjunto_ids = patch.atividadeAutoSubconjuntoIds;
   row.updated_at = new Date().toISOString();
   const { data, error } = await eco().from("store_settings").update(row).eq("company_id", admin.company_id).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
@@ -2040,13 +2058,15 @@ function mapActivity(r: Record<string, unknown>) {
     description: r.description ?? undefined,
     column: r.column,
     priority: r.priority,
-    createdByAdminId: r.created_by_admin_id,
-    assignedToAdminId: r.assigned_to_admin_id,
+    createdByAdminId: r.created_by_admin_id ?? undefined,
+    assignedToAdminId: r.assigned_to_admin_id ?? undefined,
     outcomeId: r.outcome_id ?? undefined,
     expectedResolutionAt: r.expected_resolution_at ?? undefined,
     imageUrls: r.image_urls ?? [],
     createdAt: r.created_at,
     completedAt: r.completed_at ?? undefined,
+    sourceType: r.source_type ?? undefined,
+    sourceRefId: r.source_ref_id ?? undefined,
   };
 }
 
@@ -2161,8 +2181,8 @@ app.get("/admin/activities", async (c) => {
 app.post("/admin/activities", async (c) => {
   const admin = await requirePermission(c, "atividades");
   const input = await c.req.json();
-  if (!input.title?.trim() || !input.clientId || !input.assignedToAdminId) {
-    throw new ApiError(422, "INVALID_INPUT", "Cliente, título e responsável são obrigatórios.");
+    if (!input.title?.trim() || !input.clientId) {
+      throw new ApiError(422, "INVALID_INPUT", "Cliente e título são obrigatórios.");
   }
   const { data: cardNumberRow, error: seqError } = await eco().rpc("next_activity_number", { p_company_id: admin.company_id });
   if (seqError) throw new ApiError(500, "DB_ERROR", seqError.message);
@@ -2176,7 +2196,7 @@ app.post("/admin/activities", async (c) => {
       description: input.description || null,
       priority: input.priority ?? "none",
       created_by_admin_id: admin.id,
-      assigned_to_admin_id: input.assignedToAdminId,
+      assigned_to_admin_id: input.assignedToAdminId || null,
       expected_resolution_at: input.expectedResolutionAt || null,
     })
     .select("*")
