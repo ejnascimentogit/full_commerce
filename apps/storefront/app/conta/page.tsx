@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
-import type { Category, Order } from "@ecommerce/types";
+import type { Category, Order, Quote } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
 import { useAuth } from "@/lib/auth-context";
+import { QUOTE_STATUS_BADGE, QUOTE_STATUS_LABEL } from "@/lib/quote-status";
 import Link from "next/link";
 
 export default function ContaPage() {
@@ -14,6 +15,7 @@ export default function ContaPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
 
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
@@ -22,6 +24,7 @@ export default function ContaPage() {
   useEffect(() => {
     if (!customer) return;
     apiClient.getCustomerOrders(customer.id).then(setOrders);
+    apiClient.getQuotes().then(setQuotes);
   }, [customer]);
 
   useEffect(() => {
@@ -115,6 +118,26 @@ export default function ContaPage() {
                 Pedido mais recente: {orders[0].orderNumber} — {ORDER_STATUS_LABEL[orders[0].status]}
               </p>
             </>
+          )}
+        </Link>
+
+        <Link
+          href="/conta/orcamentos"
+          className="block bg-white border border-slate-200 rounded-lg p-5 mt-4 hover:border-brand-300"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">Meus orcamentos</h2>
+            <span className="text-sm font-medium text-brand-600">Ver todos os orcamentos -&gt;</span>
+          </div>
+          {quotes.length === 0 ? (
+            <p className="text-sm text-slate-500 mt-1">Voce ainda nao pediu nenhum orcamento.</p>
+          ) : (
+            <p className="text-xs text-slate-400 mt-2">
+              Mais recente: {quotes[0].quoteNumber} -{" "}
+              <span className={`px-1.5 py-0.5 rounded-full ${QUOTE_STATUS_BADGE[quotes[0].status]}`}>
+                {QUOTE_STATUS_LABEL[quotes[0].status]}
+              </span>
+            </p>
           )}
         </Link>
       </div>

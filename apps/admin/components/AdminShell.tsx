@@ -22,6 +22,12 @@ const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/produtos", label: "Produtos", icon: "📦", permissionKey: "produtos" },
   { href: "/pedidos", label: "Pedidos", icon: "🧾", permissionKey: "pedidos" },
+  // Sem chave de permissao propria ainda -- reaproveita "pedidos" de proposito
+  // (ver .claude/skills/ecommerce/references/orcamento-implementacao.md, que
+  // ja documenta essa alternativa) porque adicionar "orcamentos" em
+  // AdminPermissionKey exigiria mexer em packages/types, fora do escopo desta
+  // entrega de UI.
+  { href: "/orcamentos", label: "Orcamentos", icon: "📝", permissionKey: "pedidos" },
   { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true, permissionKey: "clientes" },
   { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true, permissionKey: "financeiro" },
   { href: "/promocoes", label: "Promoções", icon: "🏷️", permissionKey: "promocoes" },
