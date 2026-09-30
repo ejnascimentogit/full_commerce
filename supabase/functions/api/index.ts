@@ -452,6 +452,15 @@ function mapQuote(q: Record<string, unknown>, items: Record<string, unknown>[]) 
   };
 }
 
+function mapCart(cart: Record<string, unknown>, items: Record<string, unknown>[]) {
+  return {
+    id: cart.id,
+    customerId: cart.customer_id,
+    items: items.map((i) => ({ productId: i.product_id, quantity: Number(i.quantity) })),
+    updatedAt: cart.updated_at,
+  };
+}
+
 // ---------- Domain (portado de packages/api-client/src/domain.ts) ----------
 
 function unitPriceOf(p: Record<string, unknown>): number {
@@ -1173,6 +1182,56 @@ app.post("/quotes/:id/convert", async (c) => {
   return c.json(order);
 });
 
+// ---------- Carrinho persistido (cliente) ----------
+
+app.get("/cart", async (c) => {
+  const customer = await requireCustomer(c);
+  const { data: cart } = await eco().from("carts").select("*").eq("customer_id", customer.id).maybeSingle();
+  if (!cart) return c.json(null);
+  const { data: items } = await eco().from("cart_items").select("*").eq("cart_id", cart.id);
+  return c.json(mapCart(cart, items ?? []));
+});
+
+app.put("/cart", async (c) => {
+  const customer = await requireCustomer(c);
+  const input = await c.req.json();
+  const items = (input.items ?? []) as { productId: string; quantity: number }[];
+
+  let { data: cart } = await eco().from("carts").select("*").eq("customer_id", customer.id).maybeSingle();
+  if (!cart) {
+    const { data: created, error } = await eco()
+      .from("carts")
+      .insert({ company_id: customer.company_id, customer_id: customer.id })
+      .select("*")
+      .single();
+    if (error) throw new ApiError(500, "DB_ERROR", error.message);
+    cart = created;
+  }
+
+  await eco().from("cart_items").delete().eq("cart_id", cart.id);
+  if (items.length > 0) {
+    const rows = items.map((i) => ({
+      company_id: customer.company_id,
+      cart_id: cart!.id,
+      product_id: i.productId,
+      quantity: i.quantity,
+    }));
+    const { error } = await eco().from("cart_items").insert(rows);
+    if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  }
+
+  const { data: updated, error: updateError } = await eco()
+    .from("carts")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", cart.id)
+    .select("*")
+    .single();
+  if (updateError) throw new ApiError(500, "DB_ERROR", updateError.message);
+
+  const { data: finalItems } = await eco().from("cart_items").select("*").eq("cart_id", cart.id);
+  return c.json(mapCart(updated, finalItems ?? []));
+});
+
 // ---------- Auth do admin ----------
 
 app.post("/admin/auth/register", async (c) => {
@@ -1617,6 +1676,23 @@ app.post("/admin/quotes/:id/convert", async (c) => {
     input.addressId,
   );
   return c.json(order);
+});
+
+app.get("/admin/carts", async (c) => {
+  const admin = await requirePermission(c, "pedidos");
+  const { data: carts } = await eco()
+    .from("carts")
+    .select("*, cart_items!inner(id)")
+    .eq("company_id", admin.company_id)
+    .order("updated_at", { ascending: false });
+  const uniqueCarts = [...new Map((carts ?? []).map((cart) => [cart.id, cart])).values()];
+  const results = await Promise.all(
+    uniqueCarts.map(async (cart) => {
+      const { data: items } = await eco().from("cart_items").select("*").eq("cart_id", cart.id);
+      return mapCart(cart, items ?? []);
+    }),
+  );
+  return c.json(results);
 });
 
 // ---------- Admin: configurações ----------

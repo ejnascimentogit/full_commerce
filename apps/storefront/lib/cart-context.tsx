@@ -1,7 +1,10 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { apiClient } from "@ecommerce/api-client";
 import { useAuth } from "./auth-context";
+
+const SYNC_DEBOUNCE_MS = 800;
 
 export interface CartLine {
   productId: string;
@@ -57,6 +60,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { customer, loading: authLoading } = useAuth();
   const [state, setState] = useState<StoredState | null>(null);
   const previousCustomerId = useRef<string | null | undefined>(undefined);
+  // Skips the sync effect once, right after a hydration-driven setState.
+  const skipNextSync = useRef(false);
+  // Only true after the initial GET /cart for this customer has finished
+  // (success or failure). Without this the sync effect could fire BEFORE
+  // hydration completes: on first render `lines` is always [] (state starts
+  // null), so without this guard an 800ms debounce would schedule an empty
+  // PUT /cart racing the GET /cart -- if the GET takes longer than 800ms
+  // (Edge Function cold start is a real case here, not hypothetical), the
+  // empty PUT fires first and wipes the customer real server-side cart
+  // before it was ever read.
+  const hydrated = useRef(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -70,30 +84,74 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const raw = localStorage.getItem(storageKey(currentId));
-    let parsed: StoredState | null = null;
-    if (raw) {
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        parsed = null;
-      }
-    }
+    let cancelled = false;
+    hydrated.current = false;
 
-    if (!parsed || parsed.carts.length === 0) {
-      const cart = makeCart();
-      parsed = { activeCartId: cart.id, carts: [cart] };
-    } else if (wasLoggedOut) {
-      const active = parsed.carts.find((c) => c.id === parsed!.activeCartId);
-      if (active && active.lines.length > 0) {
+    (async () => {
+      const raw = localStorage.getItem(storageKey(currentId));
+      let parsed: StoredState | null = null;
+      if (raw) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = null;
+        }
+      }
+
+      if (!parsed || parsed.carts.length === 0) {
         const cart = makeCart();
-        parsed = { activeCartId: cart.id, carts: [cart, ...parsed.carts] };
+        parsed = { activeCartId: cart.id, carts: [cart] };
+      } else if (wasLoggedOut) {
+        const active = parsed.carts.find((c) => c.id === parsed!.activeCartId);
+        if (active && active.lines.length > 0) {
+          const cart = makeCart();
+          parsed = { activeCartId: cart.id, carts: [cart, ...parsed.carts] };
+        }
       }
-    }
 
-    localStorage.setItem(storageKey(currentId), JSON.stringify(parsed));
-    setState(parsed);
-    previousCustomerId.current = currentId;
+      // The server is the source of truth for the ACTIVE cart from here on --
+      // the other saved carts (pendingCarts) stay fully local. If the server
+      // already has a cart (another device, or a previous sync), it replaces
+      // the local active cart lines; if it has nothing yet, whatever exists
+      // locally is sent there now, so nothing is lost on this first sync.
+      try {
+        const serverCart = await apiClient.getCart();
+        if (cancelled) return;
+        if (serverCart) {
+          parsed = {
+            ...parsed,
+            carts: parsed.carts.map((c) =>
+              c.id === parsed!.activeCartId
+                ? {
+                    ...c,
+                    lines: serverCart.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+                    updatedAt: serverCart.updatedAt,
+                  }
+                : c,
+            ),
+          };
+        } else {
+          const active = parsed.carts.find((c) => c.id === parsed!.activeCartId);
+          if (active && active.lines.length > 0) {
+            await apiClient.updateCart(active.lines);
+          }
+        }
+      } catch {
+        // No server available right now (network, etc.) -- keep going with
+        // local state only; sync is retried on the next cart change.
+      }
+      if (cancelled) return;
+
+      localStorage.setItem(storageKey(currentId), JSON.stringify(parsed));
+      skipNextSync.current = true;
+      hydrated.current = true;
+      setState(parsed);
+      previousCustomerId.current = currentId;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [customer, authLoading]);
 
   function persist(next: StoredState) {
@@ -111,6 +169,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const activeCart = state?.carts.find((c) => c.id === state.activeCartId) ?? null;
   const lines = activeCart?.lines ?? [];
   const pendingCarts = (state?.carts ?? []).filter((c) => c.id !== state?.activeCartId && c.lines.length > 0);
+
+  useEffect(() => {
+    if (!customer) return;
+    if (!hydrated.current) return;
+    if (skipNextSync.current) {
+      skipNextSync.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiClient.updateCart(lines).catch(() => {
+        // Network/server failure should not block the shopping experience --
+        // the local cart keeps working; the next change retries the sync.
+      });
+    }, SYNC_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, customer]);
 
   const value = useMemo<CartContextValue>(
     () => ({

@@ -28,6 +28,7 @@ const NAV: NavItem[] = [
   // AdminPermissionKey exigiria mexer em packages/types, fora do escopo desta
   // entrega de UI.
   { href: "/orcamentos", label: "Orcamentos", icon: "📝", permissionKey: "pedidos" },
+  { href: "/perdidos", label: "Perdidos", icon: "🛒", permissionKey: "pedidos" },
   { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true, permissionKey: "clientes" },
   { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true, permissionKey: "financeiro" },
   { href: "/promocoes", label: "Promoções", icon: "🏷️", permissionKey: "promocoes" },
