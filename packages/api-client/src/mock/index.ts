@@ -18,6 +18,8 @@ import type {
   ActivityOutcome,
   Address,
   AdminUser,
+  Cart,
+  CartItem,
   Category,
   Company,
   Customer,
@@ -81,6 +83,11 @@ import {
   saveQuote as saveQuoteStore,
   updateQuote as updateQuoteStore,
 } from "./quotes-store";
+import {
+  findAllCartsWithItems as findAllCartsWithItemsStore,
+  readCart as readCartStore,
+  writeCart as writeCartStore,
+} from "./cart-store";
 import {
   buildOrderItem,
   buildOrderItemFromQuoteItem,
@@ -442,6 +449,20 @@ export const mockApiClient: ApiClient = {
     return convertQuoteToOrderMock(id, customerId, input);
   },
 
+  async getCart(): Promise<Cart | null> {
+    await delay();
+    const customerId = getSessionCustomerId();
+    if (!customerId) return null;
+    return readCartStore(customerId);
+  },
+
+  async updateCart(items: CartItem[]): Promise<Cart> {
+    await delay(200);
+    const customerId = getSessionCustomerId();
+    if (!customerId) throw new Error("UNAUTHENTICATED");
+    return writeCartStore(customerId, items);
+  },
+
   async registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser> {
     await delay(300);
     const user = createAdminUser(input);
@@ -641,6 +662,11 @@ export const mockApiClient: ApiClient = {
     const quote = findQuoteByIdStore(id);
     if (!quote) throw new Error("NOT_FOUND");
     return convertQuoteToOrderMock(id, quote.customerId, input);
+  },
+
+  async getAdminCarts(): Promise<Cart[]> {
+    await delay();
+    return findAllCartsWithItemsStore();
   },
 
   async getAdminCustomers(): Promise<Customer[]> {

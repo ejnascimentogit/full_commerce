@@ -168,18 +168,24 @@ export interface Product {
   weight?: number;
 }
 
+// Carrinho persistido no servidor a partir do momento em que o cliente
+// adiciona o primeiro item -- ver .claude/skills/ecommerce/references/carrinho-persistido-implementacao.md.
+// Sem preco: o valor de cada item e sempre resolvido ao vivo a partir do
+// Product correspondente (basePrice/salePrice), nunca congelado -- diferente
+// de QuoteItem.referenceUnitPrice, que e um preco de tabela travado no
+// momento da criacao do orcamento. So existe um carrinho ATIVO por cliente
+// (customerId e unique no banco); os "carrinhos salvos"/multiplos carrinhos
+// que a loja mostra em /carrinhos sao um conceito so de front-end (ver
+// apps/storefront/lib/cart-context.tsx), nao tem equivalente aqui.
 export interface CartItem {
   productId: string;
-  variantId?: string;
   quantity: number;
-  unitPriceAtAdd: number;
 }
 
 export interface Cart {
   id: string;
-  customerId?: string;
+  customerId: string;
   items: CartItem[];
-  couponCode?: string;
   updatedAt: string;
 }
 

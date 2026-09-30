@@ -7,6 +7,8 @@ import type {
   Address,
   AdminPermissionKey,
   AdminUser,
+  Cart,
+  CartItem,
   Category,
   Company,
   Customer,
@@ -154,6 +156,13 @@ export interface ApiClient {
   /** Converte o orçamento em Order de verdade — exige endereço já confirmado (ou addressId informado aqui) e a forma de pagamento. Recusa se o orçamento não estiver "accepted" ou já tiver sido convertido. */
   convertQuoteToOrder(id: string, input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number }): Promise<Order>;
 
+  // ---------- Carrinho persistido (cliente) ----------
+  // Sincroniza o carrinho ATIVO (ver apps/storefront/lib/cart-context.tsx) com o
+  // servidor -- os carrinhos salvos/multiplos carrinhos continuam 100% locais,
+  // nao passam por aqui. Ver .claude/skills/ecommerce/references/carrinho-persistido-implementacao.md.
+  getCart(): Promise<Cart | null>;
+  updateCart(items: CartItem[]): Promise<Cart>;
+
   // Admin (painel) — platformAdmin enxerga tudo, vendorAdmin só o próprio vendorId
   /** Autocadastro do dono da loja como platformAdmin — separado das contas demo do seed. */
   registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser>;
@@ -229,6 +238,8 @@ export interface ApiClient {
   respondAdminQuote(id: string, patch: Partial<{ status: QuoteStatus; quotedTotal: number; responseNote: string }>): Promise<Quote>;
   /** Mesma conversão de convertQuoteToOrder, disparada pelo vendedor em nome do cliente (ex: fechou a venda por telefone) — não exige ser o dono do orçamento. */
   convertAdminQuoteToOrder(id: string, input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number }): Promise<Order>;
+  /** Todos os carrinhos ativos da empresa com pelo menos 1 item (tela Perdidos). */
+  getAdminCarts(): Promise<Cart[]>;
   /** Lista todos os clientes cadastrados — só platformAdmin. */
   getAdminCustomers(): Promise<Customer[]>;
   /** Editar cadastro de cliente (nome, telefone, região, cód. de referência, status) — só platformAdmin. */

@@ -4,6 +4,8 @@ import type {
   ActivityOutcome,
   Address,
   AdminUser,
+  Cart,
+  CartItem,
   Category,
   Company,
   Customer,
@@ -159,6 +161,10 @@ function createRestApiClient(baseUrl: string): ApiClient {
     convertQuoteToOrder: (id: string, input) =>
       request<Order>(`/api/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: CUSTOMER_TOKEN_KEY }),
 
+    getCart: () => request<Cart | null>("/api/cart", { tokenKey: CUSTOMER_TOKEN_KEY }),
+    updateCart: (items: CartItem[]) =>
+      request<Cart>("/api/cart", { method: "PUT", body: JSON.stringify({ items }), tokenKey: CUSTOMER_TOKEN_KEY }),
+
     registerAdmin: async (input: { name: string; email: string; password: string }) => {
       const { token, adminUser } = await request<{ token: string; adminUser: AdminUser }>("/api/admin/auth/register", {
         method: "POST",
@@ -209,6 +215,7 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<Quote>(`/api/admin/quotes/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     convertAdminQuoteToOrder: (id, input) =>
       request<Order>(`/api/admin/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    getAdminCarts: () => request<Cart[]>("/api/admin/carts", { tokenKey: ADMIN_TOKEN_KEY }),
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
     updateCustomer: (id, patch) =>
       request<Customer>(`/api/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
