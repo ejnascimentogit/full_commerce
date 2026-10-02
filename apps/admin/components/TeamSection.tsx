@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsibleSection } from "./CollapsibleSection";
 import { useEffect, useState } from "react";
 import { apiClient } from "@ecommerce/api-client";
 import type { AdminPermissionKey, AdminUser, StaffSector } from "@ecommerce/types";
@@ -112,17 +113,13 @@ export function TeamSection() {
   }
 
   return (
-    <section className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="font-semibold text-slate-900">Equipe</h2>
-        <button
+    <CollapsibleSection expandKey="equipe" title="Equipe" className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl" action={<button
           type="button"
           onClick={() => setShowForm((s) => !s)}
           className="text-sm text-brand-600 border border-brand-200 rounded-md px-3 py-1.5 hover:bg-brand-50"
         >
           {showForm ? "Cancelar" : "+ Adicionar pessoa"}
-        </button>
-      </div>
+        </button>}>
       <p className="text-sm text-slate-500 mb-4">
         Logins de vendedor, financeiro etc. — cada um vê só as abas marcadas abaixo, nunca Empresas ou Configurações. O setor e o nível (usuário,
         supervisor, gerente) controlam o que a pessoa vê dentro de Atividades.
@@ -301,6 +298,6 @@ export function TeamSection() {
         ))}
         {members.length === 0 && <p className="text-sm text-slate-500">Nenhuma pessoa de equipe cadastrada ainda.</p>}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
