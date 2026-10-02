@@ -412,6 +412,8 @@ export interface StoreSettings {
 
   /** Desligado (padrão): depois que o pedido sai para entrega ou é entregue, a mercadoria já deixou o estoque e a nota fiscal já foi emitida — não dá mais pra ajustar quantidade. Ligar aqui libera o ajuste mesmo nesses status. */
   allowAdjustmentsAfterDispatch: boolean;
+  /** Textos de mensagem de WhatsApp do admin (pedidos, orcamentos, perdidos). Vazio = usa o texto padrao. */
+  whatsappTemplates?: Partial<Record<"pedidos" | "orcamentos" | "perdidos", string>>;
 
   // ---------- Atividades Automaticas ----------
   // Ver .claude/skills/ecommerce/references/atividades-automaticas-implementacao.md.

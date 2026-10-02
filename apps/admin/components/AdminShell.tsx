@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true, permissionKey: "fornecedores" },
   { href: "/atividades", label: "Atividades", icon: "📋", platformOnly: true, permissionKey: "atividades" },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
+  { href: "/mensagens", label: "Mensagens", icon: "💬", platformOnly: true },
   { href: "/empresas", label: "Empresas", icon: "🏢", ownerOnly: true },
   { href: "/ajuda", label: "Ajuda", icon: "❓" },
 ];

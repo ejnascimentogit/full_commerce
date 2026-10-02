@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
 import type { Customer, Order, OrderStatus } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
+import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
+import { money, productList } from "@/lib/whatsapp";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
 export default function PedidosPage() {
   const { user } = useAdminAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [customersById, setCustomersById] = useState<Record<string, Customer>>({});
+  const [whatsappOpenId, setWhatsappOpenId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
 
   useEffect(() => {
@@ -61,7 +64,8 @@ export default function PedidosPage() {
             {orders.map((order) => {
               const customer = customersById[order.customerId];
               return (
-              <tr key={order.id}>
+              <Fragment key={order.id}>
+              <tr>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{order.orderNumber}</td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{customer?.code ?? "—"}</td>
                 <td className="px-4 py-2.5 text-slate-700">{customer?.name ?? "—"}</td>
@@ -69,13 +73,29 @@ export default function PedidosPage() {
                 <td className="px-4 py-2.5">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{ORDER_STATUS_LABEL[order.status]}</span>
                 </td>
-                <td className="px-4 py-2.5 text-right">R$ {order.total.toFixed(2).replace(".", ",")}</td>
+                <td className="px-4 py-2.5 text-right">
+                  R$ {order.total.toFixed(2).replace(".", ",")}
+                  <WhatsappButton open={whatsappOpenId === order.id} onClick={() => setWhatsappOpenId(whatsappOpenId === order.id ? null : order.id)} />
+                </td>
                 <td className="px-4 py-2.5 text-right">
                   <Link href={`/pedidos/${order.id}`} className="text-brand-600 hover:underline">
                     Ver
                   </Link>
                 </td>
               </tr>
+              {whatsappOpenId === order.id && (
+                <tr>
+                  <td colSpan={7} className="px-4 pb-4 bg-white">
+                    <WhatsappPanel
+                      kind="pedidos"
+                      customer={customer}
+                      vars={{ numero: String(order.orderNumber), status: ORDER_STATUS_LABEL[order.status], valor: money(order.total), produtos: productList(order.items) }}
+                      onClose={() => setWhatsappOpenId(null)}
+                    />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
               );
             })}
           </tbody>

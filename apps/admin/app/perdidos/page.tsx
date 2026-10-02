@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { apiClient, unitPriceOf } from "@ecommerce/api-client";
 import type { Cart, Customer, Product } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
+import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
+import { productList } from "@/lib/whatsapp";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -13,12 +15,6 @@ function daysStalled(cart: Cart): number {
 
 function money(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
-}
-
-function whatsappLink(phone: string | undefined): string | null {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits.length < 10) return null;
-  return `https://wa.me/${digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`}`;
 }
 
 interface CustomerGroup {
@@ -37,11 +33,25 @@ export default function PerdidosPage() {
   const [customersById, setCustomersById] = useState<Record<string, Customer>>({});
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
   const [loading, setLoading] = useState(true);
+  const [whatsappOpenId, setWhatsappOpenId] = useState<string | null>(null);
+  const [purchases, setPurchases] = useState<{ customerId: string; createdAt: string; productIds: Set<string> }[]>([]);
 
   useEffect(() => {
     apiClient.getAdminCarts().then(setCarts);
     apiClient.getAdminCustomers().then((customers) => {
       setCustomersById(Object.fromEntries(customers.map((c) => [c.id, c])));
+    });
+  }, []);
+
+  useEffect(() => {
+    Promise.all([apiClient.getAdminOrders().catch(() => []), apiClient.getAdminQuotes().catch(() => [])]).then(([orders, quotes]) => {
+      setPurchases(
+        [...orders, ...quotes].map((p) => ({
+          customerId: p.customerId,
+          createdAt: p.createdAt,
+          productIds: new Set(p.items.map((item) => item.productId)),
+        })),
+      );
     });
   }, []);
 
@@ -69,10 +79,26 @@ export default function PerdidosPage() {
     }, 0);
   }
 
+  // Carrinho que ja virou pedido ou orcamento (do mesmo cliente, feito depois da ultima mexida e com todos
+  // os produtos do carrinho) nao e venda perdida: sai da lista.
+  const openCarts = useMemo(
+    () =>
+      carts.filter(
+        (cart) =>
+          !purchases.some(
+            (p) =>
+              p.customerId === cart.customerId &&
+              Date.parse(p.createdAt) >= Date.parse(cart.updatedAt) &&
+              cart.items.every((item) => p.productIds.has(item.productId)),
+          ),
+      ),
+    [carts, purchases],
+  );
+
   // Quem abandonou mais vezes aparece primeiro (mais chance de querer comprar), depois o mais recente.
   const groups = useMemo<CustomerGroup[]>(() => {
     const byCustomer = new Map<string, Cart[]>();
-    for (const cart of carts) byCustomer.set(cart.customerId, [...(byCustomer.get(cart.customerId) ?? []), cart]);
+    for (const cart of openCarts) byCustomer.set(cart.customerId, [...(byCustomer.get(cart.customerId) ?? []), cart]);
     return [...byCustomer.entries()]
       .map(([customerId, list]) => ({
         customerId,
@@ -81,7 +107,7 @@ export default function PerdidosPage() {
         lastUpdate: Math.max(...list.map((cart) => Date.parse(cart.updatedAt))),
       }))
       .sort((a, b) => b.carts.length - a.carts.length || b.lastUpdate - a.lastUpdate);
-  }, [carts, customersById]);
+  }, [openCarts, customersById]);
 
   return (
     <AdminShell>
@@ -95,7 +121,6 @@ export default function PerdidosPage() {
       <div className="space-y-4">
         {groups.map((group) => {
           const phone = group.customer?.phone;
-          const wa = whatsappLink(phone);
           const total = group.carts.reduce((sum, cart) => sum + valueOf(cart), 0);
           const many = group.carts.length > 1;
           return (
@@ -118,16 +143,6 @@ export default function PerdidosPage() {
                   <span className="text-sm text-slate-600">
                     Total em carrinhos: <strong className="text-slate-900">{money(total)}</strong>
                   </span>
-                  {wa && (
-                    <a
-                      href={wa}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-medium bg-green-600 text-white px-3 py-1.5 rounded-md hover:bg-green-700"
-                    >
-                      Chamar no WhatsApp
-                    </a>
-                  )}
                 </div>
               </header>
               <ul className="divide-y divide-slate-100">
@@ -144,7 +159,10 @@ export default function PerdidosPage() {
                             </span>
                           )}
                         </span>
-                        <span className="font-medium text-slate-900">{money(valueOf(cart))}</span>
+                        <span className="font-medium text-slate-900">
+                          {money(valueOf(cart))}
+                          <WhatsappButton open={whatsappOpenId === cart.id} onClick={() => setWhatsappOpenId(whatsappOpenId === cart.id ? null : cart.id)} />
+                        </span>
                       </div>
                       <ul className="mt-2 text-sm text-slate-700 space-y-0.5">
                         {cart.items.map((item) => (
@@ -153,6 +171,20 @@ export default function PerdidosPage() {
                           </li>
                         ))}
                       </ul>
+                      {whatsappOpenId === cart.id && (
+                        <div className="mt-3">
+                          <WhatsappPanel
+                            kind="perdidos"
+                            customer={group.customer}
+                            vars={{
+                              valor: money(valueOf(cart)),
+                              produtos: productList(cart.items.map((item) => ({ name: productsById[item.productId]?.name ?? "Produto", quantity: item.quantity }))),
+                              dias: days >= 1 ? `há ${days} ${days === 1 ? "dia" : "dias"}` : "hoje",
+                            }}
+                            onClose={() => setWhatsappOpenId(null)}
+                          />
+                        </div>
+                      )}
                     </li>
                   );
                 })}
