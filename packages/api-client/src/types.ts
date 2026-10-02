@@ -8,7 +8,7 @@ import type {
   AdminPermissionKey,
   AdminUser,
   Cart,
-  CartItem,
+  CartSyncInput,
   Category,
   Company,
   Customer,
@@ -156,12 +156,13 @@ export interface ApiClient {
   /** Converte o orçamento em Order de verdade — exige endereço já confirmado (ou addressId informado aqui) e a forma de pagamento. Recusa se o orçamento não estiver "accepted" ou já tiver sido convertido. */
   convertQuoteToOrder(id: string, input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number }): Promise<Order>;
 
-  // ---------- Carrinho persistido (cliente) ----------
-  // Sincroniza o carrinho ATIVO (ver apps/storefront/lib/cart-context.tsx) com o
-  // servidor -- os carrinhos salvos/multiplos carrinhos continuam 100% locais,
-  // nao passam por aqui. Ver .claude/skills/ecommerce/references/carrinho-persistido-implementacao.md.
-  getCart(): Promise<Cart | null>;
-  updateCart(items: CartItem[]): Promise<Cart>;
+  // ---------- Carrinhos persistidos (cliente) ----------
+  // Todos os carrinhos do cliente (o ativo + os deixados pra tras) ficam no servidor, pra equipe de vendas
+  // conseguir recuperar quem abandonou. Ver .claude/skills/ecommerce/references/carrinho-persistido-implementacao.md.
+  /** Carrinhos abertos do cliente logado (inclusive vazios -- a loja usa pra saber o que ja esta no servidor). */
+  getCarts(): Promise<Cart[]>;
+  /** Envia o estado dos carrinhos locais; o servidor guarda o mais recente de cada um e devolve a lista atual. */
+  syncCarts(carts: CartSyncInput[]): Promise<Cart[]>;
 
   // Admin (painel) — platformAdmin enxerga tudo, vendorAdmin só o próprio vendorId
   /** Autocadastro do dono da loja como platformAdmin — separado das contas demo do seed. */

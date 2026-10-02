@@ -5,7 +5,7 @@ import type {
   Address,
   AdminUser,
   Cart,
-  CartItem,
+  CartSyncInput,
   Category,
   Company,
   Customer,
@@ -161,9 +161,9 @@ function createRestApiClient(baseUrl: string): ApiClient {
     convertQuoteToOrder: (id: string, input) =>
       request<Order>(`/api/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: CUSTOMER_TOKEN_KEY }),
 
-    getCart: () => request<Cart | null>("/api/cart", { tokenKey: CUSTOMER_TOKEN_KEY }),
-    updateCart: (items: CartItem[]) =>
-      request<Cart>("/api/cart", { method: "PUT", body: JSON.stringify({ items }), tokenKey: CUSTOMER_TOKEN_KEY }),
+    getCarts: () => request<Cart[]>("/api/carts", { tokenKey: CUSTOMER_TOKEN_KEY }),
+    syncCarts: (carts: CartSyncInput[]) =>
+      request<Cart[]>("/api/carts", { method: "PUT", body: JSON.stringify({ carts }), tokenKey: CUSTOMER_TOKEN_KEY }),
 
     registerAdmin: async (input: { name: string; email: string; password: string }) => {
       const { token, adminUser } = await request<{ token: string; adminUser: AdminUser }>("/api/admin/auth/register", {

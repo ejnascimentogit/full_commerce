@@ -1,19 +1,14 @@
-import type { Cart, CartItem } from "@ecommerce/types";
+import type { Cart, CartSyncInput } from "@ecommerce/types";
 
-// Same spirit as quotes-store.ts (persisted in localStorage, browser only, to
-// survive a reload in mock mode), but keyed PER CUSTOMER instead of a single
-// list -- on the real server only one active cart exists per customer_id
-// (unique), so the mock mirrors that by storing the cart already resolved
-// for that customer, not a loose list of carts.
+// Mock em localStorage: uma lista de carrinhos POR CLIENTE, espelhando o servidor real (varios
+// carrinhos, cada um identificado pelo localId; o mexido por ultimo ganha).
 function storageKey(customerId: string): string {
-  return `ecommerce.mock.cart.${customerId}`;
+  return `ecommerce.mock.carts.${customerId}`;
 }
 
-// Separate index of customerIds that already have a saved cart -- needed only
-// so getAdminCartsStore can "list all" without scanning the whole
-// localStorage (can't safely do Object.keys(localStorage) here since other
-// stores also use this same localStorage).
-const INDEX_KEY = "ecommerce.mock.cart.index";
+// Indice dos clientes que ja tem carrinho salvo -- so pra getAdminCarts conseguir "listar todos" sem
+// varrer o localStorage inteiro (outras stores usam o mesmo localStorage).
+const INDEX_KEY = "ecommerce.mock.carts.index";
 
 function readIndex(): string[] {
   if (typeof window === "undefined") return [];
@@ -26,42 +21,58 @@ function readIndex(): string[] {
   }
 }
 
-function addToIndex(customerId: string): void {
-  if (typeof window === "undefined") return;
-  const ids = readIndex();
-  if (!ids.includes(customerId)) localStorage.setItem(INDEX_KEY, JSON.stringify([...ids, customerId]));
-}
-
-export function readCart(customerId: string): Cart | null {
-  if (typeof window === "undefined") return null;
+function readAll(customerId: string): Cart[] {
+  if (typeof window === "undefined") return [];
   const raw = localStorage.getItem(storageKey(customerId));
-  if (!raw) return null;
+  if (!raw) return [];
   try {
     return JSON.parse(raw);
   } catch {
-    return null;
+    return [];
   }
 }
 
-export function writeCart(customerId: string, items: CartItem[]): Cart {
-  const cart: Cart = {
-    id: readCart(customerId)?.id ?? `cart-${customerId}`,
-    customerId,
-    items,
-    updatedAt: new Date().toISOString(),
-  };
+export function readCarts(customerId: string): Cart[] {
+  return readAll(customerId).filter((cart) => cart.status === "open");
+}
+
+export function syncCarts(customerId: string, incoming: CartSyncInput[]): Cart[] {
+  const current = readAll(customerId);
+  for (const input of incoming) {
+    const index = current.findIndex((cart) => cart.localId === input.localId);
+    if (input.discarded) {
+      if (index >= 0) current[index] = { ...current[index], status: "discarded", isActive: false };
+      continue;
+    }
+    if (index >= 0 && current[index].status === "discarded") continue;
+    if (index === -1) {
+      current.push({
+        id: `cart-${customerId}-${input.localId}`,
+        customerId,
+        localId: input.localId,
+        isActive: input.isActive,
+        status: "open",
+        items: input.items,
+        updatedAt: input.updatedAt,
+      });
+    } else if (Date.parse(input.updatedAt) > Date.parse(current[index].updatedAt)) {
+      current[index] = { ...current[index], items: input.items, updatedAt: input.updatedAt };
+    }
+  }
+  const activeLocalId = incoming.find((cart) => cart.isActive && !cart.discarded)?.localId;
+  const next = activeLocalId ? current.map((cart) => ({ ...cart, isActive: cart.localId === activeLocalId })) : current;
   if (typeof window !== "undefined") {
-    localStorage.setItem(storageKey(customerId), JSON.stringify(cart));
-    addToIndex(customerId);
+    localStorage.setItem(storageKey(customerId), JSON.stringify(next));
+    const ids = readIndex();
+    if (!ids.includes(customerId)) localStorage.setItem(INDEX_KEY, JSON.stringify([...ids, customerId]));
   }
-  return cart;
+  return next.filter((cart) => cart.status === "open");
 }
 
-// For getAdminCarts: every indexed cart that still has at least 1 item, most
-// recent first -- same filter the real backend applies.
+// Pra getAdminCarts: todos os carrinhos abertos com pelo menos 1 item, mais recentes primeiro.
 export function findAllCartsWithItems(): Cart[] {
   return readIndex()
-    .map((id) => readCart(id))
-    .filter((cart): cart is Cart => cart != null && cart.items.length > 0)
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    .flatMap((id) => readCarts(id))
+    .filter((cart) => cart.items.length > 0)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }

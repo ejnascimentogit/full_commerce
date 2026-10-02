@@ -66,7 +66,7 @@ app.use(
   "*",
   cors({
     origin: (origin) => (origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]),
-    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
@@ -456,6 +456,9 @@ function mapCart(cart: Record<string, unknown>, items: Record<string, unknown>[]
   return {
     id: cart.id,
     customerId: cart.customer_id,
+    localId: cart.local_id,
+    isActive: cart.is_active,
+    status: cart.status,
     items: items.map((i) => ({ productId: i.product_id, quantity: Number(i.quantity) })),
     updatedAt: cart.updated_at,
   };
@@ -1182,54 +1185,126 @@ app.post("/quotes/:id/convert", async (c) => {
   return c.json(order);
 });
 
-// ---------- Carrinho persistido (cliente) ----------
+// ---------- Carrinhos persistidos (cliente) ----------
+// O cliente pode ter varios carrinhos (o ativo + os deixados pra tras, "Meus carrinhos" na loja). Todos
+// vao pro servidor pra equipe de vendas conseguir contatar quem abandonou. A loja identifica cada um pelo
+// proprio id local (local_id) e manda o estado completo; quem foi mexido por ultimo (updatedAt) ganha, entao
+// um aparelho com dados velhos nunca sobrescreve um carrinho mais novo.
 
-app.get("/cart", async (c) => {
+async function listOpenCarts(customerId: string) {
+  const { data: carts } = await eco()
+    .from("carts")
+    .select("*")
+    .eq("customer_id", customerId)
+    .eq("status", "open")
+    .order("updated_at", { ascending: false });
+  const ids = (carts ?? []).map((cart) => cart.id as string);
+  const { data: items } = ids.length
+    ? await eco().from("cart_items").select("*").in("cart_id", ids)
+    : { data: [] as Record<string, unknown>[] };
+  return (carts ?? []).map((cart) =>
+    mapCart(
+      cart,
+      (items ?? []).filter((i) => i.cart_id === cart.id),
+    ),
+  );
+}
+
+app.get("/carts", async (c) => {
   const customer = await requireCustomer(c);
-  const { data: cart } = await eco().from("carts").select("*").eq("customer_id", customer.id).maybeSingle();
-  if (!cart) return c.json(null);
-  const { data: items } = await eco().from("cart_items").select("*").eq("cart_id", cart.id);
-  return c.json(mapCart(cart, items ?? []));
+  return c.json(await listOpenCarts(customer.id));
 });
 
-app.put("/cart", async (c) => {
+app.put("/carts", async (c) => {
   const customer = await requireCustomer(c);
   const input = await c.req.json();
-  const items = (input.items ?? []) as { productId: string; quantity: number }[];
+  const incoming = (input.carts ?? []) as {
+    localId: string;
+    items?: { productId: string; quantity: number }[];
+    isActive?: boolean;
+    updatedAt?: string;
+    discarded?: boolean;
+  }[];
 
-  let { data: cart } = await eco().from("carts").select("*").eq("customer_id", customer.id).maybeSingle();
-  if (!cart) {
-    const { data: created, error } = await eco()
-      .from("carts")
-      .insert({ company_id: customer.company_id, customer_id: customer.id })
-      .select("*")
-      .single();
-    if (error) throw new ApiError(500, "DB_ERROR", error.message);
-    cart = created;
+  const { data: existingRows } = await eco().from("carts").select("*").eq("customer_id", customer.id);
+  const existingByLocalId = new Map((existingRows ?? []).map((row) => [row.local_id as string, row]));
+  let activeLocalId: string | null = null;
+
+  for (const cart of incoming) {
+    if (!cart.localId) continue;
+    const existing = existingByLocalId.get(cart.localId);
+
+    // Cliente apagou o carrinho em "Meus carrinhos": guarda os itens mas tira da lista de abandonados.
+    if (cart.discarded) {
+      if (existing && existing.status !== "discarded") {
+        await eco().from("carts").update({ status: "discarded", is_active: false }).eq("id", existing.id);
+      }
+      continue;
+    }
+    if (existing?.status === "discarded") continue;
+
+    const clientTs =
+      cart.updatedAt && !Number.isNaN(Date.parse(cart.updatedAt)) ? new Date(cart.updatedAt).toISOString() : new Date().toISOString();
+    if (cart.isActive) activeLocalId = cart.localId;
+
+    let cartId: string;
+    let replaceItems: boolean;
+    if (!existing) {
+      const { data: created, error } = await eco()
+        .from("carts")
+        .insert({
+          company_id: customer.company_id,
+          customer_id: customer.id,
+          local_id: cart.localId,
+          is_active: !!cart.isActive,
+          updated_at: clientTs,
+        })
+        .select("id")
+        .single();
+      if (error) throw new ApiError(500, "DB_ERROR", error.message);
+      cartId = created.id as string;
+      replaceItems = true;
+    } else {
+      cartId = existing.id as string;
+      replaceItems = Date.parse(clientTs) > Date.parse(existing.updated_at as string);
+      if (replaceItems) await eco().from("carts").update({ updated_at: clientTs }).eq("id", cartId);
+    }
+    if (!replaceItems) continue;
+
+    await eco().from("cart_items").delete().eq("cart_id", cartId);
+    const wanted = (cart.items ?? []).filter((i) => i.productId && Number(i.quantity) > 0);
+    if (wanted.length > 0) {
+      const { data: validProducts } = await eco()
+        .from("products")
+        .select("id")
+        .eq("company_id", customer.company_id)
+        .in(
+          "id",
+          wanted.map((i) => i.productId),
+        );
+      const validIds = new Set((validProducts ?? []).map((p) => p.id as string));
+      const rows = wanted
+        .filter((i) => validIds.has(i.productId))
+        .map((i) => ({
+          company_id: customer.company_id,
+          cart_id: cartId,
+          product_id: i.productId,
+          quantity: Number(i.quantity),
+        }));
+      if (rows.length > 0) {
+        const { error } = await eco().from("cart_items").insert(rows);
+        if (error) throw new ApiError(500, "DB_ERROR", error.message);
+      }
+    }
   }
 
-  await eco().from("cart_items").delete().eq("cart_id", cart.id);
-  if (items.length > 0) {
-    const rows = items.map((i) => ({
-      company_id: customer.company_id,
-      cart_id: cart!.id,
-      product_id: i.productId,
-      quantity: i.quantity,
-    }));
-    const { error } = await eco().from("cart_items").insert(rows);
-    if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  // So um carrinho ativo por cliente.
+  if (activeLocalId) {
+    await eco().from("carts").update({ is_active: false }).eq("customer_id", customer.id).neq("local_id", activeLocalId);
+    await eco().from("carts").update({ is_active: true }).eq("customer_id", customer.id).eq("local_id", activeLocalId);
   }
 
-  const { data: updated, error: updateError } = await eco()
-    .from("carts")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", cart.id)
-    .select("*")
-    .single();
-  if (updateError) throw new ApiError(500, "DB_ERROR", updateError.message);
-
-  const { data: finalItems } = await eco().from("cart_items").select("*").eq("cart_id", cart.id);
-  return c.json(mapCart(updated, finalItems ?? []));
+  return c.json(await listOpenCarts(customer.id));
 });
 
 // ---------- Auth do admin ----------
@@ -1684,6 +1759,7 @@ app.get("/admin/carts", async (c) => {
     .from("carts")
     .select("*, cart_items!inner(id)")
     .eq("company_id", admin.company_id)
+    .eq("status", "open")
     .order("updated_at", { ascending: false });
   const uniqueCarts = [...new Map((carts ?? []).map((cart) => [cart.id, cart])).values()];
   const results = await Promise.all(
