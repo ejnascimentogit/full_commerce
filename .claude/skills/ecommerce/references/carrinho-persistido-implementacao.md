@@ -58,3 +58,21 @@ Ver o corpo completo de `ecommerce.gerar_atividades_automaticas()` (com o gatilh
 - Filtro por vendorId em `GET /admin/carts` (segue o padrao de /admin/quotes, que tambem nao filtra).
 - `handleRequestQuote` (storefront) nao esvazia o carrinho depois de pedir orcamento -- comportamento pre-existente, nao alterado.
 - Nenhuma UI pra configurar o prazo de "carrinho parado" (fixo em 1 dia).
+
+## Atualizacao: varios carrinhos por cliente (todos vao pro servidor)
+
+A primeira versao so sincronizava o carrinho ATIVO. Mas o objetivo e recuperar vendas: um cliente que deixa
+varios carrinhos parados (os "Meus carrinhos" da loja) e exatamente quem o vendedor quer contatar. Agora:
+
+- `carts` deixou de ser 1 por cliente: `local_id` (id que a loja ja usa pra cada carrinho), `is_active`, `status`
+  (`open` | `discarded`), unico por (`customer_id`, `local_id`). Linhas da v1 (sem local_id) foram arquivadas como
+  `discarded` na migracao -- a loja reenvia tudo com o id certo.
+- Rotas: `GET /carts` (carrinhos abertos do cliente) e `PUT /carts` (estado completo dos carrinhos locais). O servidor
+  guarda a versao mais NOVA de cada carrinho (`updatedAt` vindo da loja), entao um aparelho com dado velho nunca
+  sobrescreve um carrinho mais novo. Carrinho apagado em "Meus carrinhos" vira `discarded` (itens guardados, some de Perdidos).
+- A loja junta (merge) por `localId` ao logar: carrinho so do servidor vira pendente no aparelho; so do aparelho sobe.
+- Tela Perdidos: agrupada por cliente (quem abandonou mais vezes primeiro), com telefone, e-mail, link do WhatsApp,
+  itens de cada carrinho, valor e "parado ha N dias".
+- Atividade automatica (gatilho 4) agora e POR CLIENTE (1 atividade resumindo todos os carrinhos parados dele), com
+  `source_ref_id` = id do cliente.
+- Rotas antigas `GET/PUT /cart` foram removidas (a loja nova usa `/carts`).

@@ -1,23 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiClient, unitPriceOf } from "@ecommerce/api-client";
 import type { Cart, Customer, Product } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function daysStalled(cart: Cart): number {
-  const start = new Date(cart.updatedAt).getTime();
-  return Math.max(0, Math.floor((Date.now() - start) / (24 * 60 * 60 * 1000)));
+  return Math.max(0, Math.floor((Date.now() - Date.parse(cart.updatedAt)) / DAY_MS));
 }
 
-function itemCountOf(cart: Cart): number {
-  return cart.items.reduce((sum, item) => sum + item.quantity, 0);
+function money(value: number): string {
+  return `R$ ${value.toFixed(2).replace(".", ",")}`;
 }
 
-// Read-only view of carts with at least 1 item that never turned into an
-// Order or a Quote. Unlike those two, a cart has no confirmed address/payment
-// method, so there is no conversion action here, only visibility for the
-// sales team.
+function whatsappLink(phone: string | undefined): string | null {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  return `https://wa.me/${digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`}`;
+}
+
+interface CustomerGroup {
+  customerId: string;
+  customer: Customer | undefined;
+  carts: Cart[];
+  lastUpdate: number;
+}
+
+// Carrinhos com produtos que o cliente escolheu e nao finalizou (nem pedido, nem orcamento).
+// Um cliente pode ter varios -- o vendedor ve tudo junto, com o contato, pra entrar em contato e
+// tentar reverter a venda. So leitura: o carrinho nao tem endereco/pagamento confirmados, entao nao
+// existe acao de conversao aqui.
 export default function PerdidosPage() {
   const [carts, setCarts] = useState<Cart[]>([]);
   const [customersById, setCustomersById] = useState<Record<string, Customer>>({});
@@ -31,9 +45,7 @@ export default function PerdidosPage() {
     });
   }, []);
 
-  // The cart never stores a price (see CartItem) -- the displayed value is
-  // always resolved live from the current product, same pattern the
-  // storefront's own cart page already uses.
+  // O carrinho nao guarda preco -- o valor mostrado e sempre o do produto hoje.
   useEffect(() => {
     const ids = new Set<string>();
     carts.forEach((cart) => cart.items.forEach((item) => ids.add(item.productId)));
@@ -57,51 +69,104 @@ export default function PerdidosPage() {
     }, 0);
   }
 
+  // Quem abandonou mais vezes aparece primeiro (mais chance de querer comprar), depois o mais recente.
+  const groups = useMemo<CustomerGroup[]>(() => {
+    const byCustomer = new Map<string, Cart[]>();
+    for (const cart of carts) byCustomer.set(cart.customerId, [...(byCustomer.get(cart.customerId) ?? []), cart]);
+    return [...byCustomer.entries()]
+      .map(([customerId, list]) => ({
+        customerId,
+        customer: customersById[customerId],
+        carts: [...list].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+        lastUpdate: Math.max(...list.map((cart) => Date.parse(cart.updatedAt))),
+      }))
+      .sort((a, b) => b.carts.length - a.carts.length || b.lastUpdate - a.lastUpdate);
+  }, [carts, customersById]);
+
   return (
     <AdminShell>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Perdidos</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Carrinhos com produtos que o cliente escolheu e não finalizou. Entre em contato pra tentar reverter a venda.
+        </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-            <tr>
-              <th className="text-left px-4 py-2.5">Cliente</th>
-              <th className="text-left px-4 py-2.5">Itens</th>
-              <th className="text-right px-4 py-2.5">Valor atual</th>
-              <th className="text-left px-4 py-2.5">Atualizado em</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {carts.map((cart) => {
-              const customer = customersById[cart.customerId];
-              const count = itemCountOf(cart);
-              const days = daysStalled(cart);
-              return (
-                <tr key={cart.id}>
-                  <td className="px-4 py-2.5 font-medium text-slate-900">{customer?.name ?? "-"}</td>
-                  <td className="px-4 py-2.5 text-slate-700">
-                    {count} {count === 1 ? "item" : "itens"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">R$ {valueOf(cart).toFixed(2).replace(".", ",")}</td>
-                  <td className="px-4 py-2.5 text-slate-500">
-                    {new Date(cart.updatedAt).toLocaleString("pt-BR")}
-                    {days >= 1 && (
-                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">
-                        parado ha {days} {days === 1 ? "dia" : "dias"}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {!loading && carts.length === 0 && (
-          <p className="text-sm text-slate-500 p-6 text-center">Nenhum carrinho em aberto no momento.</p>
-        )}
+      <div className="space-y-4">
+        {groups.map((group) => {
+          const phone = group.customer?.phone;
+          const wa = whatsappLink(phone);
+          const total = group.carts.reduce((sum, cart) => sum + valueOf(cart), 0);
+          const many = group.carts.length > 1;
+          return (
+            <section key={group.customerId} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold text-slate-900">{group.customer?.name ?? "Cliente não encontrado"}</h2>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${many ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                    >
+                      {group.carts.length} {many ? "carrinhos abandonados" : "carrinho abandonado"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {[phone, group.customer?.email].filter(Boolean).join(" | ") || "Sem contato cadastrado"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-slate-600">
+                    Total em carrinhos: <strong className="text-slate-900">{money(total)}</strong>
+                  </span>
+                  {wa && (
+                    <a
+                      href={wa}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-medium bg-green-600 text-white px-3 py-1.5 rounded-md hover:bg-green-700"
+                    >
+                      Chamar no WhatsApp
+                    </a>
+                  )}
+                </div>
+              </header>
+              <ul className="divide-y divide-slate-100">
+                {group.carts.map((cart) => {
+                  const days = daysStalled(cart);
+                  return (
+                    <li key={cart.id} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="text-slate-500">
+                          Atualizado em {new Date(cart.updatedAt).toLocaleString("pt-BR")}
+                          {days >= 1 && (
+                            <span className="ml-2 text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">
+                              parado há {days} {days === 1 ? "dia" : "dias"}
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-medium text-slate-900">{money(valueOf(cart))}</span>
+                      </div>
+                      <ul className="mt-2 text-sm text-slate-700 space-y-0.5">
+                        {cart.items.map((item) => (
+                          <li key={item.productId}>
+                            {item.quantity}x {productsById[item.productId]?.name ?? "Produto indisponível"}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
       </div>
+
+      {!loading && groups.length === 0 && (
+        <p className="text-sm text-slate-500 p-6 text-center bg-white border border-slate-200 rounded-lg">
+          Nenhum carrinho abandonado no momento.
+        </p>
+      )}
     </AdminShell>
   );
 }

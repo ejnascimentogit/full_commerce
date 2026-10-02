@@ -19,7 +19,7 @@ import type {
   Address,
   AdminUser,
   Cart,
-  CartItem,
+  CartSyncInput,
   Category,
   Company,
   Customer,
@@ -85,8 +85,8 @@ import {
 } from "./quotes-store";
 import {
   findAllCartsWithItems as findAllCartsWithItemsStore,
-  readCart as readCartStore,
-  writeCart as writeCartStore,
+  readCarts as readCartsStore,
+  syncCarts as syncCartsStore,
 } from "./cart-store";
 import {
   buildOrderItem,
@@ -449,18 +449,18 @@ export const mockApiClient: ApiClient = {
     return convertQuoteToOrderMock(id, customerId, input);
   },
 
-  async getCart(): Promise<Cart | null> {
+  async getCarts(): Promise<Cart[]> {
     await delay();
     const customerId = getSessionCustomerId();
-    if (!customerId) return null;
-    return readCartStore(customerId);
+    if (!customerId) return [];
+    return readCartsStore(customerId);
   },
 
-  async updateCart(items: CartItem[]): Promise<Cart> {
+  async syncCarts(carts: CartSyncInput[]): Promise<Cart[]> {
     await delay(200);
     const customerId = getSessionCustomerId();
     if (!customerId) throw new Error("UNAUTHENTICATED");
-    return writeCartStore(customerId, items);
+    return syncCartsStore(customerId, carts);
   },
 
   async registerAdmin(input: { name: string; email: string; password: string }): Promise<AdminUser> {

@@ -173,10 +173,9 @@ export interface Product {
 // Sem preco: o valor de cada item e sempre resolvido ao vivo a partir do
 // Product correspondente (basePrice/salePrice), nunca congelado -- diferente
 // de QuoteItem.referenceUnitPrice, que e um preco de tabela travado no
-// momento da criacao do orcamento. So existe um carrinho ATIVO por cliente
-// (customerId e unique no banco); os "carrinhos salvos"/multiplos carrinhos
-// que a loja mostra em /carrinhos sao um conceito so de front-end (ver
-// apps/storefront/lib/cart-context.tsx), nao tem equivalente aqui.
+// momento da criacao do orcamento. Um cliente pode ter varios carrinhos (o ativo + os deixados pra tras); todos
+// ficam no servidor pra equipe de vendas recuperar quem abandonou. A loja identifica
+// cada um pelo proprio id local (localId) -- ver apps/storefront/lib/cart-context.tsx.
 export interface CartItem {
   productId: string;
   quantity: number;
@@ -185,8 +184,24 @@ export interface CartItem {
 export interface Cart {
   id: string;
   customerId: string;
+  /** Id que a loja usa localmente pra esse carrinho -- chave de sincronizacao. */
+  localId: string;
+  /** Carrinho em uso agora (os outros sao os deixados pra tras). */
+  isActive: boolean;
+  /** "discarded" = o cliente apagou o carrinho; some da lista de abandonados. */
+  status: "open" | "discarded";
   items: CartItem[];
+  /** Ultima vez que o cliente mexeu nesse carrinho. */
   updatedAt: string;
+}
+
+/** Estado de um carrinho local enviado pro servidor (PUT /carts). */
+export interface CartSyncInput {
+  localId: string;
+  items: CartItem[];
+  isActive: boolean;
+  updatedAt: string;
+  discarded?: boolean;
 }
 
 export type OrderStatus =

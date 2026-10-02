@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { apiClient } from "@ecommerce/api-client";
+import type { Cart } from "@ecommerce/types";
 import { useAuth } from "./auth-context";
 
 const SYNC_DEBOUNCE_MS = 800;
@@ -41,6 +42,26 @@ interface StoredState {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+// Junta o que o servidor tem com o que existe neste aparelho, carrinho por carrinho (pelo id local).
+// O mexido por ultimo ganha; carrinho que so existe no servidor (ex: deixado em outro aparelho) vira
+// um carrinho pendente aqui.
+function mergeServerCarts(local: StoredState, serverCarts: Cart[], syncedIds: Set<string>): StoredState {
+  const carts = [...local.carts];
+  for (const serverCart of serverCarts) {
+    syncedIds.add(serverCart.localId);
+    const lines = serverCart.items.map((item) => ({ productId: item.productId, quantity: item.quantity }));
+    const index = carts.findIndex((cart) => cart.id === serverCart.localId);
+    if (index === -1) {
+      if (lines.length > 0) {
+        carts.push({ id: serverCart.localId, createdAt: serverCart.updatedAt, updatedAt: serverCart.updatedAt, lines });
+      }
+    } else if (Date.parse(serverCart.updatedAt) > Date.parse(carts[index].updatedAt)) {
+      carts[index] = { ...carts[index], updatedAt: serverCart.updatedAt, lines };
+    }
+  }
+  return { ...local, carts };
+}
+
 function storageKey(customerId: string) {
   return `ecommerce.carts.${customerId}`;
 }
@@ -60,8 +81,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { customer, loading: authLoading } = useAuth();
   const [state, setState] = useState<StoredState | null>(null);
   const previousCustomerId = useRef<string | null | undefined>(undefined);
-  // Skips the sync effect once, right after a hydration-driven setState.
-  const skipNextSync = useRef(false);
+  // Ids dos carrinhos que o servidor ja conhece (vieram dele ou ja foram enviados). Um carrinho que ficou
+  // vazio (ex: depois do checkout) so e reenviado se o servidor ja tinha uma versao dele.
+  const syncedIds = useRef<Set<string>>(new Set());
   // Only true after the initial GET /cart for this customer has finished
   // (success or failure). Without this the sync effect could fire BEFORE
   // hydration completes: on first render `lines` is always [] (state starts
@@ -86,6 +108,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     hydrated.current = false;
+    syncedIds.current = new Set();
 
     (async () => {
       const raw = localStorage.getItem(storageKey(currentId));
@@ -109,43 +132,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // The server is the source of truth for the ACTIVE cart from here on --
-      // the other saved carts (pendingCarts) stay fully local. If the server
-      // already has a cart (another device, or a previous sync), it replaces
-      // the local active cart lines; if it has nothing yet, whatever exists
-      // locally is sent there now, so nothing is lost on this first sync.
+      // O servidor guarda TODOS os carrinhos do cliente (o ativo e os deixados pra tras), pra equipe de
+      // vendas poder recuperar quem abandonou. Aqui junta o que ele ja tem com o que existe neste aparelho;
+      // depois da hidratacao o efeito de sincronizacao abaixo envia o que for so local.
+      let merged: StoredState = parsed;
       try {
-        const serverCart = await apiClient.getCart();
+        const serverCarts = await apiClient.getCarts();
         if (cancelled) return;
-        if (serverCart) {
-          parsed = {
-            ...parsed,
-            carts: parsed.carts.map((c) =>
-              c.id === parsed!.activeCartId
-                ? {
-                    ...c,
-                    lines: serverCart.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-                    updatedAt: serverCart.updatedAt,
-                  }
-                : c,
-            ),
-          };
-        } else {
-          const active = parsed.carts.find((c) => c.id === parsed!.activeCartId);
-          if (active && active.lines.length > 0) {
-            await apiClient.updateCart(active.lines);
-          }
-        }
+        merged = mergeServerCarts(parsed, serverCarts, syncedIds.current);
       } catch {
-        // No server available right now (network, etc.) -- keep going with
-        // local state only; sync is retried on the next cart change.
+        // Sem servidor agora (rede, etc.) -- segue com o estado local; a sincronizacao tenta de novo
+        // na proxima mudanca. O servidor nunca perde dado por isso: ele so aceita uma versao mais nova.
       }
       if (cancelled) return;
 
-      localStorage.setItem(storageKey(currentId), JSON.stringify(parsed));
-      skipNextSync.current = true;
+      localStorage.setItem(storageKey(currentId), JSON.stringify(merged));
       hydrated.current = true;
-      setState(parsed);
+      setState(merged);
       previousCustomerId.current = currentId;
     })();
 
@@ -170,22 +173,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const lines = activeCart?.lines ?? [];
   const pendingCarts = (state?.carts ?? []).filter((c) => c.id !== state?.activeCartId && c.lines.length > 0);
 
+  // Sincroniza TODOS os carrinhos com o servidor (com debounce) sempre que algo muda: adicionar/remover
+  // item, trocar o carrinho ativo, esvaziar apos checkout. So envia carrinho com item, ou um que o servidor
+  // ja conhece (pra refletir que foi esvaziado).
   useEffect(() => {
-    if (!customer) return;
+    if (!customer || !state) return;
     if (!hydrated.current) return;
-    if (skipNextSync.current) {
-      skipNextSync.current = false;
-      return;
-    }
     const timer = setTimeout(() => {
-      apiClient.updateCart(lines).catch(() => {
-        // Network/server failure should not block the shopping experience --
-        // the local cart keeps working; the next change retries the sync.
-      });
+      const payload = state.carts
+        .filter((c) => c.lines.length > 0 || syncedIds.current.has(c.id))
+        .map((c) => ({
+          localId: c.id,
+          items: c.lines,
+          isActive: c.id === state.activeCartId,
+          updatedAt: c.updatedAt,
+        }));
+      if (payload.length === 0) return;
+      apiClient
+        .syncCarts(payload)
+        .then(() => payload.forEach((p) => syncedIds.current.add(p.localId)))
+        .catch(() => {
+          // Falha de rede/servidor nao trava a compra -- o carrinho local segue normal e a proxima
+          // mudanca tenta sincronizar de novo.
+        });
     }, SYNC_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, customer]);
+  }, [state, customer]);
 
   const value = useMemo<CartContextValue>(
     () => ({
@@ -214,6 +227,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         persist({ ...state, activeCartId: cartId });
       },
       deleteCart: (cartId) => {
+      apiClient
+        .syncCarts([{ localId: cartId, items: [], isActive: false, updatedAt: new Date().toISOString(), discarded: true }])
+        .catch(() => {});
+      syncedIds.current.delete(cartId);
         if (!state) return;
         let carts = state.carts.filter((c) => c.id !== cartId);
         let activeCartId = state.activeCartId;
