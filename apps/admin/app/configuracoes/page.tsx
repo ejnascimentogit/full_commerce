@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsibleSection, CONFIG_EXPAND_EVENT } from "@/components/CollapsibleSection";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
@@ -331,6 +332,7 @@ export default function ConfiguracoesPage() {
   }
 
   function goToSection(id: string) {
+    window.dispatchEvent(new CustomEvent(CONFIG_EXPAND_EVENT, { detail: id }));
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     setHighlightedId(id);
     setTimeout(() => setHighlightedId((current) => (current === id ? null : current)), 2000);
@@ -370,8 +372,7 @@ export default function ConfiguracoesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,720px)_1fr] gap-6 items-start">
         <div className="min-w-0">
-      <section id="cor-marca" className={sectionClass("cor-marca", "max-w-xl mt-0")}>
-        <h2 className="font-semibold text-slate-900 mb-3">Cor da marca</h2>
+      <CollapsibleSection id="cor-marca" title="Cor da marca" className={sectionClass("cor-marca", "max-w-xl mt-0")}>
         <p className="text-sm text-slate-500 mb-3">
           Uma cor só — os outros tons (fundo claro, hover, etc.) são derivados automaticamente.
         </p>
@@ -409,12 +410,12 @@ export default function ConfiguracoesPage() {
             {savingColor ? "Salvando..." : "Salvar cor"}
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="promocoes" className={sectionClass("promocoes", "max-w-xl")}>
+      <CollapsibleSection id="promocoes" title="Promoções e cupons" className={sectionClass("promocoes", "max-w-xl")}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-slate-900">Promoções e cupons</h2>
+            
             <p className="text-sm text-slate-500 mt-1">
               Desligado, nenhum cupom aplica desconto no checkout — mesmo as promoções cadastradas continuam ativas
               (é só um freio geral, não precisa apagar nada).
@@ -431,10 +432,9 @@ export default function ConfiguracoesPage() {
             />
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="logo" className={sectionClass("logo", "max-w-xl")}>
-        <h2 className="font-semibold text-slate-900 mb-3">Logo</h2>
+      <CollapsibleSection id="logo" title="Logo" className={sectionClass("logo", "max-w-xl")}>
         <div className="flex items-center gap-4">
           {settings.logoUrl ? (
             <div className="relative">
@@ -456,10 +456,9 @@ export default function ConfiguracoesPage() {
             <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} className="hidden" />
           </label>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="carrossel" className={sectionClass("carrossel", "max-w-2xl")}>
-        <h2 className="font-semibold text-slate-900 mb-3">Carrossel da home</h2>
+      <CollapsibleSection id="carrossel" title="Carrossel da home" className={sectionClass("carrossel", "max-w-2xl")}>
 
         <div className="space-y-3 mb-4">
           {sortedBanners.map((banner, i) => (
@@ -518,10 +517,9 @@ export default function ConfiguracoesPage() {
             <input type="file" accept="image/*" onChange={handleBannerUpload} disabled={uploadingBanner} className="hidden" />
           </label>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="textos-site" className={sectionClass("textos-site", "max-w-2xl")}>
-        <h2 className="font-semibold text-slate-900 mb-1">Textos do site</h2>
+      <CollapsibleSection id="textos-site" title="Textos do site" className={sectionClass("textos-site", "max-w-2xl")}>
         <p className="text-sm text-slate-500 mb-4">
           Nome da loja, título de destaque da home e os 3 selos — troque à vontade, sem precisar mexer em código.
         </p>
@@ -587,10 +585,9 @@ export default function ConfiguracoesPage() {
             {savingCopy ? "Salvando..." : "Salvar textos"}
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="rodape" className={sectionClass("rodape", "max-w-2xl")}>
-        <h2 className="font-semibold text-slate-900 mb-1">Rodapé</h2>
+      <CollapsibleSection id="rodape" title="Rodapé" className={sectionClass("rodape", "max-w-2xl")}>
         <p className="text-sm text-slate-500 mb-4">
           Razão social/CNPJ/endereço, contato de suporte e redes sociais exibidos no rodapé da loja.
         </p>
@@ -736,10 +733,9 @@ export default function ConfiguracoesPage() {
             {savingFooter ? "Salvando..." : "Salvar rodapé"}
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="pedidos-frete" className={sectionClass("pedidos-frete", "max-w-xl")}>
-        <h2 className="font-semibold text-slate-900 mb-1">Pedidos e frete</h2>
+      <CollapsibleSection id="pedidos-frete" title="Pedidos e frete" className={sectionClass("pedidos-frete", "max-w-xl")}>
         <p className="text-sm text-slate-500 mb-4">
           Por padrão a loja não tem pedido mínimo e o frete é grátis pra CNPJ — os dois são só o ponto de partida,
           ajuste como quiser.
@@ -815,10 +811,9 @@ export default function ConfiguracoesPage() {
             {savingOrderRules ? "Salvando..." : "Salvar"}
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="pagamento" className={sectionClass("pagamento", "max-w-xl")}>
-        <h2 className="font-semibold text-slate-900 mb-1">Pagamento</h2>
+      <CollapsibleSection id="pagamento" title="Pagamento" className={sectionClass("pagamento", "max-w-xl")}>
         <p className="text-sm text-slate-500 mb-4">
           Configure a chave Pix da loja pra gerar o QR Code no checkout, e as regras de parcelamento no cartão.
         </p>
@@ -939,7 +934,7 @@ export default function ConfiguracoesPage() {
             {savingPayment ? "Salvando..." : "Salvar pagamento"}
           </button>
         </div>
-      </section>
+      </CollapsibleSection>
 
       <div id="rota" className={highlightedId === "rota" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
         <RegionsSection />

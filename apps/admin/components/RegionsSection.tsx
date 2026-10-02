@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsibleSection } from "./CollapsibleSection";
 import { useEffect, useState } from "react";
 import { apiClient } from "@ecommerce/api-client";
 import type { DeliveryRegion } from "@ecommerce/types";
@@ -60,17 +61,13 @@ export function RegionsSection() {
   }
 
   return (
-    <section className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="font-semibold text-slate-900">Rota</h2>
-        <button
+    <CollapsibleSection expandKey="rota" title="Rota" className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl" action={<button
           type="button"
           onClick={() => setShowForm((s) => !s)}
           className="text-sm text-brand-600 border border-brand-200 rounded-md px-3 py-1.5 hover:bg-brand-50"
         >
           {showForm ? "Cancelar" : "+ Nova zona de entrega"}
-        </button>
-      </div>
+        </button>}>
       <p className="text-sm text-slate-500 mb-4">
         A região de cada cliente é resolvida automaticamente pelo bairro do endereço — cadastre aqui quais bairros
         cada zona atende. Cliente com bairro fora de qualquer zona fica sem cobertura até você adicionar aqui.
@@ -170,6 +167,6 @@ export function RegionsSection() {
         ))}
         {regions.length === 0 && <p className="text-sm text-slate-500">Nenhuma zona cadastrada ainda.</p>}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

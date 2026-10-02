@@ -1,5 +1,6 @@
 "use client";
 
+import { CollapsibleSection } from "./CollapsibleSection";
 import { useEffect, useState } from "react";
 import { apiClient } from "@ecommerce/api-client";
 import type { AdminUser, StoreSettings } from "@ecommerce/types";
@@ -62,8 +63,7 @@ export function AtividadesAutomaticasSection() {
   if (!settings) return null;
 
   return (
-    <section className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
-      <h2 className="font-semibold text-slate-900 mb-1">Atividades Automaticas</h2>
+    <CollapsibleSection expandKey="atividades-automaticas" title="Atividades Automaticas" className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
       <p className="text-sm text-slate-500 mb-4">
         Gera cards em Atividades sozinho, todo dia, a partir de 3 situacoes: orcamento parado (criado e nao virou pedido ate o dia seguinte), cliente
         que ja comprou mas sumiu, e cliente cadastrado que nunca comprou. Sem isso ligado, ninguem precisa lembrar de checar essas situacoes na mao.
@@ -166,6 +166,6 @@ export function AtividadesAutomaticasSection() {
       >
         {saving ? "Salvando..." : "Salvar"}
       </button>
-    </section>
+    </CollapsibleSection>
   );
 }
