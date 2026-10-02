@@ -371,6 +371,7 @@ function mapSettings(s: Record<string, unknown>) {
     monthlyInterestRate: Number(s.monthly_interest_rate),
     enabledPaymentMethods: s.enabled_payment_methods ?? ["pix", "debit", "credit", "cash"],
     allowAdjustmentsAfterDispatch: s.allow_adjustments_after_dispatch,
+    whatsappTemplates: s.whatsapp_templates ?? undefined,
     // Atividades Automaticas (ver ecommerce.gerar_atividades_automaticas / atividades-automaticas-implementacao.md).
     // atividade_auto_round_robin_cursor NAO e exposto aqui de proposito -- e estado
     // interno so da funcao SQL do cron avancar o rodizio, nao um dado de configuracao
@@ -1795,6 +1796,7 @@ app.patch("/settings", async (c) => {
   if ("monthlyInterestRate" in patch) row.monthly_interest_rate = patch.monthlyInterestRate;
   if ("enabledPaymentMethods" in patch) row.enabled_payment_methods = patch.enabledPaymentMethods;
   if ("allowAdjustmentsAfterDispatch" in patch) row.allow_adjustments_after_dispatch = patch.allowAdjustmentsAfterDispatch;
+  if ("whatsappTemplates" in patch) row.whatsapp_templates = patch.whatsappTemplates;
   // Atividades Automaticas -- atividadeAutoRoundRobinCursor de proposito NAO
   // entra aqui (ver mapSettings): e estado interno do cron, nao configuracao.
   if ("atividadeAutoAtivo" in patch) row.atividade_auto_ativo = patch.atividadeAutoAtivo;

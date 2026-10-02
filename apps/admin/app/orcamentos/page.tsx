@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@ecommerce/api-client";
 import type { Customer, Quote, QuoteStatus } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
+import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
+import { money, productList } from "@/lib/whatsapp";
 import { QUOTE_STATUS_BADGE, QUOTE_STATUS_LABEL } from "@/lib/quote-status";
 
 const ALL_STATUSES = Object.keys(QUOTE_STATUS_LABEL) as QuoteStatus[];
@@ -17,6 +19,7 @@ function quoteTotal(quote: Quote): number {
 export default function OrcamentosPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [customersById, setCustomersById] = useState<Record<string, Customer>>({});
+  const [whatsappOpenId, setWhatsappOpenId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | "">("");
 
   useEffect(() => {
@@ -62,7 +65,8 @@ export default function OrcamentosPage() {
             {filtered.map((quote) => {
               const customer = customersById[quote.customerId];
               return (
-                <tr key={quote.id}>
+                <Fragment key={quote.id}>
+                <tr>
                   <td className="px-4 py-2.5 font-medium text-slate-900">{quote.quoteNumber}</td>
                   <td className="px-4 py-2.5 text-slate-700">{customer?.name ?? "-"}</td>
                   <td className="px-4 py-2.5 text-slate-500">{new Date(quote.createdAt).toLocaleDateString("pt-BR")}</td>
@@ -74,6 +78,7 @@ export default function OrcamentosPage() {
                   <td className="px-4 py-2.5 text-right">
                     R$ {quoteTotal(quote).toFixed(2).replace(".", ",")}
                     {quote.quotedTotal == null && <span className="text-slate-400 text-xs"> (ref.)</span>}
+                  <WhatsappButton open={whatsappOpenId === quote.id} onClick={() => setWhatsappOpenId(whatsappOpenId === quote.id ? null : quote.id)} />
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <Link href={`/orcamentos/${quote.id}`} className="text-brand-600 hover:underline">
@@ -81,6 +86,19 @@ export default function OrcamentosPage() {
                     </Link>
                   </td>
                 </tr>
+                {whatsappOpenId === quote.id && (
+                  <tr>
+                    <td colSpan={6} className="px-4 pb-4 bg-white">
+                      <WhatsappPanel
+                        kind="orcamentos"
+                        customer={customer}
+                        vars={{ numero: String(quote.quoteNumber), status: QUOTE_STATUS_LABEL[quote.status], valor: money(quoteTotal(quote)), produtos: productList(quote.items) }}
+                        onClose={() => setWhatsappOpenId(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
