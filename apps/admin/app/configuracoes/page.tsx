@@ -81,6 +81,7 @@ export default function ConfiguracoesPage() {
   const { user } = useAdminAuth();
   const router = useRouter();
   const [helpSearch, setHelpSearch] = useState("");
+  const [settingsError, setSettingsError] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [brandColor, setBrandColor] = useState("#1d4ed8");
@@ -141,7 +142,8 @@ export default function ConfiguracoesPage() {
       setInterestFreeInstallments(s.interestFreeInstallments.toString());
       setMonthlyInterestRate(s.monthlyInterestRate.toString());
       setEnabledPaymentMethods(s.enabledPaymentMethods ?? PAYMENT_METHOD_ORDER);
-    });
+      setSettingsError(false);
+    }).catch(() => setSettingsError(true));
   }
 
   useEffect(refresh, []);
@@ -349,7 +351,32 @@ export default function ConfiguracoesPage() {
       ? CONFIG_SECTIONS
       : CONFIG_SECTIONS.filter((s) => `${s.title} ${s.help}`.toLowerCase().includes(helpSearch.trim().toLowerCase()));
 
-  if (user?.role !== "platformAdmin" || !settings || !siteCopy || !footer) return null;
+  // Antes isso devolvia null: sem o AdminShell, nem o menu nem o redirecionamento pro login rodavam, e se o usuario
+  // ou as configuracoes demorassem/falhassem no carregamento a tela ficava em branco pra sempre.
+  if (user?.role !== "platformAdmin" || !settings || !siteCopy || !footer) {
+    return (
+      <AdminShell>
+        <h1 className="text-2xl font-bold text-slate-900 mb-6">Configurações</h1>
+        {settingsError ? (
+          <p className="text-sm text-slate-600">
+            Não foi possível carregar as configurações.{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsError(false);
+                refresh();
+              }}
+              className="text-brand-600 underline"
+            >
+              Tentar novamente
+            </button>
+          </p>
+        ) : (
+          <p className="text-sm text-slate-500">Carregando…</p>
+        )}
+      </AdminShell>
+    );
+  }
 
   const COLOR_PRESETS = [
     { name: "Azul", value: "#1d4ed8" },
