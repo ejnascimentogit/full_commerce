@@ -59,7 +59,7 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
     return (
       <AdminShell>
         <p className="text-slate-500">Orcamento nao encontrado.</p>
-        <Link href="/orcamentos" className="text-sm text-brand-600 hover:underline">
+        <Link href="/comercial/vendas?aba=orcamentos" className="text-sm text-brand-600 hover:underline">
           {"<- Voltar para orcamentos"}
         </Link>
       </AdminShell>
@@ -114,7 +114,7 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
 
   return (
     <AdminShell>
-      <Link href="/orcamentos" className="text-sm text-brand-600 hover:underline">
+      <Link href="/comercial/vendas?aba=orcamentos" className="text-sm text-brand-600 hover:underline">
         {"<- Voltar para orcamentos"}
       </Link>
       <div className="flex items-center justify-between mb-1 mt-2">
