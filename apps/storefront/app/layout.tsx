@@ -6,7 +6,7 @@ import { ThemeInjector } from "@/components/ThemeInjector";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Full-Commerce | Loja B2B",
+  title: "Loja B2B",
   description: "Loja por atacado para o seu negócio.",
 };
 

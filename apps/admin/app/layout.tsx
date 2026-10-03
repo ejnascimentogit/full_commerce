@@ -4,7 +4,7 @@ import { AdminAuthProvider } from "@/lib/admin-auth-context";
 import { ThemeInjector } from "@/components/ThemeInjector";
 
 export const metadata: Metadata = {
-  title: "Painel Admin | Full-Commerce",
+  title: "Painel Admin",
   description: "Painel de gestão do e-commerce.",
 };
 
