@@ -8,6 +8,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyAdminLogin,
   CompanyProfile,
   Customer,
   DeliveryRegion,
@@ -283,6 +284,16 @@ function createRestApiClient(baseUrl: string): ApiClient {
       const data = await upload<{ url: string }>("/api/admin/activities/photos", file, ADMIN_TOKEN_KEY);
       return data.url;
     },
+    uploadCompanyLogo: async (id: string, file: File) => {
+      const data = await upload<{ url: string }>(`/api/admin/companies/${id}/logo`, file, ADMIN_TOKEN_KEY);
+      return data.url;
+    },
+    getCompanyAdmins: (id: string) =>
+      request<CompanyAdminLogin[]>(`/api/admin/companies/${id}/admins`, { tokenKey: ADMIN_TOKEN_KEY }),
+    createCompanyAdmin: (id: string, input: { kind: "company" | "support"; email: string }) =>
+      request<CompanyAdminLogin>(`/api/admin/companies/${id}/admins`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    resetCompanyAdminPassword: (id: string, adminId: string) =>
+      request<void>(`/api/admin/companies/${id}/admins/${adminId}/reset-password`, { method: "POST", tokenKey: ADMIN_TOKEN_KEY }),
     uploadLogo: async (file: File) => {
       const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
       return data.url;

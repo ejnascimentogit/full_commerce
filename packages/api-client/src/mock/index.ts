@@ -22,6 +22,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyAdminLogin,
   Customer,
   DeliveryRegion,
   Order,
@@ -519,6 +520,22 @@ export const mockApiClient: ApiClient = {
   },
 
   async deleteCompany(): Promise<void> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async uploadCompanyLogo(): Promise<string> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async getCompanyAdmins(): Promise<CompanyAdminLogin[]> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async createCompanyAdmin(): Promise<CompanyAdminLogin> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async resetCompanyAdminPassword(): Promise<void> {
     throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
   },
 

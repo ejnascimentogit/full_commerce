@@ -1945,7 +1945,10 @@ app.get("/admin/companies", async (c) => {
   await requirePlatformOwner(c);
   const { data, error } = await eco().from("companies").select("*").order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json((data ?? []).map(mapCompany));
+  // A logo mora em store_settings (e a que a loja de cada empresa usa) -- junta aqui pra tela de Empresas mostrar.
+  const { data: logos } = await eco().from("store_settings").select("company_id, logo_url");
+  const logoByCompany = new Map((logos ?? []).map((row) => [row.company_id as string, row.logo_url as string | null]));
+  return c.json((data ?? []).map((co) => ({ ...mapCompany(co), logoUrl: logoByCompany.get(co.id as string) ?? undefined })));
 });
 
 // Cria a empresa + a linha de configurações padrão dela (site_copy/footer
@@ -2079,7 +2082,7 @@ app.patch("/admin/companies/:id", async (c) => {
 });
 
 // Dados cadastrais da empresa: so campos conhecidos, texto aparado e limitado, CNPJ validado. Vazio vira "nao informado".
-const PROFILE_TEXT_FIELDS = ["legalName", "tradeName", "cnpj", "stateRegistration", "email", "phone", "responsibleName", "responsiblePhone"];
+const PROFILE_TEXT_FIELDS = ["legalName", "tradeName", "cnpj", "stateRegistration", "email", "phone", "responsibleName", "responsiblePhone", "adminEmail", "supportAdminEmail"];
 const PROFILE_ADDRESS_FIELDS = ["zipCode", "street", "number", "complement", "neighborhood", "city", "state"];
 
 function cleanProfileText(value: unknown): string | undefined {
@@ -2123,6 +2126,106 @@ app.delete("/admin/companies/:id", async (c) => {
     if (error.message.includes("COMPANY_NOT_FOUND")) throw new ApiError(404, "COMPANY_NOT_FOUND");
     throw new ApiError(500, "DB_ERROR", error.message);
   }
+  return c.body(null, 204);
+});
+
+// Logo da loja de uma empresa, enviada pelo operador da plataforma (empresa 1) -- pra empresa que ainda nao tem admin
+// nem dominio proprio. Mesmo bucket de /settings/logo; grava direto em store_settings.logo_url da empresa escolhida.
+app.post("/admin/companies/:id/logo", async (c) => {
+  await requirePlatformOwner(c);
+  const id = c.req.param("id");
+  const { data: company } = await eco().from("companies").select("id").eq("id", id).maybeSingle();
+  if (!company) throw new ApiError(404, "COMPANY_NOT_FOUND");
+  const form = await c.req.formData();
+  const file = form.get("file") as File;
+  if (!file) throw new ApiError(422, "FILE_REQUIRED");
+  if (!file.type.startsWith("image/")) throw new ApiError(422, "INVALID_FILE", "Envie um arquivo de imagem.");
+  const safeName = file.name.replace(/[^\w.-]+/g, "_");
+  const path = `company-${id}/logo-${Date.now()}-${safeName}`;
+  const { error } = await db().storage.from("ecommerce-site-assets").upload(path, file, { contentType: file.type, upsert: true });
+  if (error) throw new ApiError(500, "STORAGE_ERROR", error.message);
+  const { data: pub } = db().storage.from("ecommerce-site-assets").getPublicUrl(path);
+  const { error: updateError } = await eco()
+    .from("store_settings")
+    .update({ logo_url: pub.publicUrl, updated_at: new Date().toISOString() })
+    .eq("company_id", id);
+  if (updateError) throw new ApiError(500, "DB_ERROR", updateError.message);
+  return c.json({ url: pub.publicUrl });
+});
+
+// Logins de administrador de uma empresa, criados pelo operador da plataforma (empresa 1). Senha inicial fixa
+// (decisao do dono do projeto): cada pessoa troca depois. "Redefinir senha" volta pra mesma senha inicial.
+const DEFAULT_ADMIN_PASSWORD = "123456";
+
+app.get("/admin/companies/:id/admins", async (c) => {
+  await requirePlatformOwner(c);
+  const { data, error } = await eco()
+    .from("admin_users")
+    .select("id, name, email, active")
+    .eq("company_id", c.req.param("id"))
+    .eq("role", "platformAdmin")
+    .order("created_at", { ascending: true });
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map((a) => ({ id: a.id, name: a.name, email: a.email, active: a.active ?? true })));
+});
+
+app.post("/admin/companies/:id/admins", async (c) => {
+  await requirePlatformOwner(c);
+  const companyId = c.req.param("id");
+  const input = await c.req.json();
+  const kind = input.kind;
+  const email = String(input.email ?? "").trim().toLowerCase();
+  if (kind !== "company" && kind !== "support") throw new ApiError(422, "INVALID_INPUT", "Tipo de login inválido.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError(422, "INVALID_INPUT", "E-mail inválido.");
+
+  const { data: company } = await eco().from("companies").select("id, name, profile").eq("id", companyId).maybeSingle();
+  if (!company) throw new ApiError(404, "COMPANY_NOT_FOUND");
+
+  const { data: created, error: createError } = await db().auth.admin.createUser({
+    email,
+    password: DEFAULT_ADMIN_PASSWORD,
+    email_confirm: true,
+  });
+  if (createError || !created.user) {
+    throw new ApiError(422, createError?.code === "weak_password" ? "WEAK_PASSWORD" : "EMAIL_IN_USE", createError?.message);
+  }
+
+  const label = kind === "company" ? "Administrador" : "Suporte Full-Commerce";
+  const { data: adminUser, error } = await eco()
+    .from("admin_users")
+    .insert({
+      company_id: companyId,
+      auth_user_id: created.user.id,
+      name: `${label} — ${company.name}`,
+      email,
+      role: "platformAdmin",
+    })
+    .select("id, name, email, active")
+    .single();
+  if (error) {
+    await db().auth.admin.deleteUser(created.user.id);
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+
+  // Guarda o e-mail no cadastro da empresa pra tela reabrir com ele preenchido.
+  const profile = { ...((company.profile as Record<string, unknown>) ?? {}), [kind === "company" ? "adminEmail" : "supportAdminEmail"]: email };
+  await eco().from("companies").update({ profile }).eq("id", companyId);
+
+  return c.json({ id: adminUser.id, name: adminUser.name, email: adminUser.email, active: adminUser.active ?? true });
+});
+
+app.post("/admin/companies/:id/admins/:adminId/reset-password", async (c) => {
+  await requirePlatformOwner(c);
+  const { data: adminUser } = await eco()
+    .from("admin_users")
+    .select("auth_user_id")
+    .eq("id", c.req.param("adminId"))
+    .eq("company_id", c.req.param("id"))
+    .eq("role", "platformAdmin")
+    .maybeSingle();
+  if (!adminUser) throw new ApiError(404, "NOT_FOUND");
+  const { error } = await db().auth.admin.updateUserById(adminUser.auth_user_id as string, { password: DEFAULT_ADMIN_PASSWORD });
+  if (error) throw new ApiError(500, "AUTH_ERROR", error.message);
   return c.body(null, 204);
 });
 

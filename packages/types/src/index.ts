@@ -47,6 +47,14 @@ export interface AdminUser {
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */
 export type EcommerceType = "wholesale" | "televendas";
 
+/** Login de administrador de uma empresa (sem senha -- a senha nunca sai do servidor). */
+export interface CompanyAdminLogin {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+}
+
 /** Dados cadastrais basicos de uma empresa (tela Empresas do admin, visivel so pra empresa 1). */
 export interface CompanyProfile {
   legalName?: string;
@@ -57,6 +65,9 @@ export interface CompanyProfile {
   phone?: string;
   responsibleName?: string;
   responsiblePhone?: string;
+  /** E-mails de acesso (login) dos administradores desta empresa -- ver POST /admin/companies/:id/admins. */
+  adminEmail?: string;
+  supportAdminEmail?: string;
   address?: {
     zipCode?: string;
     street?: string;
@@ -84,6 +95,8 @@ export interface Company {
   branchCode: number;
   /** Dados cadastrais -- so o operador da plataforma (empresa 1) enxerga e edita. */
   profile?: CompanyProfile;
+  /** Logo da loja (store_settings.logo_url) -- preenchida so na listagem de empresas do operador da plataforma. */
+  logoUrl?: string;
 }
 
 export interface Address {
