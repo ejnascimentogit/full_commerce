@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
-import type { Company, CompanyProfile, EcommerceType } from "@ecommerce/types";
+import type { Company, CompanyAdminLogin, CompanyProfile, EcommerceType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -14,6 +14,9 @@ const ERRO_MENSAGEM: Record<string, string> = {
   COMPANY_PROTECTED: "A empresa 1 (Full-Commerce) não pode ser excluída.",
   COMPANY_NOT_FOUND: "Empresa não encontrada — atualize a página.",
   INVALID_DOCUMENT: "CNPJ inválido. Confira os números.",
+  EMAIL_IN_USE: "Esse e-mail já tem um login. Use outro e-mail ou, se for desta empresa, use Redefinir senha.",
+  WEAK_PASSWORD: "A senha 123456 foi recusada pelo Supabase (considerada fraca). Me avise para ajustar.",
+  INVALID_FILE: "Envie um arquivo de imagem (PNG, JPG ou SVG).",
   INVALID_INPUT: "Confira os dados informados (nome e identificador são obrigatórios).",
   DB_ERROR: "Não foi possível salvar — o identificador (slug) pode já estar em uso por outra empresa.",
 };
@@ -149,6 +152,7 @@ export default function EmpresasPage() {
       {editingData && (
         <CompanyFormModal
           company={editingData}
+          onLogoChanged={refresh}
           onClose={() => setEditingData(null)}
           onSaved={() => {
             setEditingData(null);
@@ -201,6 +205,8 @@ interface FormState {
   neighborhood: string;
   city: string;
   state: string;
+  adminEmail: string;
+  supportAdminEmail: string;
 }
 
 function toForm(company: Company | null): FormState {
@@ -225,6 +231,8 @@ function toForm(company: Company | null): FormState {
     neighborhood: a.neighborhood ?? "",
     city: a.city ?? "",
     state: a.state ?? "",
+    adminEmail: p.adminEmail ?? suggestEmail("adm", company?.name ?? ""),
+    supportAdminEmail: p.supportAdminEmail ?? suggestEmail("suporte", company?.name ?? ""),
   };
 }
 
@@ -238,6 +246,8 @@ function toProfile(f: FormState): CompanyProfile {
     phone: f.phone,
     responsibleName: f.responsibleName,
     responsiblePhone: f.responsiblePhone,
+    adminEmail: f.adminEmail,
+    supportAdminEmail: f.supportAdminEmail,
     address: {
       zipCode: f.zipCode,
       street: f.street,
@@ -250,18 +260,105 @@ function toProfile(f: FormState): CompanyProfile {
   };
 }
 
+// Sugestão de e-mail de acesso: prefixo + primeira palavra do nome da empresa, sem acento/espaço (ex: adm_almir@...).
+function suggestEmail(prefix: string, companyName: string): string {
+  const first = companyName.trim().split(/\s+/)[0] ?? "";
+  const clean = slugify(first).replace(/-/g, "");
+  return clean ? `${prefix}_${clean}@fullcommerce.com.br` : "";
+}
+
 // Cadastro completo da empresa: serve pra criar (company = null) e pra editar os dados de uma já existente.
-function CompanyFormModal({ company, onClose, onSaved }: { company: Company | null; onClose: () => void; onSaved: () => void }) {
+function CompanyFormModal({
+  company,
+  onClose,
+  onSaved,
+  onLogoChanged,
+}: {
+  company: Company | null;
+  onClose: () => void;
+  onSaved: () => void;
+  onLogoChanged?: () => void;
+}) {
   const isEdit = company !== null;
   const [form, setForm] = useState<FormState>(() => toForm(company));
   const [saving, setSaving] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(company?.logoUrl);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [admins, setAdmins] = useState<CompanyAdminLogin[]>([]);
+  const [emailsEdited, setEmailsEdited] = useState(false);
+  const [busyLogin, setBusyLogin] = useState(false);
+
+  useEffect(() => {
+    if (!company) return;
+    apiClient
+      .getCompanyAdmins(company.id)
+      .then(setAdmins)
+      .catch(() => setAdmins([]));
+  }, [company]);
+
+  function loginFor(email: string) {
+    const alvo = email.trim().toLowerCase();
+    return alvo ? admins.find((a) => a.email.toLowerCase() === alvo) : undefined;
+  }
+
+  async function handleCreateLogin(kind: "company" | "support") {
+    if (!company) return;
+    const email = (kind === "company" ? form.adminEmail : form.supportAdminEmail).trim();
+    setBusyLogin(true);
+    try {
+      await apiClient.createCompanyAdmin(company.id, { kind, email });
+      setAdmins(await apiClient.getCompanyAdmins(company.id));
+      alert(`Login criado: ${email}\nSenha inicial: 123456 (a pessoa pode trocar depois).`);
+    } catch (err) {
+      alert(mensagemDeErro(err));
+    } finally {
+      setBusyLogin(false);
+    }
+  }
+
+  async function handleResetLogin(admin: CompanyAdminLogin) {
+    if (!company) return;
+    if (!window.confirm(`Voltar a senha de ${admin.email} para 123456?`)) return;
+    setBusyLogin(true);
+    try {
+      await apiClient.resetCompanyAdminPassword(company.id, admin.id);
+      alert("Pronto: a senha voltou para 123456.");
+    } catch (err) {
+      alert(mensagemDeErro(err));
+    } finally {
+      setBusyLogin(false);
+    }
+  }
+
+  // A logo é aplicada na hora (não espera o "Salvar dados") — vai direto pra loja daquela empresa.
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const input = e.target;
+    if (!file || !company) return;
+    setUploadingLogo(true);
+    try {
+      setLogoUrl(await apiClient.uploadCompanyLogo(company.id, file));
+      onLogoChanged?.();
+    } catch (err) {
+      alert(mensagemDeErro(err));
+    } finally {
+      setUploadingLogo(false);
+      input.value = "";
+    }
+  }
 
   function set<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   function handleNameChange(value: string) {
-    setForm((prev) => ({ ...prev, name: value, slug: isEdit ? prev.slug : slugify(value) }));
+    setForm((prev) => ({
+      ...prev,
+      name: value,
+      slug: isEdit ? prev.slug : slugify(value),
+      adminEmail: isEdit || emailsEdited ? prev.adminEmail : suggestEmail("adm", value),
+      supportAdminEmail: isEdit || emailsEdited ? prev.supportAdminEmail : suggestEmail("suporte", value),
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -272,7 +369,22 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
       if (company) {
         await apiClient.updateCompany(company.id, { name: form.name.trim(), profile });
       } else {
-        await apiClient.createCompany({ name: form.name.trim(), slug: form.slug.trim(), ecommerceType: form.ecommerceType, profile });
+        const created = await apiClient.createCompany({ name: form.name.trim(), slug: form.slug.trim(), ecommerceType: form.ecommerceType, profile });
+        const falhas: string[] = [];
+        for (const [kind, email] of [
+          ["company", form.adminEmail],
+          ["support", form.supportAdminEmail],
+        ] as const) {
+          if (!email.trim()) continue;
+          try {
+            await apiClient.createCompanyAdmin(created.id, { kind, email: email.trim() });
+          } catch (err) {
+            falhas.push(`${email.trim()}: ${mensagemDeErro(err)}`);
+          }
+        }
+        if (falhas.length > 0) {
+          alert(`A empresa foi criada, mas nem todos os logins:\n\n${falhas.join("\n")}\n\nAbra Dados para tentar de novo.`);
+        }
       }
       onSaved();
     } catch (err) {
@@ -344,6 +456,29 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
           </Field>
         </section>
 
+        {isEdit && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Logo da loja</h3>
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-32 rounded-md border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Logo da empresa" className="max-h-full max-w-full object-contain" />
+                ) : (
+                  <span className="text-xs text-slate-400">Sem logo</span>
+                )}
+              </div>
+              <label className="cursor-pointer text-sm font-semibold text-brand-600 hover:text-brand-700">
+                {uploadingLogo ? "Enviando..." : logoUrl ? "Trocar logo" : "Enviar logo"}
+                <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo} onChange={handleLogoChange} />
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              PNG, JPG ou SVG. A logo vale na hora para a loja dessa empresa — não precisa clicar em "Salvar dados".
+            </p>
+          </section>
+        )}
+
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-slate-900">Contato e responsável</h3>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -387,6 +522,48 @@ function CompanyFormModal({ company, onClose, onSaved }: { company: Company | nu
               <input maxLength={2} value={form.state} onChange={(e) => set("state", e.target.value.toUpperCase())} className={inputClass} />
             </Field>
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-900">Acessos de administrador</h3>
+          <AdminLoginField
+            label="Administrador da empresa (administra o e-commerce do cliente)"
+            email={form.adminEmail}
+            onEmailChange={(value) => {
+              setEmailsEdited(true);
+              set("adminEmail", value);
+            }}
+            existing={loginFor(form.adminEmail)}
+            canManage={isEdit}
+            busy={busyLogin}
+            onCreate={() => handleCreateLogin("company")}
+            onReset={() => {
+              const login = loginFor(form.adminEmail);
+              if (login) handleResetLogin(login);
+            }}
+          />
+          <AdminLoginField
+            label="Administrador Full-Commerce (suporte desta empresa)"
+            email={form.supportAdminEmail}
+            onEmailChange={(value) => {
+              setEmailsEdited(true);
+              set("supportAdminEmail", value);
+            }}
+            existing={loginFor(form.supportAdminEmail)}
+            canManage={isEdit}
+            busy={busyLogin}
+            onCreate={() => handleCreateLogin("support")}
+            onReset={() => {
+              const login = loginFor(form.supportAdminEmail);
+              if (login) handleResetLogin(login);
+            }}
+          />
+          <p className="text-xs text-slate-500">
+            Senha inicial dos dois logins: <strong>123456</strong> — cada pessoa troca depois, se precisar.{" "}
+            {isEdit
+              ? "Ajuste o e-mail se quiser e clique em Criar login (o e-mail também é guardado ao salvar os dados)."
+              : "Os logins são criados junto com a empresa, usando os e-mails acima."}
+          </p>
         </section>
 
         <div className="flex justify-end gap-2 pt-2">
@@ -457,6 +634,64 @@ function EditCompanyModal({ company, onClose, onSaved }: { company: Company; onC
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function AdminLoginField({
+  label,
+  email,
+  onEmailChange,
+  existing,
+  canManage,
+  busy,
+  onCreate,
+  onReset,
+}: {
+  label: string;
+  email: string;
+  onEmailChange: (value: string) => void;
+  existing: CompanyAdminLogin | undefined;
+  canManage: boolean;
+  busy: boolean;
+  onCreate: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-sm font-medium text-slate-700">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => onEmailChange(e.target.value)}
+          placeholder="adm_empresa@fullcommerce.com.br"
+          className={`${inputClass} flex-1`}
+        />
+        {canManage &&
+          (existing ? (
+            <>
+              <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 whitespace-nowrap">Login criado</span>
+              <button
+                type="button"
+                onClick={onReset}
+                disabled={busy}
+                className="text-xs font-semibold text-brand-600 hover:text-brand-700 whitespace-nowrap disabled:opacity-50"
+              >
+                Redefinir senha
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onCreate}
+              disabled={busy || !email.trim()}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700 whitespace-nowrap disabled:opacity-50"
+            >
+              Criar login
+            </button>
+          ))}
+      </div>
     </div>
   );
 }

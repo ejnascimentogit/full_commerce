@@ -11,6 +11,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyAdminLogin,
   CompanyProfile,
   Customer,
   DeliveryRegion,
@@ -178,6 +179,10 @@ export interface ApiClient {
   createCompany(input: { name: string; slug: string; ecommerceType?: EcommerceType; profile?: CompanyProfile }): Promise<Company>;
   updateCompany(id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean; profile?: CompanyProfile }): Promise<Company>;
   deleteCompany(id: string): Promise<void>;
+  uploadCompanyLogo(id: string, file: File): Promise<string>;
+  getCompanyAdmins(id: string): Promise<CompanyAdminLogin[]>;
+  createCompanyAdmin(id: string, input: { kind: "company" | "support"; email: string }): Promise<CompanyAdminLogin>;
+  resetCompanyAdminPassword(id: string, adminId: string): Promise<void>;
   /** Equipe (login "staff", acesso restrito por aba) — só platformAdmin pode chamar, backend rejeita os outros com 403. */
   getTeamMembers(): Promise<AdminUser[]>;
   createTeamMember(input: CreateTeamMemberInput): Promise<AdminUser>;
