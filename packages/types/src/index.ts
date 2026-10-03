@@ -47,6 +47,15 @@ export interface AdminUser {
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */
 export type EcommerceType = "wholesale" | "televendas";
 
+/** Resultado de publicar a loja e o admin de uma empresa na Cloudflare. */
+export interface CompanyDeployResult {
+  base: string;
+  storeUrl: string;
+  adminUrl: string;
+  dispatched: boolean;
+  reason?: string;
+}
+
 /** Login de administrador de uma empresa (sem senha -- a senha nunca sai do servidor). */
 export interface CompanyAdminLogin {
   id: string;
@@ -97,6 +106,8 @@ export interface Company {
   profile?: CompanyProfile;
   /** Logo da loja (store_settings.logo_url) -- preenchida so na listagem de empresas do operador da plataforma. */
   logoUrl?: string;
+  /** So na resposta de criar empresa: dispatched quando a publicacao dos sites foi disparada, ou o motivo de nao ter sido. */
+  deployStatus?: string;
 }
 
 export interface Address {

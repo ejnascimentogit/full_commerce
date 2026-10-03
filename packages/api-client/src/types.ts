@@ -11,6 +11,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyDeployResult,
   CompanyAdminLogin,
   CompanyProfile,
   Customer,
@@ -183,6 +184,7 @@ export interface ApiClient {
   getCompanyAdmins(id: string): Promise<CompanyAdminLogin[]>;
   createCompanyAdmin(id: string, input: { kind: "company" | "support"; email: string }): Promise<CompanyAdminLogin>;
   resetCompanyAdminPassword(id: string, adminId: string): Promise<void>;
+  deployCompany(id: string): Promise<CompanyDeployResult>;
   /** Equipe (login "staff", acesso restrito por aba) — só platformAdmin pode chamar, backend rejeita os outros com 403. */
   getTeamMembers(): Promise<AdminUser[]>;
   createTeamMember(input: CreateTeamMemberInput): Promise<AdminUser>;

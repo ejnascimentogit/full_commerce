@@ -22,6 +22,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyDeployResult,
   CompanyAdminLogin,
   Customer,
   DeliveryRegion,
@@ -536,6 +537,10 @@ export const mockApiClient: ApiClient = {
   },
 
   async resetCompanyAdminPassword(): Promise<void> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async deployCompany(): Promise<CompanyDeployResult> {
     throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
   },
 

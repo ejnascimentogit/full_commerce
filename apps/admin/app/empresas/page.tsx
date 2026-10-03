@@ -66,6 +66,25 @@ export default function EmpresasPage() {
     }
   }
 
+  async function handlePublish(company: Company) {
+    const ok = window.confirm(
+      `Publicar a loja e o admin de "${company.name}" na Cloudflare?\n\nLeva alguns minutos. Se a empresa já tem sites publicados à mão com esses nomes (ex: Odoya), eles serão substituídos pela versão atual do sistema.`,
+    );
+    if (!ok) return;
+    try {
+      const r = await apiClient.deployCompany(company.id);
+      if (r.dispatched) {
+        alert(`Publicação iniciada (leva uns 5 minutos).\n\nLoja: ${r.storeUrl}\nAdmin: ${r.adminUrl}`);
+        refresh();
+      } else {
+        alert(`Os endereços foram definidos, mas a publicação não foi iniciada (${r.reason}).\n\nLoja: ${r.storeUrl}\nAdmin: ${r.adminUrl}`);
+        refresh();
+      }
+    } catch (e) {
+      alert(mensagemDeErro(e));
+    }
+  }
+
   if (!user?.isPlatformOwner) return null;
 
   return (
@@ -126,6 +145,11 @@ export default function EmpresasPage() {
                   <button type="button" onClick={() => setEditingCompany(c)} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
                     Editar domínio
                   </button>
+                  {c.branchCode !== 1 && (
+                    <button type="button" onClick={() => handlePublish(c)} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
+                      Publicar sites
+                    </button>
+                  )}
                   {c.branchCode !== 1 && (
                     <button type="button" onClick={() => handleDelete(c)} className="text-xs font-semibold text-red-600 hover:text-red-700">
                       Excluir
@@ -381,9 +405,16 @@ function CompanyFormModal({
             falhas.push(`${email.trim()}: ${mensagemDeErro(err)}`);
           }
         }
-        if (falhas.length > 0) {
-          alert(`A empresa foi criada, mas nem todos os logins:\n\n${falhas.join("\n")}\n\nAbra Dados para tentar de novo.`);
+        const avisos: string[] = [];
+        if (created.deployStatus === "dispatched") {
+          avisos.push("A loja e o admin da empresa estão sendo publicados (leva uns 5 minutos).");
+        } else if (created.deployStatus) {
+          avisos.push(`Os sites ainda não foram publicados automaticamente (${created.deployStatus}). Depois de configurar o GitHub, use o botão Publicar sites.`);
         }
+        if (falhas.length > 0) {
+          avisos.push(`Nem todos os logins foram criados:\n${falhas.join("\n")}\nAbra Dados para tentar de novo.`);
+        }
+        if (avisos.length > 0) alert(avisos.join("\n\n"));
       }
       onSaved();
     } catch (err) {
