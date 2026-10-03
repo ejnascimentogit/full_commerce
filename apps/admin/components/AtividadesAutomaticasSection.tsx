@@ -16,6 +16,16 @@ const MODO_LABEL: Record<ModoAtribuicao, string> = {
 
 const MODO_ORDER: ModoAtribuicao[] = ["manual", "vendedor_vinculado", "round_robin_todos", "round_robin_subconjunto"];
 
+const DIAS_SEMANA = [
+  { valor: 1, rotulo: "Seg" },
+  { valor: 2, rotulo: "Ter" },
+  { valor: 3, rotulo: "Qua" },
+  { valor: 4, rotulo: "Qui" },
+  { valor: 5, rotulo: "Sex" },
+  { valor: 6, rotulo: "Sáb" },
+  { valor: 7, rotulo: "Dom" },
+];
+
 export function AtividadesAutomaticasSection() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [staff, setStaff] = useState<AdminUser[]>([]);
@@ -23,6 +33,8 @@ export function AtividadesAutomaticasSection() {
   const [ativo, setAtivo] = useState(false);
   const [clienteInativoDias, setClienteInativoDias] = useState("30");
   const [cadastroSemCompraDias, setCadastroSemCompraDias] = useState("15");
+  const [horario, setHorario] = useState("08:00");
+  const [diasSemana, setDiasSemana] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]);
   const [modoAtribuicao, setModoAtribuicao] = useState<ModoAtribuicao>("round_robin_todos");
   const [subconjuntoIds, setSubconjuntoIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -33,6 +45,8 @@ export function AtividadesAutomaticasSection() {
       setAtivo(s.atividadeAutoAtivo);
       setClienteInativoDias(s.atividadeAutoClienteInativoDias.toString());
       setCadastroSemCompraDias(s.atividadeAutoCadastroSemCompraDias.toString());
+      setHorario(s.atividadeAutoHorario ?? "08:00");
+      setDiasSemana(s.atividadeAutoDiasSemana ?? [1, 2, 3, 4, 5, 6, 7]);
       setModoAtribuicao(s.atividadeAutoModoAtribuicao);
       setSubconjuntoIds(s.atividadeAutoSubconjuntoIds ?? []);
     });
@@ -47,12 +61,26 @@ export function AtividadesAutomaticasSection() {
     setSubconjuntoIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function toggleDia(dia: number) {
+    setDiasSemana((prev) => (prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia].sort()));
+  }
+
   async function handleSave() {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(horario)) {
+      alert("Informe um horário válido.");
+      return;
+    }
+    if (diasSemana.length === 0) {
+      alert("Marque pelo menos um dia da semana.");
+      return;
+    }
     setSaving(true);
     await apiClient.updateStoreSettings({
       atividadeAutoAtivo: ativo,
       atividadeAutoClienteInativoDias: Number(clienteInativoDias),
       atividadeAutoCadastroSemCompraDias: Number(cadastroSemCompraDias),
+      atividadeAutoHorario: horario,
+      atividadeAutoDiasSemana: diasSemana,
       atividadeAutoModoAtribuicao: modoAtribuicao,
       atividadeAutoSubconjuntoIds: modoAtribuicao === "round_robin_subconjunto" ? subconjuntoIds : undefined,
     });
@@ -65,8 +93,8 @@ export function AtividadesAutomaticasSection() {
   return (
     <CollapsibleSection expandKey="atividades-automaticas" title="Atividades Automaticas" className="bg-white border border-slate-200 shadow-md rounded-lg p-5 mt-6 max-w-2xl">
       <p className="text-sm text-slate-500 mb-4">
-        Gera cards em Atividades sozinho, todo dia, a partir de 3 situacoes: orcamento parado (criado e nao virou pedido ate o dia seguinte), cliente
-        que ja comprou mas sumiu, e cliente cadastrado que nunca comprou. Sem isso ligado, ninguem precisa lembrar de checar essas situacoes na mao.
+        Gera cards em Atividades sozinho, nos dias e horario escolhidos abaixo, a partir de 4 situacoes: orcamento parado (criado e nao virou pedido ate o dia seguinte), cliente
+        que ja comprou mas sumiu, cliente cadastrado que nunca comprou, e carrinho parado ha mais de 1 dia. Sem isso ligado, ninguem precisa lembrar de checar essas situacoes na mao.
       </p>
 
       <div className="space-y-4">
@@ -107,6 +135,47 @@ export function AtividadesAutomaticasSection() {
             />
             <p className="text-xs text-slate-400 mt-1">Cliente que nunca comprou, cadastrado ha esse tanto de dias.</p>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Quando gerar</label>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="time"
+              value={horario}
+              onChange={(e) => setHorario(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+            />
+            <span className="text-xs text-slate-400">Horário de Brasília</span>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {DIAS_SEMANA.map((d) => {
+              const marcado = diasSemana.includes(d.valor);
+              return (
+                <label
+                  key={d.valor}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm ${
+                    marcado ? "border-brand-200 bg-brand-50 text-brand-600" : "border-slate-300 text-slate-500"
+                  }`}
+                >
+                  <input type="checkbox" checked={marcado} onChange={() => toggleDia(d.valor)} />
+                  {d.rotulo}
+                </label>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex gap-3 text-xs">
+            <button type="button" onClick={() => setDiasSemana([1, 2, 3, 4, 5])} className="text-brand-600 underline">
+              Segunda a sexta
+            </button>
+            <button type="button" onClick={() => setDiasSemana([1, 2, 3, 4, 5, 6, 7])} className="text-brand-600 underline">
+              Todos os dias
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Nos dias marcados, os cards são criados uma vez, a partir do horário escolhido (o sistema confere a cada 5 minutos).
+            Se a chave for ligada depois desse horário, a geração começa no próximo dia marcado.
+          </p>
         </div>
 
         <div>

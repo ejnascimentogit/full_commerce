@@ -379,6 +379,8 @@ function mapSettings(s: Record<string, unknown>) {
     atividadeAutoAtivo: s.atividade_auto_ativo ?? false,
     atividadeAutoClienteInativoDias: s.atividade_auto_cliente_inativo_dias ?? 30,
     atividadeAutoCadastroSemCompraDias: s.atividade_auto_cadastro_sem_compra_dias ?? 15,
+    atividadeAutoHorario: String(s.atividade_auto_horario ?? "08:00").slice(0, 5),
+    atividadeAutoDiasSemana: s.atividade_auto_dias_semana ?? [1, 2, 3, 4, 5, 6, 7],
     atividadeAutoModoAtribuicao: s.atividade_auto_modo_atribuicao ?? "round_robin_todos",
     atividadeAutoSubconjuntoIds: s.atividade_auto_subconjunto_ids ?? undefined,
   };
@@ -1802,6 +1804,19 @@ app.patch("/settings", async (c) => {
   if ("atividadeAutoAtivo" in patch) row.atividade_auto_ativo = patch.atividadeAutoAtivo;
   if ("atividadeAutoClienteInativoDias" in patch) row.atividade_auto_cliente_inativo_dias = patch.atividadeAutoClienteInativoDias;
   if ("atividadeAutoCadastroSemCompraDias" in patch) row.atividade_auto_cadastro_sem_compra_dias = patch.atividadeAutoCadastroSemCompraDias;
+  if ("atividadeAutoHorario" in patch) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(patch.atividadeAutoHorario))) {
+      throw new ApiError(422, "INVALID_INPUT", "Horário inválido (use HH:MM).");
+    }
+    row.atividade_auto_horario = patch.atividadeAutoHorario;
+  }
+  if ("atividadeAutoDiasSemana" in patch) {
+    const dias = patch.atividadeAutoDiasSemana;
+    if (!Array.isArray(dias) || !dias.every((d: unknown) => Number.isInteger(d) && (d as number) >= 1 && (d as number) <= 7)) {
+      throw new ApiError(422, "INVALID_INPUT", "Dias da semana inválidos (1 a 7).");
+    }
+    row.atividade_auto_dias_semana = [...new Set(dias as number[])].sort();
+  }
   if ("atividadeAutoModoAtribuicao" in patch) row.atividade_auto_modo_atribuicao = patch.atividadeAutoModoAtribuicao;
   if ("atividadeAutoSubconjuntoIds" in patch) row.atividade_auto_subconjunto_ids = patch.atividadeAutoSubconjuntoIds;
   row.updated_at = new Date().toISOString();

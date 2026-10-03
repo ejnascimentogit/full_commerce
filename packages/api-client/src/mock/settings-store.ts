@@ -53,6 +53,8 @@ function seedSettings(): StoreSettings {
     atividadeAutoAtivo: false,
     atividadeAutoClienteInativoDias: 30,
     atividadeAutoCadastroSemCompraDias: 15,
+    atividadeAutoHorario: "08:00",
+    atividadeAutoDiasSemana: [1, 2, 3, 4, 5, 6, 7],
     atividadeAutoModoAtribuicao: "round_robin_todos",
   };
 }

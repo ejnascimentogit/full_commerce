@@ -130,3 +130,12 @@ select cron.schedule('gerar-atividades-automaticas', '0 11 * * *',
 - Tela de configuracao (React) em `apps/admin` -- liga/desliga, prazos (X/Y dias), modo de atribuicao, lista do subconjunto.
 - Campo "Vendedor vinculado" na tela de edicao de cliente do admin (backend ja aceita via `PATCH /admin/customers/:id` com `assignedStaffId`).
 - Ligar `atividade_auto_ativo = true` para a(s) empresa(s) que quiserem usar (so depois que a tela existir, ou manualmente via SQL Editor para testar antes).
+
+## Horario e dias da semana configuraveis (2026-10-02)
+
+Substitui a execucao fixa "1x/dia as 08:00 de Brasilia". Cada empresa escolhe, em Configuracoes -> Atividades Automaticas, o horario (Brasilia) e os dias da semana (segunda a domingo) em que a geracao roda.
+
+- `store_settings.atividade_auto_horario` (`time`, padrao `08:00`), `atividade_auto_dias_semana` (`smallint[]`, 1 = segunda ... 7 = domingo, padrao todos os dias) e `atividade_auto_ultima_execucao` (`date`, evita rodar duas vezes no mesmo dia). Os padroes reproduzem o comportamento antigo.
+- O job do `pg_cron` agora roda **a cada 5 minutos** e chama `ecommerce.executar_atividades_automaticas_agendadas()`. Ela dispara, por empresa, so se: chave ligada, hoje (fuso `America/Sao_Paulo`) e um dia marcado, ja passou do horario escolhido (janela de 1 hora -- ligar a chave tarde nao gera "atrasado") e ainda nao rodou hoje.
+- `ecommerce.gerar_atividades_automaticas(p_company_id uuid default null)` ganhou o parametro opcional: com ele roda so pra aquela empresa; sem ele, pra todas as empresas com a chave ligada (como antes). O corpo (os 4 gatilhos: orcamento parado, cliente inativo, cadastro sem compra, carrinho abandonado) nao mudou.
+- Edge Function: `GET/PATCH /settings` expoem `atividadeAutoHorario` ("HH:MM") e `atividadeAutoDiasSemana` (`number[]`), com validacao no PATCH.

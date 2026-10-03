@@ -426,6 +426,10 @@ export interface StoreSettings {
   atividadeAutoClienteInativoDias: number;
   /** Dias desde o cadastro, sem nenhum pedido, pra considerar "cadastrado sem compra" (gatilho 3). */
   atividadeAutoCadastroSemCompraDias: number;
+  /** Horario (HH:MM, Brasilia) em que a geracao automatica roda nos dias marcados. */
+  atividadeAutoHorario: string;
+  /** Dias da semana em que gera (1 = segunda ... 7 = domingo). */
+  atividadeAutoDiasSemana: number[];
   /** Como resolver o responsavel (assignedToAdminId) de uma Activity criada automaticamente -- vale igualmente pros 3 gatilhos. */
   atividadeAutoModoAtribuicao: "manual" | "vendedor_vinculado" | "round_robin_todos" | "round_robin_subconjunto";
   /** Lista de AdminUser.id elegiveis pro rodizio quando o modo e "round_robin_subconjunto". Ignorado nos outros modos. */
