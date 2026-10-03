@@ -231,8 +231,8 @@ function toForm(company: Company | null): FormState {
     neighborhood: a.neighborhood ?? "",
     city: a.city ?? "",
     state: a.state ?? "",
-    adminEmail: p.adminEmail ?? suggestEmail("adm", company?.name ?? ""),
-    supportAdminEmail: p.supportAdminEmail ?? suggestEmail("suporte", company?.name ?? ""),
+    adminEmail: p.adminEmail ?? "",
+    supportAdminEmail: p.supportAdminEmail ?? suggestEmail("adm", company?.name ?? ""),
   };
 }
 
@@ -356,8 +356,7 @@ function CompanyFormModal({
       ...prev,
       name: value,
       slug: isEdit ? prev.slug : slugify(value),
-      adminEmail: isEdit || emailsEdited ? prev.adminEmail : suggestEmail("adm", value),
-      supportAdminEmail: isEdit || emailsEdited ? prev.supportAdminEmail : suggestEmail("suporte", value),
+      supportAdminEmail: isEdit || emailsEdited ? prev.supportAdminEmail : suggestEmail("adm", value),
     }));
   }
 
@@ -527,10 +526,10 @@ function CompanyFormModal({
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-slate-900">Acessos de administrador</h3>
           <AdminLoginField
-            label="Administrador da empresa (administra o e-commerce do cliente)"
+            label="Administrador da empresa (e-mail do cliente, que administra a loja)"
+            placeholder="e-mail real do cliente"
             email={form.adminEmail}
             onEmailChange={(value) => {
-              setEmailsEdited(true);
               set("adminEmail", value);
             }}
             existing={loginFor(form.adminEmail)}
@@ -544,6 +543,7 @@ function CompanyFormModal({
           />
           <AdminLoginField
             label="Administrador Full-Commerce (suporte desta empresa)"
+            placeholder="adm_empresa@fullcommerce.com.br"
             email={form.supportAdminEmail}
             onEmailChange={(value) => {
               setEmailsEdited(true);
@@ -559,7 +559,7 @@ function CompanyFormModal({
             }}
           />
           <p className="text-xs text-slate-500">
-            Senha inicial dos dois logins: <strong>123456</strong> — cada pessoa troca depois, se precisar.{" "}
+            O administrador da empresa usa o e-mail real do cliente; o domínio @fullcommerce.com.br é só do suporte Full-Commerce. Senha inicial dos dois logins: <strong>123456</strong> — cada pessoa troca depois, se precisar.{" "}
             {isEdit
               ? "Ajuste o e-mail se quiser e clique em Criar login (o e-mail também é guardado ao salvar os dados)."
               : "Os logins são criados junto com a empresa, usando os e-mails acima."}
@@ -640,6 +640,7 @@ function EditCompanyModal({ company, onClose, onSaved }: { company: Company; onC
 
 function AdminLoginField({
   label,
+  placeholder,
   email,
   onEmailChange,
   existing,
@@ -649,6 +650,7 @@ function AdminLoginField({
   onReset,
 }: {
   label: string;
+  placeholder: string;
   email: string;
   onEmailChange: (value: string) => void;
   existing: CompanyAdminLogin | undefined;
@@ -665,7 +667,7 @@ function AdminLoginField({
           type="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          placeholder="adm_empresa@fullcommerce.com.br"
+          placeholder={placeholder}
           className={`${inputClass} flex-1`}
         />
         {canManage &&
