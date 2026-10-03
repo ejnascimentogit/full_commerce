@@ -1,0 +1,62 @@
+name: Publicar sites de uma empresa
+
+# Publica a loja e o admin de UMA empresa na Cloudflare (workers <nome>-storefront e <nome>-admin).
+# O codigo e o mesmo para todas as empresas (a empresa e reconhecida pelo endereco), so o nome do worker muda.
+# Disparado pelo admin (Empresas) ao criar uma empresa, ou manualmente em Actions -> Run workflow.
+# Segredos necessarios no repositorio: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Nome base dos workers (ex: almir gera almir-storefront e almir-admin)"
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-company-${{ inputs.name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [storefront, admin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instala dependencias (monorepo inteiro)
+        run: npm ci
+
+      - name: Gera a configuracao do worker desta empresa
+        working-directory: apps/${{ matrix.app }}
+        env:
+          NOME: ${{ inputs.name }}
+        run: |
+          if ! [[ "$NOME" =~ ^[a-z0-9]+$ ]]; then
+            echo "Nome invalido: use so letras minusculas e numeros."
+            exit 1
+          fi
+          sed "s/\"name\": \"[^\"]*\"/\"name\": \"${NOME}-${{ matrix.app }}\"/" wrangler.jsonc > wrangler.company.jsonc
+          grep '"name"' wrangler.company.jsonc
+
+      - name: Compila e publica
+        working-directory: apps/${{ matrix.app }}
+        env:
+          NEXT_PUBLIC_API_MODE: rest
+          NEXT_PUBLIC_API_BASE_URL: https://ijruithwgvxdqhatgwqd.supabase.co/functions/v1
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx opennextjs-cloudflare build -c wrangler.company.jsonc
+          npx opennextjs-cloudflare deploy -c wrangler.company.jsonc

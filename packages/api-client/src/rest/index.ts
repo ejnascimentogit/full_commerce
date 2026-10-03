@@ -8,6 +8,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyDeployResult,
   CompanyAdminLogin,
   CompanyProfile,
   Customer,
@@ -294,6 +295,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<CompanyAdminLogin>(`/api/admin/companies/${id}/admins`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     resetCompanyAdminPassword: (id: string, adminId: string) =>
       request<void>(`/api/admin/companies/${id}/admins/${adminId}/reset-password`, { method: "POST", tokenKey: ADMIN_TOKEN_KEY }),
+    deployCompany: (id: string) =>
+      request<CompanyDeployResult>(`/api/admin/companies/${id}/deploy`, { method: "POST", tokenKey: ADMIN_TOKEN_KEY }),
     uploadLogo: async (file: File) => {
       const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
       return data.url;

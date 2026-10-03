@@ -1962,6 +1962,65 @@ app.delete("/categories/:id", async (c) => {
 
 // ---------- Admin: empresas (só o operador da plataforma) ----------
 
+// ---------- Publicacao automatica dos sites de uma empresa ----------
+// A loja e o admin sao o MESMO codigo pra toda empresa (a empresa e reconhecida pelo endereco), entao "publicar" e rodar o
+// workflow deploy-company.yml do GitHub com o nome base (almir -> almir-storefront e almir-admin). Precisa do segredo
+// GITHUB_DEPLOY_TOKEN (token do GitHub com permissao de Actions) nas Edge Function secrets.
+const GITHUB_REPO = "ejnascimentogit/full_commerce";
+const WORKERS_SUBDOMAIN = "ejnascimento1";
+
+function deployBaseName(text: string): string {
+  const first = text.trim().split(/\s+/)[0] ?? "";
+  return first
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+async function dispatchCompanyDeploy(base: string): Promise<{ dispatched: boolean; reason?: string }> {
+  const token = Deno.env.get("GITHUB_DEPLOY_TOKEN");
+  if (!token) return { dispatched: false, reason: "GITHUB_TOKEN_MISSING" };
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/deploy-company.yml/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "fullcommerce-admin",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ref: "main", inputs: { name: base } }),
+  });
+  return res.status === 204 ? { dispatched: true } : { dispatched: false, reason: `GITHUB_DISPATCH_${res.status}` };
+}
+
+// Define os enderecos padrao (<base>-storefront / <base>-admin .workers.dev) quando a empresa ainda nao tem, e dispara a
+// publicacao. Se a empresa ja tem endereco nesse padrao, reaproveita o nome base dele.
+async function prepareCompanyDeploy(company: Record<string, unknown>) {
+  const existing = String(company.domain ?? "").match(/^([a-z0-9]+)-storefront\.[a-z0-9.-]+\.workers\.dev$/);
+  let base = existing ? existing[1] : deployBaseName(String(company.name)) || `empresa${company.company_number}`;
+  let current = company;
+  if (!existing) {
+    const { data: taken } = await eco()
+      .from("companies")
+      .select("id")
+      .eq("domain", `${base}-storefront.${WORKERS_SUBDOMAIN}.workers.dev`)
+      .neq("id", company.id as string)
+      .maybeSingle();
+    if (taken) base = `${base}${company.company_number}`;
+    const { data: updated } = await eco()
+      .from("companies")
+      .update({ domain: `${base}-storefront.${WORKERS_SUBDOMAIN}.workers.dev`, admin_domain: `${base}-admin.${WORKERS_SUBDOMAIN}.workers.dev` })
+      .eq("id", company.id as string)
+      .select("*")
+      .single();
+    current = updated ?? company;
+  }
+  const result = await dispatchCompanyDeploy(base);
+  return { company: current, base, ...result };
+}
+
 app.get("/admin/companies", async (c) => {
   await requirePlatformOwner(c);
   const { data, error } = await eco().from("companies").select("*").order("created_at", { ascending: false });
@@ -2018,7 +2077,9 @@ app.post("/admin/companies", async (c) => {
     throw new ApiError(500, "DB_ERROR", settingsError.message);
   }
 
-  return c.json(mapCompany(company));
+  // Enderecos padrao + publicacao automatica da loja e do admin (ver prepareCompanyDeploy).
+  const deploy = await prepareCompanyDeploy(company);
+  return c.json({ ...mapCompany(deploy.company), deployStatus: deploy.dispatched ? "dispatched" : deploy.reason });
 });
 
 // ---------- Admin: endereços de cliente ----------
@@ -2248,6 +2309,25 @@ app.post("/admin/companies/:id/admins/:adminId/reset-password", async (c) => {
   const { error } = await db().auth.admin.updateUserById(adminUser.auth_user_id as string, { password: DEFAULT_ADMIN_PASSWORD });
   if (error) throw new ApiError(500, "AUTH_ERROR", error.message);
   return c.body(null, 204);
+});
+
+// Publica (ou republica) a loja e o admin de uma empresa. Cuidado: se a empresa ja tem sites publicados a mao com esses
+// mesmos nomes (ex: Odoya), eles sao substituidos pela versao atual do codigo.
+app.post("/admin/companies/:id/deploy", async (c) => {
+  await requirePlatformOwner(c);
+  const { data: company } = await eco().from("companies").select("*").eq("id", c.req.param("id")).maybeSingle();
+  if (!company) throw new ApiError(404, "COMPANY_NOT_FOUND");
+  if (company.id === DEMO_COMPANY_ID) {
+    throw new ApiError(422, "COMPANY_PROTECTED", "Os sites da empresa 1 (Full-Commerce) tem publicacao propria.");
+  }
+  const deploy = await prepareCompanyDeploy(company);
+  return c.json({
+    base: deploy.base,
+    storeUrl: `https://${deploy.base}-storefront.${WORKERS_SUBDOMAIN}.workers.dev`,
+    adminUrl: `https://${deploy.base}-admin.${WORKERS_SUBDOMAIN}.workers.dev`,
+    dispatched: deploy.dispatched,
+    reason: deploy.reason,
+  });
 });
 
 // ---------- Admin: equipe (login "staff", acesso restrito por aba) ----------
