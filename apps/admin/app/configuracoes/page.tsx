@@ -1,5 +1,7 @@
 "use client";
 
+import { prepareLogoFile } from "@/lib/prepare-logo";
+
 import { CollapsibleSection, CONFIG_EXPAND_EVENT } from "@/components/CollapsibleSection";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -273,7 +275,7 @@ export default function ConfiguracoesPage() {
     e.target.value = "";
     if (!file) return;
     setUploadingLogo(true);
-    const url = await apiClient.uploadLogo(file);
+    const url = await apiClient.uploadLogo(await prepareLogoFile(file));
     await apiClient.updateStoreSettings({ logoUrl: url });
     setUploadingLogo(false);
     refresh();

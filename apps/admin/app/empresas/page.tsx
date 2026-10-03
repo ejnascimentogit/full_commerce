@@ -1,5 +1,7 @@
 "use client";
 
+import { prepareLogoFile } from "@/lib/prepare-logo";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@ecommerce/api-client";
@@ -361,7 +363,7 @@ function CompanyFormModal({
     if (!file || !company) return;
     setUploadingLogo(true);
     try {
-      setLogoUrl(await apiClient.uploadCompanyLogo(company.id, file));
+      setLogoUrl(await apiClient.uploadCompanyLogo(company.id, await prepareLogoFile(file)));
       onLogoChanged?.();
     } catch (err) {
       alert(mensagemDeErro(err));

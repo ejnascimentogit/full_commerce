@@ -99,8 +99,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="px-5 py-5 text-lg font-bold text-white border-b border-slate-800">
           {brand ? (
             brand.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={brand.logoUrl} alt={brand.storeName} className="h-8 w-auto" />
+              <span className="inline-flex bg-white rounded-md px-2 py-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={brand.logoUrl} alt={brand.storeName} className="h-8 w-auto max-w-[170px] object-contain" />
+              </span>
             ) : (
               brand.storeName
             )

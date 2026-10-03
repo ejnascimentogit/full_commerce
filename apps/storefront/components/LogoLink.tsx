@@ -15,8 +15,10 @@ export function LogoLink() {
       {!brand ? (
         <span className="invisible text-2xl font-bold tracking-tight leading-tight">.</span>
       ) : brand.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded logo (mock: data URI)
-        <img src={brand.logoUrl} alt={brand.storeName} className="h-9 w-auto" />
+        <span className="inline-flex self-start bg-white rounded-lg px-2 py-1">
+          {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded logo (mock: data URI) */}
+          <img src={brand.logoUrl} alt={brand.storeName} className="h-10 w-auto max-w-[200px] object-contain" />
+        </span>
       ) : (
         <span className="text-2xl font-bold tracking-tight leading-tight">{brand.storeName}</span>
       )}
