@@ -268,6 +268,8 @@ function mapCompany(c: Record<string, unknown>) {
     active: c.active,
     createdAt: c.created_at,
     ecommerceType: c.ecommerce_type ?? "wholesale",
+    branchCode: c.company_number,
+    profile: c.profile ?? {},
   };
 }
 
@@ -1952,7 +1954,8 @@ app.get("/admin/companies", async (c) => {
 // só existe depois que o cliente compra/aponta o domínio de verdade.
 app.post("/admin/companies", async (c) => {
   await requirePlatformOwner(c);
-  const { name, slug, ecommerceType } = await c.req.json();
+  const { name, slug, ecommerceType, profile } = await c.req.json();
+  const cleanProfile = sanitizeCompanyProfile(profile);
   if (!name || !slug) throw new ApiError(422, "INVALID_INPUT", "Nome e slug são obrigatórios.");
   if (ecommerceType && ecommerceType !== "wholesale" && ecommerceType !== "televendas") {
     throw new ApiError(422, "INVALID_INPUT", "Tipo de e-commerce inválido.");
@@ -1967,7 +1970,7 @@ app.post("/admin/companies", async (c) => {
 
   const { data: company, error } = await eco()
     .from("companies")
-    .insert({ name, slug, active: true, company_number: companyNumber, ecommerce_type: ecommerceType || "wholesale" })
+    .insert({ name, slug, active: true, company_number: companyNumber, ecommerce_type: ecommerceType || "wholesale", profile: cleanProfile })
     .select("*")
     .single();
   if (error) throw new ApiError(422, "DB_ERROR", error.message);
@@ -2068,10 +2071,59 @@ app.patch("/admin/companies/:id", async (c) => {
   if ("name" in patch) row.name = patch.name;
   if ("domain" in patch) row.domain = patch.domain || null;
   if ("adminDomain" in patch) row.admin_domain = patch.adminDomain || null;
+  if ("profile" in patch) row.profile = sanitizeCompanyProfile(patch.profile);
   if ("active" in patch) row.active = patch.active;
   const { data, error } = await eco().from("companies").update(row).eq("id", c.req.param("id")).select("*").single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(mapCompany(data));
+});
+
+// Dados cadastrais da empresa: so campos conhecidos, texto aparado e limitado, CNPJ validado. Vazio vira "nao informado".
+const PROFILE_TEXT_FIELDS = ["legalName", "tradeName", "cnpj", "stateRegistration", "email", "phone", "responsibleName", "responsiblePhone"];
+const PROFILE_ADDRESS_FIELDS = ["zipCode", "street", "number", "complement", "neighborhood", "city", "state"];
+
+function cleanProfileText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim().slice(0, 200);
+  return text ? text : undefined;
+}
+
+function sanitizeCompanyProfile(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object") return {};
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const field of PROFILE_TEXT_FIELDS) {
+    const text = cleanProfileText(src[field]);
+    if (text) out[field] = text;
+  }
+  if (src.address && typeof src.address === "object") {
+    const address: Record<string, string> = {};
+    for (const field of PROFILE_ADDRESS_FIELDS) {
+      const text = cleanProfileText((src.address as Record<string, unknown>)[field]);
+      if (text) address[field] = text;
+    }
+    if (Object.keys(address).length > 0) out.address = address;
+  }
+  if (typeof out.cnpj === "string" && !isValidCNPJ(out.cnpj)) throw new ApiError(422, "INVALID_DOCUMENT", "CNPJ inválido.");
+  return out;
+}
+
+// So apaga empresa sem nenhum dado de negocio (ver ecommerce.excluir_empresa_vazia). A empresa 1 nunca pode ser excluida.
+app.delete("/admin/companies/:id", async (c) => {
+  const admin = await requirePlatformOwner(c);
+  const id = c.req.param("id");
+  if (id === DEMO_COMPANY_ID || id === admin.company_id) {
+    throw new ApiError(422, "COMPANY_PROTECTED", "A empresa 1 (Full-Commerce) não pode ser excluída.");
+  }
+  const { error } = await eco().rpc("excluir_empresa_vazia", { p_company_id: id });
+  if (error) {
+    if (error.message.includes("COMPANY_HAS_DATA")) {
+      throw new ApiError(422, "COMPANY_HAS_DATA", "A empresa já tem dados cadastrados e não pode ser excluída. Desative-a em vez disso.");
+    }
+    if (error.message.includes("COMPANY_NOT_FOUND")) throw new ApiError(404, "COMPANY_NOT_FOUND");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+  return c.body(null, 204);
 });
 
 // ---------- Admin: equipe (login "staff", acesso restrito por aba) ----------

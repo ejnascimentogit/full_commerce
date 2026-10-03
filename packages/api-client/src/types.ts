@@ -11,6 +11,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyProfile,
   Customer,
   DeliveryRegion,
   DocumentType,
@@ -174,8 +175,9 @@ export interface ApiClient {
   getCurrentAdminUser(): Promise<AdminUser | null>;
   /** Só retorna algo pra quem é isPlatformOwner — backend rejeita os outros com 403. */
   getCompanies(): Promise<Company[]>;
-  createCompany(input: { name: string; slug: string; ecommerceType?: EcommerceType }): Promise<Company>;
-  updateCompany(id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }): Promise<Company>;
+  createCompany(input: { name: string; slug: string; ecommerceType?: EcommerceType; profile?: CompanyProfile }): Promise<Company>;
+  updateCompany(id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean; profile?: CompanyProfile }): Promise<Company>;
+  deleteCompany(id: string): Promise<void>;
   /** Equipe (login "staff", acesso restrito por aba) — só platformAdmin pode chamar, backend rejeita os outros com 403. */
   getTeamMembers(): Promise<AdminUser[]>;
   createTeamMember(input: CreateTeamMemberInput): Promise<AdminUser>;
