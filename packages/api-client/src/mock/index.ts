@@ -502,6 +502,7 @@ export const mockApiClient: ApiClient = {
         id: "00000000-0000-0000-0000-000000000001",
         name: "Full-Commerce (demo)",
         slug: "fullcommerce",
+        branchCode: 1,
         active: true,
         createdAt: new Date().toISOString(),
         ecommerceType: "wholesale",
@@ -514,6 +515,10 @@ export const mockApiClient: ApiClient = {
   },
 
   async updateCompany(): Promise<Company> {
+    throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
+  },
+
+  async deleteCompany(): Promise<void> {
     throw new Error("Cadastro de empresas só existe no modo com backend real (rest), não no mock.");
   },
 

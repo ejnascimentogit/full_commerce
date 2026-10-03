@@ -8,6 +8,7 @@ import type {
   CartSyncInput,
   Category,
   Company,
+  CompanyProfile,
   Customer,
   DeliveryRegion,
   EcommerceType,
@@ -234,10 +235,12 @@ function createRestApiClient(baseUrl: string): ApiClient {
     updateStoreSettings: (patch: Partial<StoreSettings>) =>
       request<StoreSettings>("/api/settings", { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     getCompanies: () => request<Company[]>("/api/admin/companies", { tokenKey: ADMIN_TOKEN_KEY }),
-    createCompany: (input: { name: string; slug: string; ecommerceType?: EcommerceType }) =>
+    createCompany: (input: { name: string; slug: string; ecommerceType?: EcommerceType; profile?: CompanyProfile }) =>
       request<Company>("/api/admin/companies", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
-    updateCompany: (id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean }) =>
+    updateCompany: (id: string, patch: { name?: string; domain?: string; adminDomain?: string; active?: boolean; profile?: CompanyProfile }) =>
       request<Company>(`/api/admin/companies/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+      deleteCompany: (id: string) =>
+        request<void>(`/api/admin/companies/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
     getTeamMembers: () => request<AdminUser[]>("/api/admin/team-members", { tokenKey: ADMIN_TOKEN_KEY }),
     createTeamMember: (input: CreateTeamMemberInput) =>
       request<AdminUser>("/api/admin/team-members", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
