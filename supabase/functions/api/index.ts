@@ -57,6 +57,27 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
 ];
 
+// As origens acima passam direto. Qualquer outra so passa se for o dominio (loja ou admin) de uma empresa ATIVA cadastrada
+// em Empresas -- assim empresa nova (ex: Almir) nao exige editar nem redeployar o backend pra liberar o CORS.
+async function isAllowedOrigin(origin: string | undefined): Promise<boolean> {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+  if (!/^[a-z0-9.-]+$/i.test(hostname)) return false;
+  const { data } = await eco()
+    .from("companies")
+    .select("id")
+    .or(`domain.eq.${hostname},admin_domain.eq.${hostname}`)
+    .eq("active", true)
+    .maybeSingle();
+  return !!data;
+}
+
 // O Supabase remove só "/functions/v1" antes de invocar esta function — o slug
 // "api" continua fazendo parte do caminho (confirmado via debug), por isso o
 // basePath aqui é "/api" e as rotas abaixo (ex: "/settings") ficam relativas a ele.
@@ -65,7 +86,7 @@ const app = new Hono().basePath("/api");
 app.use(
   "*",
   cors({
-    origin: (origin) => (origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]),
+    origin: async (origin) => ((await isAllowedOrigin(origin)) ? origin : ALLOWED_ORIGINS[0]),
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   }),
