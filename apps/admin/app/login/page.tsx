@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { PasswordField } from "@/components/PasswordField";
+import { useStoreBrand } from "@/lib/use-store-brand";
 
 export default function LoginPage() {
   const { login } = useAdminAuth();
+  const brand = useStoreBrand("admin");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,7 +33,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
       <div className="bg-white rounded-lg p-8 w-full max-w-sm">
         <h1 className="text-xl font-bold text-slate-900 mb-1">
-          full<span className="text-brand-600">commerce</span>
+          {brand ? brand.storeName : <span className="invisible">.</span>}
         </h1>
         <p className="text-sm text-slate-500 mb-6">Painel administrativo</p>
 

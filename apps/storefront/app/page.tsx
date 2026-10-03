@@ -41,7 +41,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 py-10 grid md:grid-cols-2 gap-8 items-center">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight">
-              {settings?.siteCopy.heroTitle ?? "A melhor forma de abastecer o seu negócio."}
+              {settings ? settings.siteCopy.heroTitle || "A melhor forma de abastecer o seu negócio." : "\u00a0"}
             </h1>
             <div className="mt-6 grid sm:grid-cols-3 gap-4">
               {settings?.siteCopy.featureBullets.map((f) => (
