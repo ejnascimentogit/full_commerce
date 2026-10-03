@@ -3,6 +3,7 @@
 import { apiClient } from "@ecommerce/api-client";
 import type { AdminUser } from "@ecommerce/types";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 interface AdminAuthContextValue {
   user: AdminUser | null;
@@ -18,13 +19,27 @@ const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     apiClient
       .getCurrentAdminUser()
       .then(setUser)
+      .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
+
+  // O token de login do admin dura 1 hora. Passado isso, ao recarregar a pagina o servidor responde "ninguem logado",
+  // e as paginas que devolvem null antes de montar o AdminShell (Empresas, Clientes, Configuracoes...) ficavam em
+  // branco pra sempre, porque era o AdminShell que mandava pro login. Agora o redirecionamento vale pra qualquer rota
+  // que nao seja uma das telas publicas de acesso.
+  useEffect(() => {
+    if (loading || user) return;
+    const publicas = ["/login", "/criar-conta", "/esqueci-senha", "/redefinir-senha"];
+    if (publicas.some((rota) => pathname === rota || pathname.startsWith(rota + "/"))) return;
+    router.replace("/login");
+  }, [loading, user, pathname, router]);
 
   const value = useMemo<AdminAuthContextValue>(
     () => ({
