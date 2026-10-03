@@ -17,27 +17,33 @@ interface NavItem {
   platformOnly?: boolean;
   ownerOnly?: boolean;
   permissionKey?: AdminPermissionKey;
+  // Rotas que também deixam o item "ativo" no menu (telas de detalhe que continuam fora da pasta do item).
+  alsoActiveOn?: string[];
+  // Grupo (menu com sub-menu): o item só abre/fecha os filhos; aparece se pelo menos um filho for permitido.
+  children?: NavItem[];
 }
 
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/produtos", label: "Produtos", icon: "📦", permissionKey: "produtos" },
-  { href: "/pedidos", label: "Pedidos", icon: "🧾", permissionKey: "pedidos" },
-  // Sem chave de permissao propria ainda -- reaproveita "pedidos" de proposito
-  // (ver .claude/skills/ecommerce/references/orcamento-implementacao.md, que
-  // ja documenta essa alternativa) porque adicionar "orcamentos" em
-  // AdminPermissionKey exigiria mexer em packages/types, fora do escopo desta
-  // entrega de UI.
-  { href: "/orcamentos", label: "Orcamentos", icon: "📝", permissionKey: "pedidos" },
-  { href: "/perdidos", label: "Perdidos", icon: "🛒", permissionKey: "pedidos" },
+  {
+    href: "/comercial",
+    label: "Comercial",
+    icon: "💼",
+    children: [
+      // Vendas = Pedidos + Orçamentos + Perdidos (abas). Sem chave de permissão própria ainda -- reaproveita "pedidos"
+      // de propósito (ver .claude/skills/ecommerce/references/orcamento-implementacao.md).
+      { href: "/comercial/vendas", label: "Vendas", icon: "🧾", permissionKey: "pedidos", alsoActiveOn: ["/pedidos", "/orcamentos", "/perdidos"] },
+      { href: "/comercial/promocoes", label: "Promoções", icon: "🏷️", permissionKey: "promocoes" },
+      { href: "/comercial/atividades", label: "Atividades", icon: "📋", platformOnly: true, permissionKey: "atividades" },
+      { href: "/comercial/mensagens", label: "Mensagens", icon: "💬", platformOnly: true },
+    ],
+  },
   { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true, permissionKey: "clientes" },
   { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true, permissionKey: "financeiro" },
-  { href: "/promocoes", label: "Promoções", icon: "🏷️", permissionKey: "promocoes" },
   { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true, permissionKey: "departamentos" },
   { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true, permissionKey: "fornecedores" },
-  { href: "/atividades", label: "Atividades", icon: "📋", platformOnly: true, permissionKey: "atividades" },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
-  { href: "/mensagens", label: "Mensagens", icon: "💬", platformOnly: true },
   { href: "/empresas", label: "Empresas", icon: "🏢", ownerOnly: true },
   { href: "/ajuda", label: "Ajuda", icon: "❓" },
 ];
@@ -49,6 +55,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const brand = useStoreBrand("admin");
   // Cada empresa tem a loja no mesmo padrao do admin (<nome>-admin -> <nome>-storefront); fora do padrao usa o endereco fixo.
   const [storefrontUrl, setStorefrontUrl] = useState(STOREFRONT_URL);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
     const host = window.location.hostname;
     if (host.includes("-admin.")) setStorefrontUrl(`https://${host.replace("-admin.", "-storefront.")}`);
@@ -58,19 +65,30 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
-  const visibleNav = user
-    ? NAV.filter((item) => {
-        if (item.ownerOnly) return !!user.isPlatformOwner;
-        if (user.role === "staff") {
-          // Configurações/Empresas nunca são concedíveis a staff, mesmo sem permissionKey.
-          if (item.platformOnly && !item.permissionKey) return false;
-          if (!item.permissionKey) return true; // Dashboard, Ajuda — sempre visíveis
-          return (user.permissions ?? []).includes(item.permissionKey);
-        }
-        if (item.platformOnly) return user.role === "platformAdmin";
-        return true;
+  const canSee = (item: NavItem): boolean => {
+    if (!user) return false;
+    if (item.ownerOnly) return !!user.isPlatformOwner;
+    if (user.role === "staff") {
+      // Configurações/Empresas nunca são concedíveis a staff, mesmo sem permissionKey.
+      if (item.platformOnly && !item.permissionKey) return false;
+      if (!item.permissionKey) return true; // Dashboard, Ajuda — sempre visíveis
+      return (user.permissions ?? []).includes(item.permissionKey);
+    }
+    if (item.platformOnly) return user.role === "platformAdmin";
+    return true;
+  };
+
+  // Grupo sem nenhum filho permitido some; com filhos, o href do grupo vira o do primeiro filho (usado no redirecionamento do staff).
+  const visibleNav: NavItem[] = user
+    ? NAV.flatMap((item): NavItem[] => {
+        if (!item.children) return canSee(item) ? [item] : [];
+        const children = item.children.filter(canSee);
+        return children.length > 0 ? [{ ...item, href: children[0].href, children }] : [];
       })
     : [];
+
+  const isActive = (item: NavItem) =>
+    [item.href, ...(item.alsoActiveOn ?? [])].some((p) => (p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(`${p}/`)));
 
   // Dashboard mostra faturamento/pedidos da empresa toda — staff sem permissão de
   // "pedidos" não consegue nem carregar essa tela (backend recusa), então manda
@@ -120,14 +138,44 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             ↗
           </span>
         </a>
-        <nav className="flex-1 py-3 mt-2">
+        <nav className="flex-1 py-3 mt-2 overflow-y-auto">
           {visibleNav.map((item) => {
-            const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            if (item.children) {
+              const groupActive = item.children.some(isActive);
+              const expanded = openGroups[item.label] ?? groupActive;
+              return (
+                <div key={item.label}>
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    onClick={() => setOpenGroups((prev) => ({ ...prev, [item.label]: !expanded }))}
+                    className={`w-full flex items-center gap-2.5 px-5 py-2.5 text-sm text-left ${groupActive ? "text-white font-medium" : "hover:bg-slate-800/60"}`}
+                  >
+                    <span aria-hidden>{item.icon}</span>
+                    <span className="flex-1">{item.label}</span>
+                    <span aria-hidden className="text-xs text-slate-400">
+                      {expanded ? "▾" : "▸"}
+                    </span>
+                  </button>
+                  {expanded &&
+                    item.children.map((child) => (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        className={`flex items-center gap-2.5 pl-10 pr-5 py-2 text-sm ${isActive(child) ? "bg-slate-800 text-white font-medium border-r-2 border-brand-500" : "text-slate-300 hover:bg-slate-800/60"}`}
+                      >
+                        <span aria-hidden>{child.icon}</span>
+                        {child.label}
+                      </Link>
+                    ))}
+                </div>
+              );
+            }
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 px-5 py-2.5 text-sm ${active ? "bg-slate-800 text-white font-medium border-r-2 border-brand-500" : "hover:bg-slate-800/60"}`}
+                className={`flex items-center gap-2.5 px-5 py-2.5 text-sm ${isActive(item) ? "bg-slate-800 text-white font-medium border-r-2 border-brand-500" : "hover:bg-slate-800/60"}`}
               >
                 <span aria-hidden>{item.icon}</span>
                 {item.label}

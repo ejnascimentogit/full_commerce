@@ -108,7 +108,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <AdminShell>
-      <Link href="/pedidos" className="text-sm text-brand-600 hover:underline">
+      <Link href="/comercial/vendas?aba=pedidos" className="text-sm text-brand-600 hover:underline">
         ← Voltar para pedidos
       </Link>
       <div className="flex items-start justify-between mb-1 mt-2">

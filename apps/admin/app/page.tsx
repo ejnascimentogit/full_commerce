@@ -6,7 +6,7 @@ import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
 import type { Activity, Order, OrderStatus, Product } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
-import { isOverdue } from "@/app/atividades/page";
+import { isOverdue } from "@/app/comercial/atividades/page";
 
 export default function DashboardPage() {
   const { user } = useAdminAuth();
@@ -67,7 +67,7 @@ export default function DashboardPage() {
         <Stat label="Aguardando entrega" value={pendingDelivery} />
         {canAccessAtividades && (
           <Link
-            href="/atividades"
+            href="/comercial/atividades"
             className={`rounded-lg p-5 border transition-colors ${overdueActivities > 0 ? "bg-red-50 border-red-200 hover:bg-red-100" : "bg-white border-slate-200 hover:bg-slate-50"}`}
           >
             <p className={`text-sm ${overdueActivities > 0 ? "text-red-700" : "text-slate-500"}`}>Atividades em atraso</p>
