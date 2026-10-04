@@ -128,3 +128,16 @@ Cada `Company` cadastrada em **Empresas** roda isolada (produtos, clientes, conf
 - [ ] Domínio próprio (o pendente combinado antes era usar DuckDNS) apontando para os Workers, em vez do `*.workers.dev`
 - [ ] Geracao automatica de Atividades para orcamentos parados e clientes inativos, com atribuicao configuravel - spec revisada em `.claude/skills/ecommerce/references/atividades-automaticas.md`, plano de implementacao das telas de orcamento em `.claude/skills/ecommerce/references/orcamento-implementacao.md`
 - [ ] Produtos relacionados na loja: quando o cliente escolher um produto, mostrar tambem os produtos semelhantes, os derivados e os que formam combo/kit (hoje a pagina do produto nao sugere nada). Falta definir como cadastrar essa relacao no admin (produtos relacionados e combos) e onde exibir (pagina do produto e carrinho).
+
+
+## Aparência: intensidade das linhas
+
+Cada pessoa pode escurecer as linhas e contornos (bordas de cards, tabelas, divisórias e campos) com uma barra **Suave ↔ Forte**, pra ficar mais legível. É uma preferência **pessoal**, guardada só no navegador de quem mexeu (localStorage, chave `ecommerce.lineStrength`): não vai pro banco e não muda o que os outros veem. 0 = padrão (o visual de sempre); 100 = linhas bem escuras. O botão "↺ Padrão" volta pra 0.
+
+- **Onde fica:** admin → menu lateral, bloco "Aparência" (acima do nome do usuário); loja → rodapé, linha "Aparência · linhas".
+- **Como funciona:** a variável `--line-strength` (0–100) fica no `<html>`. Em `apps/*/app/globals.css` as bordas e divisórias `slate-100/200/300` são misturadas (`color-mix`) com `#0f172a` em até 65%; com 0 a cor é idêntica à original. O `layout.tsx` de cada app aplica o valor salvo no `<head>`, antes da primeira pintura (sem piscar), junto do script da paleta da marca.
+- **Arquivos:** `components/LineStrengthControl.tsx` (idêntico nos dois apps), `app/globals.css`, `app/layout.tsx`, `components/AdminShell.tsx` (admin) e `components/Footer.tsx` (loja).
+- **O que não escurece:** destaques com cor (ex.: `hover:border-brand-500` no card de produto) e bordas que não usam `slate-100/200/300`. Pra um componente novo participar, use essas classes de borda.
+- **Ajustar o máximo:** `--line-mix: calc(var(--line-strength) * 0.65%)` em `globals.css` (0.65 = 65% de mistura no 100); `#0f172a` é o tom escuro da mistura.
+- **Origem:** a ideia vem do menu "Aparência" do RS CRM (Intelipulse): barra Suave/Forte com botão "Padrão". Um controle assim já existiu num projeto nosso e a documentação dele pode ter se perdido na migração do desktop pro Git; este registro existe pra isso não se repetir.
+- **Fora do escopo (pendente):** modo claro/escuro (a loja e o admin só têm tema claro) e guardar a preferência na conta da pessoa (hoje é por navegador).

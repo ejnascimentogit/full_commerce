@@ -14,6 +14,10 @@ export const metadata: Metadata = {
 // mesma chave/formato, os dois precisam ficar em sincronia.
 const THEME_BOOTSTRAP_SCRIPT = `
 try {
+var ls = localStorage.getItem("ecommerce.lineStrength");
+if (ls !== null) document.documentElement.style.setProperty("--line-strength", String(Math.min(100, Math.max(0, Number(ls) || 0))));
+} catch (e) {}
+try {
   var palette = JSON.parse(localStorage.getItem("ecommerce.theme.palette"));
   var root = document.documentElement.style;
   root.setProperty("--color-brand-50", palette["50"]);
