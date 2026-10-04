@@ -11,3 +11,30 @@
 body {
   background: #f5f7fb;
 }
+
+/* Intensidade das linhas (barra "Aparência", componente LineStrengthControl). --line-strength vai de 0 (padrão, igual ao de
+   sempre) a 100; o layout aplica o valor salvo da pessoa antes da primeira pintura. As bordas e divisórias cinza (slate
+   100/200/300) são misturadas com um tom escuro; com 0% de mistura a cor é exatamente a original. Fica em @layer utilities,
+   depois das utilities do Tailwind: ganha delas, mas não vence estados mais específicos como hover:border-brand-500. */
+:root {
+  --line-strength: 0;
+  --line-mix: calc(var(--line-strength) * 0.65%);
+}
+
+@layer utilities {
+  .border-slate-100 {
+    border-color: color-mix(in oklab, var(--color-slate-100), #0f172a var(--line-mix));
+  }
+  .border-slate-200 {
+    border-color: color-mix(in oklab, var(--color-slate-200), #0f172a var(--line-mix));
+  }
+  .border-slate-300 {
+    border-color: color-mix(in oklab, var(--color-slate-300), #0f172a var(--line-mix));
+  }
+  .divide-slate-100 > :not(:last-child) {
+    border-color: color-mix(in oklab, var(--color-slate-100), #0f172a var(--line-mix));
+  }
+  .divide-slate-200 > :not(:last-child) {
+    border-color: color-mix(in oklab, var(--color-slate-200), #0f172a var(--line-mix));
+  }
+}
