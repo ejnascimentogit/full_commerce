@@ -13,6 +13,7 @@
 import { Hono, type Context } from "npm:hono@4";
 import { cors } from "npm:hono/cors";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { effectivePermissions, type Permission } from "./permissions.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -156,6 +157,35 @@ async function requirePermission(c: Context, key: string) {
   if (admin.role === "staff") {
     if (Array.isArray(admin.permissions) && admin.permissions.includes(key)) return admin;
     throw new ApiError(403, "FORBIDDEN");
+  }
+  return admin;
+}
+
+// Permissao por acao (catalogo e calculo em permissions.ts). platformAdmin e vendorAdmin passam como antes (o vendorAdmin segue
+// limitado ao proprio fornecedor dentro de cada rota); a equipe (staff) precisa ter a permissao efetiva. Perfil e ajustes por
+// pessoa entram na etapa 2: as colunas ainda nao existem, entao hoje a base vem da lista antiga por aba (`permissions`).
+function staffPermissions(admin: Record<string, unknown>): Set<Permission> {
+  return effectivePermissions({
+    role: admin.role as string,
+    permissions: admin.permissions as string[] | null,
+    profilePermissions: admin.profile_permissions as string[] | null | undefined,
+    grants: admin.permission_grants as string[] | null | undefined,
+    revokes: admin.permission_revokes as string[] | null | undefined,
+  });
+}
+
+async function requirePerm(c: Context, key: Permission) {
+  const admin = await requireAdmin(c);
+  if (admin.role === "staff" && !staffPermissions(admin).has(key)) throw new ApiError(403, "FORBIDDEN");
+  return admin;
+}
+
+// Listas de apoio usadas por mais de uma tela (ex: produtos na tela de promocoes): basta uma das permissoes.
+async function requireAnyPerm(c: Context, keys: Permission[]) {
+  const admin = await requireAdmin(c);
+  if (admin.role === "staff") {
+    const mine = staffPermissions(admin);
+    if (!keys.some((k) => mine.has(k))) throw new ApiError(403, "FORBIDDEN");
   }
   return admin;
 }
@@ -1381,7 +1411,7 @@ app.get("/admin/auth/me", async (c) => {
 // ---------- Admin: produtos ----------
 
 app.post("/products", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "produtos.editar");
   const input = await c.req.json();
   const vendorId = admin.role === "vendorAdmin" ? admin.vendor_id : input.vendorId;
   // SKU nunca vem do admin — sempre gerado pelo banco ({número da empresa} + sequencial
@@ -1422,7 +1452,7 @@ app.post("/products", async (c) => {
 });
 
 app.patch("/products/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "produtos.editar");
   const patch = await c.req.json();
   const { data: existing } = await eco().from("products").select("vendor_id, company_id").eq("id", c.req.param("id")).maybeSingle();
   if (!existing || existing.company_id !== admin.company_id) throw new ApiError(404, "NOT_FOUND");
@@ -1465,7 +1495,7 @@ app.patch("/products/:id", async (c) => {
 });
 
 app.post("/products/:id/photos", async (c) => {
-  await requireAdmin(c);
+  await requirePerm(c, "produtos.editar");
   const form = await c.req.formData();
   const file = form.get("file") as File;
   if (!file) throw new ApiError(422, "FILE_REQUIRED");
@@ -1477,7 +1507,7 @@ app.post("/products/:id/photos", async (c) => {
 });
 
 app.get("/admin/products", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requireAnyPerm(c, ["produtos.ver", "pedidos.ver", "promocoes.ver", "promocoes.editar"]);
   let query = eco().from("products").select("*").eq("company_id", admin.company_id).order("name");
   if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
   const { data, error } = await query;
@@ -1489,7 +1519,7 @@ app.get("/admin/products", async (c) => {
 // preço promocional de verdade que está gravado no produto, não o preço já
 // misturado com uma Promoção de campanha (isso é só pra exibição pública).
 app.get("/admin/products/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requireAnyPerm(c, ["produtos.ver", "pedidos.ver", "promocoes.ver", "promocoes.editar"]);
   const { data: product, error } = await eco().from("products").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   if (!product) throw new ApiError(404, "NOT_FOUND");
@@ -1501,7 +1531,7 @@ app.get("/admin/products/:id", async (c) => {
 // ---------- Admin: fornecedores ----------
 
 app.post("/vendors", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "fornecedores.gerenciar");
   const input = await c.req.json();
   const { data, error } = await eco()
     .from("vendors")
@@ -1523,7 +1553,7 @@ app.post("/vendors", async (c) => {
 });
 
 app.patch("/vendors/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "fornecedores.gerenciar");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -1542,7 +1572,7 @@ app.patch("/vendors/:id", async (c) => {
 // ---------- Admin: roteirização ----------
 
 app.post("/regions", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePlatformAdmin(c);
   const input = await c.req.json();
   const { data, error } = await eco()
     .from("delivery_regions")
@@ -1561,7 +1591,7 @@ app.post("/regions", async (c) => {
 });
 
 app.patch("/regions/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePlatformAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -1577,7 +1607,7 @@ app.patch("/regions/:id", async (c) => {
 // ---------- Admin: clientes ----------
 
 app.get("/admin/customers", async (c) => {
-  const admin = await requirePermission(c, "clientes");
+  const admin = await requirePerm(c, "clientes.ver");
   const { data: customers, error } = await eco().from("customers").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const results = await Promise.all(
@@ -1590,7 +1620,7 @@ app.get("/admin/customers", async (c) => {
 });
 
 app.patch("/admin/customers/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "clientes.editar");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -1616,7 +1646,7 @@ app.patch("/admin/customers/:id", async (c) => {
 // ---------- Admin: pedidos e orçamentos ----------
 
 app.get("/admin/orders", async (c) => {
-  const admin = await requirePermission(c, "pedidos");
+  const admin = await requirePerm(c, "pedidos.ver");
   const status = c.req.query("status");
   let query = eco()
     .from("orders")
@@ -1638,7 +1668,7 @@ app.get("/admin/orders", async (c) => {
 });
 
 app.get("/admin/orders/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "pedidos.ver");
   const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (!order) throw new ApiError(404, "NOT_FOUND");
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
@@ -1653,7 +1683,7 @@ app.get("/admin/orders/:id", async (c) => {
 const DISPATCHED_STATUSES = new Set(["OUT_FOR_DELIVERY", "DELIVERED"]);
 
 app.patch("/admin/orders/:id/items", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "pedidos.ajustar");
   const { items } = await c.req.json();
   const { data: order } = await eco().from("orders").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (!order) throw new ApiError(404, "NOT_FOUND");
@@ -1708,7 +1738,7 @@ app.patch("/admin/orders/:id/items", async (c) => {
 });
 
 app.patch("/orders/:id/status", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "pedidos.status");
   const { status } = await c.req.json();
   const { data: order, error } = await eco()
     .from("orders")
@@ -1727,7 +1757,7 @@ app.patch("/orders/:id/status", async (c) => {
 });
 
 app.get("/admin/quotes", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "orcamentos.ver");
   const { data: quotes } = await eco().from("quotes").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   const results = await Promise.all(
     (quotes ?? []).map(async (q) => {
@@ -1739,7 +1769,7 @@ app.get("/admin/quotes", async (c) => {
 });
 
 app.patch("/admin/quotes/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "orcamentos.responder");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("status" in patch) row.status = patch.status;
@@ -1764,7 +1794,7 @@ app.patch("/admin/quotes/:id", async (c) => {
 // Reaproveita a mesma função interna, então as duas rotas nunca divergem na
 // lógica de conversão em si, só na autenticação/autorização.
 app.post("/admin/quotes/:id/convert", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "orcamentos.converter");
   const input = await c.req.json();
   const { data: quote } = await eco().from("quotes").select("customer_id").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (!quote) throw new ApiError(404, "NOT_FOUND");
@@ -1780,7 +1810,7 @@ app.post("/admin/quotes/:id/convert", async (c) => {
 });
 
 app.get("/admin/carts", async (c) => {
-  const admin = await requirePermission(c, "pedidos");
+  const admin = await requirePerm(c, "perdidos.ver");
   const { data: carts } = await eco()
     .from("carts")
     .select("*, cart_items!inner(id)")
@@ -1800,7 +1830,7 @@ app.get("/admin/carts", async (c) => {
 // ---------- Admin: configurações ----------
 
 app.patch("/settings", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePlatformAdmin(c);
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("brandColor" in patch) row.brand_color = patch.brandColor;
@@ -1849,7 +1879,7 @@ app.patch("/settings", async (c) => {
 });
 
 app.post("/settings/logo", async (c) => {
-  await requireAdmin(c);
+  await requirePlatformAdmin(c);
   const form = await c.req.formData();
   const file = form.get("file") as File;
   if (!file) throw new ApiError(422, "FILE_REQUIRED");
@@ -1863,7 +1893,7 @@ app.post("/settings/logo", async (c) => {
 // ---------- Admin: promoções ----------
 
 app.get("/admin/promotions", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requireAnyPerm(c, ["promocoes.ver", "produtos.ver", "produtos.editar"]);
   let query = eco().from("promotions").select("*").eq("company_id", admin.company_id);
   if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
   const { data, error } = await query;
@@ -1872,7 +1902,7 @@ app.get("/admin/promotions", async (c) => {
 });
 
 app.post("/admin/promotions", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "promocoes.editar");
   const input = await c.req.json();
   const vendorId = admin.role === "vendorAdmin" ? admin.vendor_id : input.rules?.vendorId ?? null;
   const { data, error } = await eco()
@@ -1898,7 +1928,7 @@ app.post("/admin/promotions", async (c) => {
 });
 
 app.patch("/admin/promotions/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "promocoes.editar");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("type" in patch) row.type = patch.type;
@@ -1923,7 +1953,7 @@ app.patch("/admin/promotions/:id", async (c) => {
 // ---------- Admin: departamentos ----------
 
 app.post("/categories", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "departamentos.gerenciar");
   const input = await c.req.json();
   const { data, error } = await eco()
     .from("categories")
@@ -1941,7 +1971,7 @@ app.post("/categories", async (c) => {
 });
 
 app.patch("/categories/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "departamentos.gerenciar");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -1954,7 +1984,7 @@ app.patch("/categories/:id", async (c) => {
 });
 
 app.delete("/categories/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "departamentos.gerenciar");
   const { error } = await eco().from("categories").delete().eq("id", c.req.param("id")).eq("company_id", admin.company_id);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.body(null, 204);
@@ -2088,7 +2118,7 @@ app.post("/admin/companies", async (c) => {
 // (ex: cliente ligou pra corrigir o número, ou cadastro veio incompleto do
 // ERP) — antes só dava pra ver, não editar.
 app.post("/admin/customers/:id/addresses", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "clientes.editar");
   const input = await c.req.json();
   const { data: customer } = await eco().from("customers").select("id").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
   if (!customer) throw new ApiError(404, "NOT_FOUND");
@@ -2118,7 +2148,7 @@ app.post("/admin/customers/:id/addresses", async (c) => {
 });
 
 app.patch("/admin/addresses/:id", async (c) => {
-  const admin = await requireAdmin(c);
+  const admin = await requirePerm(c, "clientes.editar");
   const patch = await c.req.json();
   const { data: existing } = await eco()
     .from("addresses")
@@ -2496,14 +2526,14 @@ function mapActivity(r: Record<string, unknown>) {
 }
 
 app.get("/admin/activity-clients", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const { data, error } = await eco().from("activity_clients").select("*").eq("company_id", admin.company_id).order("name");
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json((data ?? []).map(mapActivityClient));
 });
 
 app.post("/admin/activity-clients", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const input = await c.req.json();
   if (!input.name?.trim()) throw new ApiError(422, "INVALID_INPUT", "Nome é obrigatório.");
   const { data, error } = await eco()
@@ -2521,7 +2551,7 @@ app.post("/admin/activity-clients", async (c) => {
 });
 
 app.patch("/admin/activity-clients/:id", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -2541,14 +2571,14 @@ app.patch("/admin/activity-clients/:id", async (c) => {
 });
 
 app.get("/admin/activity-outcomes", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const { data, error } = await eco().from("activity_outcomes").select("*").eq("company_id", admin.company_id).order("sort_order");
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json((data ?? []).map(mapActivityOutcome));
 });
 
 app.post("/admin/activity-outcomes", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const { name } = await c.req.json();
   if (!name?.trim()) throw new ApiError(422, "INVALID_INPUT", "Nome é obrigatório.");
   const { data: maxRow } = await eco()
@@ -2568,7 +2598,7 @@ app.post("/admin/activity-outcomes", async (c) => {
 });
 
 app.patch("/admin/activity-outcomes/:id", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const patch = await c.req.json();
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
@@ -2586,7 +2616,7 @@ app.patch("/admin/activity-outcomes/:id", async (c) => {
 });
 
 app.get("/admin/activities", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const visibleIds = await visibleAssigneeIds(admin);
   let query = eco().from("activities").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   if (visibleIds) query = query.in("assigned_to_admin_id", visibleIds);
@@ -2604,7 +2634,7 @@ app.get("/admin/activities", async (c) => {
 });
 
 app.post("/admin/activities", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const input = await c.req.json();
     if (!input.title?.trim() || !input.clientId) {
       throw new ApiError(422, "INVALID_INPUT", "Cliente e título são obrigatórios.");
@@ -2631,7 +2661,7 @@ app.post("/admin/activities", async (c) => {
 });
 
 app.patch("/admin/activities/:id", async (c) => {
-  const admin = await requirePermission(c, "atividades");
+  const admin = await requirePerm(c, "atividades.acessar");
   const patch = await c.req.json();
   // Mover pra "Concluído" sem dizer o resultado (venda? cobrança resolvida?)
   // deixaria o painel de desempenho sem dado nenhum — por isso outcomeId é
@@ -2663,7 +2693,7 @@ app.patch("/admin/activities/:id", async (c) => {
 });
 
 app.post("/admin/activities/photos", async (c) => {
-  await requirePermission(c, "atividades");
+  await requirePerm(c, "atividades.acessar");
   const form = await c.req.formData();
   const file = form.get("file") as File;
   if (!file) throw new ApiError(422, "FILE_REQUIRED");
