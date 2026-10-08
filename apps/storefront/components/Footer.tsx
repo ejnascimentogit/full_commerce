@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@ecommerce/api-client";
 import type { StoreSettings } from "@ecommerce/types";
-import { LineStrengthControl } from "@/components/LineStrengthControl";
+import { AppearanceControl } from "@/components/AppearanceControl";
 
 // Client component pelo mesmo motivo do LogoLink/RegionBar — os dados de
 // configuração vêm do mock em localStorage, só existem no navegador.
@@ -91,7 +91,7 @@ export function Footer() {
       <div className="border-t border-white/10">
         <div className="mx-auto max-w-7xl px-4 py-4 text-xs text-white/50 text-center">{footer.legalText}</div>
         <div className="mx-auto max-w-7xl px-4 pb-4 flex justify-center">
-          <LineStrengthControl inline />
+          <AppearanceControl inline />
         </div>
       </div>
     </footer>

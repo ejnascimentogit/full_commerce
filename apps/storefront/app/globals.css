@@ -23,18 +23,70 @@ body {
 
 @layer utilities {
   .border-slate-100 {
-    border-color: color-mix(in oklab, var(--color-slate-100), #0f172a var(--line-mix));
+    border-color: color-mix(in oklab, var(--color-slate-100), var(--line-target, #0f172a) var(--line-mix));
   }
   .border-slate-200 {
-    border-color: color-mix(in oklab, var(--color-slate-200), #0f172a var(--line-mix));
+    border-color: color-mix(in oklab, var(--color-slate-200), var(--line-target, #0f172a) var(--line-mix));
   }
   .border-slate-300 {
-    border-color: color-mix(in oklab, var(--color-slate-300), #0f172a var(--line-mix));
+    border-color: color-mix(in oklab, var(--color-slate-300), var(--line-target, #0f172a) var(--line-mix));
   }
   .divide-slate-100 > :not(:last-child) {
-    border-color: color-mix(in oklab, var(--color-slate-100), #0f172a var(--line-mix));
+    border-color: color-mix(in oklab, var(--color-slate-100), var(--line-target, #0f172a) var(--line-mix));
   }
   .divide-slate-200 > :not(:last-child) {
-    border-color: color-mix(in oklab, var(--color-slate-200), #0f172a var(--line-mix));
+    border-color: color-mix(in oklab, var(--color-slate-200), var(--line-target, #0f172a) var(--line-mix));
   }
+}
+
+/* Modo escuro (classe "dark" no <html>, escolhida em Aparência; o layout aplica antes da primeira pintura). Reescreve só as classes
+   neutras do Tailwind (fundos brancos/cinza, textos e bordas slate): o azul da marca, o menu lateral escuro do admin, o rodapé e os
+   estados de destaque (hover:border-brand-500) ficam como estão. :where(html.dark) deixa a especificidade igual à de uma classe,
+   então estas regras ganham das utilities pela ordem (vêm depois) mas perdem para variantes como :hover. */
+html.dark {
+  color-scheme: dark;
+  --line-target: #e2e8f0;
+}
+html.dark body {
+  background: #0b1220;
+  color: #e2e8f0;
+}
+html.dark input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+@layer utilities {
+  :where(html.dark) .bg-white { background-color: #111827; }
+  :where(html.dark) .bg-slate-50 { background-color: #151f31; }
+  :where(html.dark) .bg-slate-100 { background-color: #1b2538; }
+  :where(html.dark) .bg-slate-200 { background-color: #273449; }
+  :where(html.dark) .bg-slate-300 { background-color: #334155; }
+  :where(html.dark) .aspect-square.bg-white { background-color: #ffffff; } /* fotos de produto seguem em fundo branco */
+  :where(html.dark) .hover\:bg-slate-50:hover { background-color: #1b2538; }
+  :where(html.dark) .hover\:bg-slate-100:hover { background-color: #273449; }
+  :where(html.dark) .text-slate-900 { color: #f1f5f9; }
+  :where(html.dark) .text-slate-800 { color: #e2e8f0; }
+  :where(html.dark) .text-slate-700 { color: #cbd5e1; }
+  :where(html.dark) .text-slate-600 { color: #b4c0d0; }
+  :where(html.dark) .text-slate-500 { color: #94a3b8; }
+  :where(html.dark) .text-slate-400 { color: #7c8ba1; }
+  :where(html.dark) .border-slate-100 { border-color: color-mix(in oklab, #1a2436, var(--line-target, #e2e8f0) var(--line-mix)); }
+  :where(html.dark) .border-slate-200 { border-color: color-mix(in oklab, #243044, var(--line-target, #e2e8f0) var(--line-mix)); }
+  :where(html.dark) .border-slate-300 { border-color: color-mix(in oklab, #334155, var(--line-target, #e2e8f0) var(--line-mix)); }
+  :where(html.dark) .divide-slate-100 > :not(:last-child) { border-color: color-mix(in oklab, #1a2436, var(--line-target, #e2e8f0) var(--line-mix)); }
+  :where(html.dark) .divide-slate-200 > :not(:last-child) { border-color: color-mix(in oklab, #243044, var(--line-target, #e2e8f0) var(--line-mix)); }
+}
+
+/* Modo escuro: textos na cor da marca clareiam (calculado a partir do azul de cada empresa); dentro do <header> da loja (faixa azul com
+   botões brancos) nada muda. */
+@layer utilities {
+  :where(html.dark) .text-brand-600,
+  :where(html.dark) .text-brand-700 {
+    color: color-mix(in oklab, var(--color-brand-500), #ffffff 45%);
+  }
+  :where(html.dark) header .bg-white { background-color: #ffffff; }
+  :where(html.dark) header .text-brand-700 { color: var(--color-brand-700); }
 }
