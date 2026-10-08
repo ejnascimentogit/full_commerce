@@ -79,3 +79,14 @@ html.dark textarea {
   :where(html.dark) .divide-slate-100 > :not(:last-child) { border-color: color-mix(in oklab, #1a2436, var(--line-target, #e2e8f0) var(--line-mix)); }
   :where(html.dark) .divide-slate-200 > :not(:last-child) { border-color: color-mix(in oklab, #243044, var(--line-target, #e2e8f0) var(--line-mix)); }
 }
+
+/* Modo escuro: textos na cor da marca clareiam (calculado a partir do azul de cada empresa); dentro do <header> da loja (faixa azul com
+   botões brancos) nada muda. */
+@layer utilities {
+  :where(html.dark) .text-brand-600,
+  :where(html.dark) .text-brand-700 {
+    color: color-mix(in oklab, var(--color-brand-500), #ffffff 45%);
+  }
+  :where(html.dark) header .bg-white { background-color: #ffffff; }
+  :where(html.dark) header .text-brand-700 { color: var(--color-brand-700); }
+}
