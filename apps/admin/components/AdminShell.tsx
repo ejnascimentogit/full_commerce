@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { AdminPermissionKey } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { useStoreBrand } from "@/lib/use-store-brand";
-import { LineStrengthControl } from "@/components/LineStrengthControl";
+import { AppearanceControl } from "@/components/AppearanceControl";
 
 // Sem domínio próprio ainda (pendência conhecida) — quando tiver, só trocar aqui.
 const STOREFRONT_URL = "https://fullcommerce-storefront.ejnascimento1.workers.dev";
@@ -184,7 +184,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <LineStrengthControl />
+        <AppearanceControl />
         <div className="px-5 py-4 border-t border-slate-800 text-sm">
           <p className="font-medium text-white">{user.name}</p>
           <p className="text-xs text-slate-400 mb-2">

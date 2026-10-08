@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 // mesma chave/formato, os dois precisam ficar em sincronia.
 const THEME_BOOTSTRAP_SCRIPT = `
 try {
+if (localStorage.getItem("ecommerce.themeMode") === "dark") document.documentElement.classList.add("dark");
 var ls = localStorage.getItem("ecommerce.lineStrength");
 if (ls !== null) document.documentElement.style.setProperty("--line-strength", String(Math.min(100, Math.max(0, Number(ls) || 0))));
 } catch (e) {}
