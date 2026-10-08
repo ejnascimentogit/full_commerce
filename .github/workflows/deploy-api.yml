@@ -1,0 +1,21 @@
+name: Publicar API (Edge Function)
+
+# Publica a Edge Function `api` (supabase/functions/api) no projeto Supabase do e-commerce, direto do repositorio (os bytes
+# exatos do commit). Rode manualmente em Actions -> "Publicar API (Edge Function)" -> Run workflow, escolhendo a branch.
+# Precisa do segredo SUPABASE_ACCESS_TOKEN (token de acesso do Supabase com permissao so de Edge Functions, restrito ao
+# projeto do e-commerce). Os sites (loja e admin) sao publicados a parte, pelo workflow "Publicar sites de uma empresa".
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Publica a Edge Function api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy api --project-ref ijruithwgvxdqhatgwqd --no-verify-jwt --use-api
