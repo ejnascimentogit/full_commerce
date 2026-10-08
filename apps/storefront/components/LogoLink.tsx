@@ -16,7 +16,7 @@ export function LogoLink() {
         <span className="invisible text-2xl font-bold tracking-tight leading-tight">.</span>
       ) : brand.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded logo (mock: data URI)
-        <img src={brand.logoUrl} alt={brand.storeName} className="h-10 w-auto max-w-[200px] object-contain rounded-md self-start" />
+        <img src={brand.logoUrl} alt={brand.storeName} className="h-14 sm:h-[72px] w-auto max-w-[320px] object-contain rounded-md self-start" />
       ) : (
         <span className="text-2xl font-bold tracking-tight leading-tight">{brand.storeName}</span>
       )}
