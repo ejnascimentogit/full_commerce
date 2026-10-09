@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, userCan } from "@ecommerce/api-client";
 import type { Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -23,7 +23,7 @@ export default function FornecedoresPage() {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
 
   useEffect(() => {
-    if (user && user.role !== "platformAdmin") router.replace("/");
+    if (user && !userCan(user, "fornecedores.gerenciar")) router.replace("/");
   }, [user, router]);
 
   function refresh() {
@@ -59,7 +59,7 @@ export default function FornecedoresPage() {
     e.target.value = "";
     if (!file) return;
     setUploadingNewLogo(true);
-    const url = await apiClient.uploadLogo(file);
+    const url = await apiClient.uploadVendorLogo(file);
     setLogoUrl(url);
     setUploadingNewLogo(false);
   }
@@ -69,7 +69,7 @@ export default function FornecedoresPage() {
     e.target.value = "";
     if (!file) return;
     setUploadingLogoFor(vendor.id);
-    const url = await apiClient.uploadLogo(file);
+    const url = await apiClient.uploadVendorLogo(file);
     await apiClient.updateVendor(vendor.id, { logoUrl: url });
     setUploadingLogoFor(null);
     refresh();
@@ -85,7 +85,7 @@ export default function FornecedoresPage() {
     refresh();
   }
 
-  if (user?.role !== "platformAdmin") return null;
+  if (!userCan(user, "fornecedores.gerenciar")) return null;
 
   return (
     <AdminShell>

@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
+import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL, userCan } from "@ecommerce/api-client";
 import type { Order, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -47,6 +47,9 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
   // tenha ligado o parâmetro em Configurações.
   const isDispatched = order.status === "OUT_FOR_DELIVERY" || order.status === "DELIVERED";
   const itemsLocked = isTerminal || (isDispatched && !settings?.allowAdjustmentsAfterDispatch);
+  // Mudar o status (avancar ou cancelar) e ajustar itens sao permissoes separadas; o fornecedor nunca faz nenhuma das duas.
+  const canChangeStatus = user?.role !== "vendorAdmin" && userCan(user, "pedidos.status");
+  const canAdjustItems = user?.role !== "vendorAdmin" ? userCan(user, "pedidos.ajustar") : true;
 
   async function advance() {
     if (!nextStatus) return;
@@ -137,7 +140,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
           <p className="text-sm text-slate-500">Status atual</p>
           <p className="font-semibold text-slate-900">{ORDER_STATUS_LABEL[order.status]}</p>
         </div>
-        {user?.role === "platformAdmin" && nextStatus && (
+        {canChangeStatus && nextStatus && (
           <button
             type="button"
             onClick={advance}
@@ -157,7 +160,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
       <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-slate-900">Itens {user?.role === "vendorAdmin" && "(seus itens neste pedido)"}</h2>
-          {itemsLocked ? null : !editingItems ? (
+          {itemsLocked || !canAdjustItems ? null : !editingItems ? (
             <button
               type="button"
               onClick={startEditingItems}
@@ -207,7 +210,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
               Já conversou com o cliente? Escolha o que fazer — não é possível deixar o pedido salvo abaixo do mínimo sem uma decisão.
             </p>
             <div className="flex flex-wrap gap-2">
-              {user?.role === "platformAdmin" ? (
+              {canChangeStatus ? (
                 <button
                   type="button"
                   onClick={cancelOrder}

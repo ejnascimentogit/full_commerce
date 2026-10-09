@@ -16,12 +16,61 @@ export type AdminPermissionKey =
   | "fornecedores"
   | "atividades";
 
+/**
+ * Permissões por ação (perfis de acesso). É o que o servidor confere em cada rota do admin; a lista antiga por aba
+ * (AdminPermissionKey) sobrevive só por compatibilidade. Configurações e Empresas ficam de fora: são só do administrador.
+ * Nomes e descrições para a tela: packages/api-client/src/permissions-catalog.ts.
+ */
+export type PermissionKey =
+  | "pedidos.ver"
+  | "pedidos.status"
+  | "pedidos.ajustar"
+  | "orcamentos.ver"
+  | "orcamentos.responder"
+  | "orcamentos.converter"
+  | "perdidos.ver"
+  | "promocoes.ver"
+  | "promocoes.editar"
+  | "atividades.acessar"
+  | "produtos.ver"
+  | "produtos.editar"
+  | "clientes.ver"
+  | "clientes.editar"
+  | "departamentos.gerenciar"
+  | "fornecedores.gerenciar"
+  | "financeiro.ver";
+
+/** Perfil de acesso da empresa (ex: Vendedor, Financeiro). O Administrador (isAdmin) tem sempre tudo e não pode ser editado nem excluído. */
+export interface AccessProfile {
+  id: string;
+  name: string;
+  description: string;
+  permissions: PermissionKey[];
+  isAdmin: boolean;
+  /** Quantas pessoas da equipe usam este perfil hoje (perfil em uso não pode ser excluído). */
+  memberCount: number;
+}
+
+/** Registro do histórico de mudanças de acesso (quem mudou o quê e quando). */
+export interface AccessAuditEntry {
+  id: string;
+  actorName: string;
+  /** profile.create | profile.update | profile.delete | member.create | member.profile | member.adjust | member.activate | member.deactivate */
+  action: string;
+  targetType: string;
+  targetName: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
 /** Setor/cargo (ex: "Financeiro", "Televendas") — cadastrado pelo platformAdmin em Configurações. Estrutural: governa quem vê o quê em Atividades (ver AdminUser.sectorId/isSupervisor). */
 export interface StaffSector {
   id: string;
   name: string;
   /** true = qualquer pessoa desse setor enxerga Atividades de TODOS os setores (uso: Diretoria/visão executiva), não só o próprio. */
   seesAll: boolean;
+  /** Perfil de acesso sugerido ao cadastrar uma pessoa nesse setor. Só sugere: quem cria a pessoa pode trocar. */
+  defaultProfileId?: string;
 }
 
 export interface AdminUser {
@@ -42,6 +91,14 @@ export interface AdminUser {
   isSupervisor?: boolean;
   /** presente só para role "staff" — gerente enxerga Atividades de TODOS os setores, igual a um setor "vê tudo" (ex: Diretoria), mas concedido pessoa a pessoa em vez de depender do setor. */
   isManager?: boolean;
+  /** presente para role "staff" (e "platformAdmin", com tudo) — permissão efetiva: perfil + liberadas só pra pessoa - bloqueadas só pra pessoa. É o que a tela usa pra esconder o que a pessoa não pode. */
+  effectivePermissions?: PermissionKey[];
+  /** perfil de acesso da pessoa (role "staff"). Ausente enquanto ela ainda usa a lista antiga por aba. */
+  profileId?: string;
+  profileName?: string;
+  /** ajustes só desta pessoa em relação ao perfil: o que foi liberado a mais e o que foi bloqueado. */
+  permissionGrants?: PermissionKey[];
+  permissionRevokes?: PermissionKey[];
 }
 
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */

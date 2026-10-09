@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, userCan } from "@ecommerce/api-client";
 import type { Category, Product, Promotion, PromotionType, Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { InfoTooltip } from "@/components/InfoTooltip";
@@ -20,6 +20,7 @@ function toLocalInput(iso: string): string {
 
 export default function PromocoesPage() {
   const { user } = useAdminAuth();
+  const canEdit = userCan(user, "promocoes.editar");
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -50,7 +51,7 @@ export default function PromocoesPage() {
   useEffect(refresh, [user]);
   useEffect(() => {
     apiClient.getCategories().then(setCategories);
-    if (user?.role === "platformAdmin") apiClient.getVendors({ includeInactive: true }).then(setVendors);
+    if (user?.role === "platformAdmin" || user?.role === "staff") apiClient.getVendors({ includeInactive: true }).then(setVendors);
   }, [user]);
 
   useEffect(() => {
@@ -159,6 +160,7 @@ export default function PromocoesPage() {
     <AdminShell>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Promoções</h1>
+        {canEdit && (
         <button
           type="button"
           onClick={() => {
@@ -174,6 +176,7 @@ export default function PromocoesPage() {
         >
           {showForm ? "Cancelar" : "+ Nova promoção"}
         </button>
+        )}
       </div>
 
       {showForm && (
@@ -325,7 +328,7 @@ export default function PromocoesPage() {
             <p className="text-xs text-slate-400 mt-1">Nenhuma marcada = aplica em todas as categorias.</p>
           </div>
 
-          {user?.role === "platformAdmin" && (
+          {(user?.role === "platformAdmin" || user?.role === "staff") && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Restringir a um fornecedor (opcional)</label>
               <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
@@ -383,6 +386,7 @@ export default function PromocoesPage() {
                     <button
                       type="button"
                       onClick={() => toggleFeatured(p)}
+                      disabled={!canEdit}
                       className={`text-xs px-2 py-0.5 rounded-full ${p.isFeatured ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-500"}`}
                     >
                       {p.isFeatured ? "Em destaque" : "Não destacado"}
@@ -394,10 +398,10 @@ export default function PromocoesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <button type="button" onClick={() => startEdit(p)} className="text-brand-600 hover:underline text-xs mr-3">
+                    {canEdit && <button type="button" onClick={() => startEdit(p)} className="text-brand-600 hover:underline text-xs mr-3">
                       Editar
-                    </button>
-                    {active && (
+                    </button>}
+                    {canEdit && active && (
                       <button type="button" onClick={() => endNow(p)} className="text-red-600 hover:underline text-xs">
                         Encerrar agora
                       </button>

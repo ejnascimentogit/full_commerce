@@ -3,14 +3,18 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
+import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { Customer, PaymentMethod, Quote, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
+import { useAdminAuth } from "@/lib/admin-auth-context";
 import { QUOTE_STATUS_BADGE, QUOTE_STATUS_LABEL } from "@/lib/quote-status";
 
 export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { user } = useAdminAuth();
+  const canRespond = userCan(user, "orcamentos.responder");
+  const canConvert = userCan(user, "orcamentos.converter");
   const [quote, setQuote] = useState<Quote | null | undefined>(undefined);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
@@ -155,7 +159,7 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
-      {(quote.status === "requested" || quote.status === "quoted") && (
+      {canRespond && (quote.status === "requested" || quote.status === "quoted") && (
         <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
           <h2 className="font-semibold text-slate-900 mb-3">Responder orcamento</h2>
           <div className="grid sm:grid-cols-2 gap-3 mb-3">
@@ -214,7 +218,7 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {quote.status === "accepted" && (
+      {canConvert && quote.status === "accepted" && (
         <div className="bg-white border border-slate-200 rounded-lg p-5 mb-4">
           <h2 className="font-semibold text-slate-900 mb-3">Converter em pedido</h2>
           {!quote.addressId && (

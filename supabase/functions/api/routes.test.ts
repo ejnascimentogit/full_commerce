@@ -22,6 +22,9 @@ function parseGuards(): Record<string, string> {
 
 const P = (key: string) => `requirePerm("${key}")`;
 const PRODUTOS_LOOKUP = 'requireAnyPerm(["produtos.ver", "pedidos.ver", "promocoes.ver", "promocoes.editar"])';
+// A tela de Financeiro le a lista de pedidos e de clientes; por isso quem so tem "financeiro.ver" tambem passa nessas duas leituras.
+const FINANCEIRO_OU_PEDIDOS = 'requireAnyPerm(["pedidos.ver", "financeiro.ver"])';
+const FINANCEIRO_OU_CLIENTES = 'requireAnyPerm(["clientes.ver", "financeiro.ver"])';
 const PROMOCOES_LOOKUP = 'requireAnyPerm(["promocoes.ver", "produtos.ver", "produtos.editar"])';
 
 const EXPECTED: Record<string, string> = {
@@ -34,11 +37,12 @@ const EXPECTED: Record<string, string> = {
   "PATCH /vendors/:id": P("fornecedores.gerenciar"),
   "POST /regions": "requirePlatformAdmin()",
   "PATCH /regions/:id": "requirePlatformAdmin()",
-  "GET /admin/customers": P("clientes.ver"),
+  "GET /admin/customers": FINANCEIRO_OU_CLIENTES,
   "PATCH /admin/customers/:id": P("clientes.editar"),
   "POST /admin/customers/:id/addresses": P("clientes.editar"),
   "PATCH /admin/addresses/:id": P("clientes.editar"),
-  "GET /admin/orders": P("pedidos.ver"),
+  "GET /admin/orders": FINANCEIRO_OU_PEDIDOS,
+  "POST /vendors/logo": P("fornecedores.gerenciar"),
   "GET /admin/orders/:id": P("pedidos.ver"),
   "PATCH /admin/orders/:id/items": P("pedidos.ajustar"),
   "PATCH /orders/:id/status": P("pedidos.status"),
@@ -64,6 +68,17 @@ const EXPECTED: Record<string, string> = {
   "POST /admin/activities": P("atividades.acessar"),
   "PATCH /admin/activities/:id": P("atividades.acessar"),
   "POST /admin/activities/photos": P("atividades.acessar"),
+  // Equipe, setores e perfis de acesso: so o administrador da empresa.
+  "POST /admin/team-members": "requirePlatformAdmin()",
+  "PATCH /admin/team-members/:id": "requirePlatformAdmin()",
+  "POST /admin/staff-sectors": "requirePlatformAdmin()",
+  "PATCH /admin/staff-sectors/:id": "requirePlatformAdmin()",
+  "DELETE /admin/staff-sectors/:id": "requirePlatformAdmin()",
+  "GET /admin/access-profiles": "requirePlatformAdmin()",
+  "POST /admin/access-profiles": "requirePlatformAdmin()",
+  "PATCH /admin/access-profiles/:id": "requirePlatformAdmin()",
+  "DELETE /admin/access-profiles/:id": "requirePlatformAdmin()",
+  "GET /admin/access-audit": "requirePlatformAdmin()",
 };
 
 // Leituras que qualquer pessoa do admin precisa (listas usadas na tela de equipe e de atividades).

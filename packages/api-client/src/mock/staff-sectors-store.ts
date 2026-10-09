@@ -30,11 +30,13 @@ export function createStaffSector(name: string): StaffSector {
   return sector;
 }
 
-export function updateStaffSector(id: string, patch: Partial<StaffSector>): StaffSector {
+export function updateStaffSector(id: string, patch: Partial<{ name: string; seesAll: boolean; defaultProfileId: string | null }>): StaffSector {
   const sectors = readAll();
   const index = sectors.findIndex((s) => s.id === id);
   if (index === -1) throw new Error(`Staff sector not found: ${id}`);
-  sectors[index] = { ...sectors[index], ...patch };
+  const { defaultProfileId, ...rest } = patch;
+  sectors[index] = { ...sectors[index], ...rest };
+  if (defaultProfileId !== undefined) sectors[index].defaultProfileId = defaultProfileId ?? undefined;
   writeAll(sectors);
   return sectors[index];
 }

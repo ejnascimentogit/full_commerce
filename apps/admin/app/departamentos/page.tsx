@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, userCan } from "@ecommerce/api-client";
 import type { Category } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -18,7 +18,7 @@ export default function DepartamentosPage() {
   const [editing, setEditing] = useState<Record<string, { name: string; icon: string }>>({});
 
   useEffect(() => {
-    if (user && user.role !== "platformAdmin") router.replace("/");
+    if (user && !userCan(user, "departamentos.gerenciar")) router.replace("/");
   }, [user, router]);
 
   function refresh() {
@@ -63,7 +63,7 @@ export default function DepartamentosPage() {
     refresh();
   }
 
-  if (user?.role !== "platformAdmin") return null;
+  if (!userCan(user, "departamentos.gerenciar")) return null;
 
   return (
     <AdminShell>
