@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectivePermissions, expandLegacyPermissions, PERMISSIONS } from "./permissions";
+import { effectivePermissions, expandLegacyPermissions, legacyTabsFor, PERMISSIONS, sanitizePermissionList, withRequirements } from "./permissions";
 
 describe("expandLegacyPermissions", () => {
   it("traduz a aba antiga 'pedidos' para pedidos + orçamentos + perdidos", () => {
@@ -56,5 +56,44 @@ describe("effectivePermissions", () => {
   it("ignora permissões inexistentes em perfil e ajustes", () => {
     const p = effectivePermissions({ role: "staff", profilePermissions: ["x.y", "pedidos.ver"], grants: ["configuracoes.editar"] });
     expect([...p]).toEqual(["pedidos.ver"]);
+  });
+});
+
+describe("dependências entre permissões", () => {
+  it("perder o 'ver' derruba as ações dele, sem afetar as outras áreas", () => {
+    const p = effectivePermissions({
+      role: "staff",
+      profilePermissions: ["pedidos.ver", "pedidos.status", "produtos.ver", "produtos.editar"],
+      revokes: ["pedidos.ver"],
+    });
+    expect(p.has("pedidos.status")).toBe(false);
+    expect(p.has("produtos.editar")).toBe(true);
+  });
+  it("ação sem o 'ver' no perfil também não vale", () => {
+    expect(effectivePermissions({ role: "staff", profilePermissions: ["clientes.editar"] }).size).toBe(0);
+  });
+  it("liberar só a ação pra pessoa não funciona sem o 'ver' (por isso a tela libera os dois juntos)", () => {
+    expect(effectivePermissions({ role: "staff", profilePermissions: [], grants: ["produtos.editar"] }).size).toBe(0);
+    expect(effectivePermissions({ role: "staff", profilePermissions: [], grants: ["produtos.editar", "produtos.ver"] }).has("produtos.editar")).toBe(true);
+  });
+});
+
+describe("sanitizePermissionList e withRequirements", () => {
+  it("descarta lixo, repetição e tipos errados", () => {
+    expect(sanitizePermissionList(["pedidos.ver", "pedidos.ver", "x", 3, null])).toEqual(["pedidos.ver"]);
+    expect(sanitizePermissionList("pedidos.ver")).toEqual([]);
+    expect(sanitizePermissionList(undefined)).toEqual([]);
+  });
+  it("acrescenta o 'ver' de cada ação", () => {
+    expect(withRequirements(["orcamentos.converter"]).sort()).toEqual(["orcamentos.converter", "orcamentos.ver"]);
+    expect(withRequirements(["financeiro.ver"])).toEqual(["financeiro.ver"]);
+  });
+});
+
+describe("legacyTabsFor (compatibilidade com telas antigas)", () => {
+  it("a aba aparece se a pessoa pode qualquer coisa dentro dela", () => {
+    const tabs = legacyTabsFor(new Set(["orcamentos.ver", "financeiro.ver"] as const));
+    expect(tabs.sort()).toEqual(["financeiro", "pedidos"]);
+    expect(legacyTabsFor(new Set())).toEqual([]);
   });
 });

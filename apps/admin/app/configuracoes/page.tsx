@@ -9,6 +9,7 @@ import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerc
 import type { Banner, FooterLink, FooterSettings, PaymentMethod, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { RegionsSection } from "@/components/RegionsSection";
+import { PerfisSection } from "@/components/PerfisSection";
 import { TeamSection } from "@/components/TeamSection";
 import { ActivityOutcomesSection } from "@/components/ActivityOutcomesSection";
 import { AtividadesAutomaticasSection } from "@/components/AtividadesAutomaticasSection";
@@ -66,7 +67,12 @@ const CONFIG_SECTIONS = [
   {
     id: "equipe",
     title: "Equipe",
-    help: 'Crie logins de vendedor, financeiro etc. com acesso restrito só às abas que você marcar, mais o setor e o nível (usuário, supervisor, gerente) que controla o que a pessoa vê em Atividades.',
+    help: 'Crie logins de vendedor, financeiro etc., escolha o perfil de acesso de cada pessoa e, se precisar, ajuste só uma pessoa sem mexer no perfil dos outros. Também define o setor e o nível (usuário, supervisor, gerente) que controla o que ela vê em Atividades.',
+  },
+  {
+    id: "perfis",
+    title: "Perfis de acesso",
+    help: 'Conjuntos de permissões (Administrador, Vendedor, Financeiro, Atendimento e os que você criar) que definem o que cada pessoa da equipe pode ver e fazer. Edite os perfis, crie novos e veja o histórico de mudanças de acesso.',
   },
   {
     id: "status-atividades",
@@ -943,6 +949,9 @@ export default function ConfiguracoesPage() {
       </div>
       <div id="equipe" className={highlightedId === "equipe" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
         <TeamSection />
+      </div>
+      <div id="perfis" className={highlightedId === "perfis" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
+        <PerfisSection />
       </div>
       <div id="status-atividades" className={highlightedId === "status-atividades" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
         <ActivityOutcomesSection />

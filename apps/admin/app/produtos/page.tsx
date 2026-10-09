@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, userCan } from "@ecommerce/api-client";
 import type { Category, Product, Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -16,6 +16,7 @@ function hasRealPhoto(product: Product): boolean {
 
 export default function ProdutosPage() {
   const { user } = useAdminAuth();
+  const canEdit = userCan(user, "produtos.editar");
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -46,9 +47,11 @@ export default function ProdutosPage() {
     <AdminShell>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Produtos</h1>
-        <Link href="/produtos/novo" className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700">
-          + Novo produto
-        </Link>
+        {canEdit && (
+          <Link href="/produtos/novo" className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700">
+            + Novo produto
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap items-end gap-4 mb-4">
@@ -95,7 +98,7 @@ export default function ProdutosPage() {
           </div>
         </div>
 
-        {user?.role === "platformAdmin" && (
+        {(user?.role === "platformAdmin" || user?.role === "staff") && (
           <div>
             <p className="text-xs font-medium text-slate-500 mb-1.5">Fornecedor</p>
             <select
@@ -126,7 +129,7 @@ export default function ProdutosPage() {
               <th className="text-left px-4 py-2.5">Produto</th>
               <th className="text-left px-4 py-2.5">Código</th>
               <th className="text-left px-4 py-2.5">Categoria</th>
-              {user?.role === "platformAdmin" && <th className="text-left px-4 py-2.5">Fornecedor</th>}
+              {(user?.role === "platformAdmin" || user?.role === "staff") && <th className="text-left px-4 py-2.5">Fornecedor</th>}
               <th className="text-right px-4 py-2.5">Preço</th>
               <th className="text-right px-4 py-2.5">Estoque</th>
               <th className="text-left px-4 py-2.5">Status</th>
@@ -143,7 +146,7 @@ export default function ProdutosPage() {
                 <td className="px-4 py-2.5 font-medium text-slate-900">{p.name}</td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{p.sku}</td>
                 <td className="px-4 py-2.5 text-slate-500">{categories.find((c) => c.id === p.categoryId)?.name ?? "—"}</td>
-                {user?.role === "platformAdmin" && (
+                {(user?.role === "platformAdmin" || user?.role === "staff") && (
                   <td className="px-4 py-2.5 text-slate-500">{vendors.find((v) => v.id === p.vendorId)?.name ?? "—"}</td>
                 )}
                 <td className="px-4 py-2.5 text-right">R$ {(p.salePrice ?? p.basePrice).toFixed(2).replace(".", ",")}</td>
@@ -154,9 +157,11 @@ export default function ProdutosPage() {
                   </span>
                 </td>
                 <td className="px-4 py-2.5 text-right">
-                  <Link href={`/produtos/${p.id}`} className="text-brand-600 hover:underline">
-                    Editar
-                  </Link>
+                  {canEdit && (
+                    <Link href={`/produtos/${p.id}`} className="text-brand-600 hover:underline">
+                      Editar
+                    </Link>
+                  )}
                 </td>
               </tr>
             ))}

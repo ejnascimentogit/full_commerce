@@ -1,4 +1,6 @@
 import type {
+  AccessAuditEntry,
+  AccessProfile,
   Activity,
   ActivityClient,
   ActivityOutcome,
@@ -16,6 +18,7 @@ import type {
   EcommerceType,
   Order,
   OrderStatus,
+  PermissionKey,
   Product,
   Promotion,
   Quote,
@@ -255,6 +258,14 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<StaffSector>(`/api/admin/staff-sectors/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     deleteStaffSector: (id: string) =>
       request<void>(`/api/admin/staff-sectors/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
+    getAccessProfiles: () => request<AccessProfile[]>("/api/admin/access-profiles", { tokenKey: ADMIN_TOKEN_KEY }),
+    createAccessProfile: (input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }) =>
+      request<AccessProfile>("/api/admin/access-profiles", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    updateAccessProfile: (id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }) =>
+      request<AccessProfile>(`/api/admin/access-profiles/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
+    deleteAccessProfile: (id: string) =>
+      request<void>(`/api/admin/access-profiles/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
+    getAccessAudit: () => request<AccessAuditEntry[]>("/api/admin/access-audit", { tokenKey: ADMIN_TOKEN_KEY }),
 
     getActivityClients: () => request<ActivityClient[]>("/api/admin/activity-clients", { tokenKey: ADMIN_TOKEN_KEY }),
     createActivityClient: (input) =>
@@ -299,6 +310,10 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<CompanyDeployResult>(`/api/admin/companies/${id}/deploy`, { method: "POST", tokenKey: ADMIN_TOKEN_KEY }),
     uploadLogo: async (file: File) => {
       const data = await upload<{ url: string }>("/api/settings/logo", file, ADMIN_TOKEN_KEY);
+      return data.url;
+    },
+    uploadVendorLogo: async (file: File) => {
+      const data = await upload<{ url: string }>("/api/vendors/logo", file, ADMIN_TOKEN_KEY);
       return data.url;
     },
     getAdminPromotions: (params) =>

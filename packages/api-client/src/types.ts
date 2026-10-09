@@ -5,6 +5,8 @@ import type {
   ActivityHealth,
   ActivityOutcome,
   Address,
+  AccessAuditEntry,
+  AccessProfile,
   AdminPermissionKey,
   AdminUser,
   Cart,
@@ -22,6 +24,7 @@ import type {
   OrderStatus,
   PaymentMethod,
   Product,
+  PermissionKey,
   Promotion,
   Quote,
   QuoteStatus,
@@ -34,7 +37,10 @@ export interface CreateTeamMemberInput {
   name: string;
   email: string;
   password: string;
-  permissions: AdminPermissionKey[];
+  /** Perfil de acesso (tela nova). */
+  profileId?: string;
+  /** Lista antiga por aba: só vale se não houver perfil (tela antiga). */
+  permissions?: AdminPermissionKey[];
   sectorId?: string;
   isSupervisor?: boolean;
   isManager?: boolean;
@@ -43,6 +49,10 @@ export interface CreateTeamMemberInput {
 export interface UpdateTeamMemberInput {
   name?: string;
   permissions?: AdminPermissionKey[];
+  profileId?: string;
+  /** Ajustes só desta pessoa em relação ao perfil: o servidor guarda só o que realmente difere do perfil. */
+  permissionGrants?: PermissionKey[];
+  permissionRevokes?: PermissionKey[];
   active?: boolean;
   sectorId?: string | null;
   isSupervisor?: boolean;
@@ -191,8 +201,14 @@ export interface ApiClient {
   updateTeamMember(id: string, patch: UpdateTeamMemberInput): Promise<AdminUser>;
   getStaffSectors(): Promise<StaffSector[]>;
   createStaffSector(name: string): Promise<StaffSector>;
-  updateStaffSector(id: string, patch: Partial<{ name: string; seesAll: boolean }>): Promise<StaffSector>;
+  updateStaffSector(id: string, patch: Partial<{ name: string; seesAll: boolean; defaultProfileId: string | null }>): Promise<StaffSector>;
   deleteStaffSector(id: string): Promise<void>;
+  /** Perfis de acesso e histórico de mudanças — só platformAdmin (Configurações); o backend recusa os outros com 403. */
+  getAccessProfiles(): Promise<AccessProfile[]>;
+  createAccessProfile(input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }): Promise<AccessProfile>;
+  updateAccessProfile(id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }): Promise<AccessProfile>;
+  deleteAccessProfile(id: string): Promise<void>;
+  getAccessAudit(): Promise<AccessAuditEntry[]>;
 
   // ---------- Gestão de Atividades ----------
   getActivityClients(): Promise<ActivityClient[]>;
@@ -270,6 +286,8 @@ export interface ApiClient {
   updateStoreSettings(patch: Partial<StoreSettings>): Promise<StoreSettings>;
   /** Mock: mesmo resize/encode do upload de foto de produto. Real: POST /api/settings/logo (multipart). */
   uploadLogo(file: File): Promise<string>;
+  /** Logo de um fornecedor (marca): exige a permissão de fornecedores; o logo da loja (uploadLogo) é só do administrador. */
+  uploadVendorLogo(file: File): Promise<string>;
   /** platformAdmin: todas · vendorAdmin: só as com rules.vendorId === o próprio. */
   getAdminPromotions(params?: { vendorId?: string }): Promise<Promotion[]>;
   createPromotion(input: CreatePromotionInput): Promise<Promotion>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
+import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { AdminUser, Customer, DeliveryRegion } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -16,9 +16,10 @@ export default function ClientesPage() {
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
+  const canEdit = userCan(user, "clientes.editar");
 
   useEffect(() => {
-    if (user && user.role !== "platformAdmin") router.replace("/");
+    if (user && !userCan(user, "clientes.ver")) router.replace("/");
   }, [user, router]);
 
   function refresh() {
@@ -31,7 +32,7 @@ export default function ClientesPage() {
     apiClient.getTeamMembers().then(setStaff);
   }, []);
 
-  if (user?.role !== "platformAdmin") return null;
+  if (!userCan(user, "clientes.ver")) return null;
 
   const term = search.trim().toLowerCase();
   const filtered = customers.filter((c) => {
@@ -112,9 +113,11 @@ export default function ClientesPage() {
                   </span>
                 </td>
                 <td className="px-4 py-2.5">
-                  <button type="button" onClick={() => setEditing(c)} className="text-brand-600 hover:underline text-xs font-medium">
-                    Editar
-                  </button>
+                  {canEdit && (
+                    <button type="button" onClick={() => setEditing(c)} className="text-brand-600 hover:underline text-xs font-medium">
+                      Editar
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

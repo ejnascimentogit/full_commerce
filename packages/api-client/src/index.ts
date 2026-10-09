@@ -37,6 +37,17 @@ export { lookupCep, formatCep } from "./cep";
 export type { CepAddress } from "./cep";
 export { ADMIN_FAQ, buildCustomerFaq, searchFaq } from "./faq";
 export type { FaqEntry } from "./faq";
+export {
+  ALL_PERMISSION_KEYS,
+  LEGACY_TABS,
+  PERMISSION_GROUPS,
+  PERMISSION_REQUIRES,
+  permissionLabel,
+  setPermission,
+  userCan,
+  userCanAny,
+} from "./permissions-catalog";
+export type { PermissionGroup, PermissionItem } from "./permissions-catalog";
 
 // The single place that decides mock vs. real backend. Everything else in the
 // three apps imports `apiClient` from here and never touches mock/ or rest/ directly.

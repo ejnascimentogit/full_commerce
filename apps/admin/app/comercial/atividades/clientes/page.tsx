@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, userCan } from "@ecommerce/api-client";
 import type { Activity, ActivityClient, ActivityHealth, ActivityOutcome, AdminUser } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -25,7 +25,7 @@ export default function AtividadesClientesPage() {
   const [selected, setSelected] = useState<ActivityClient | null>(null);
   const [healthFilter, setHealthFilter] = useState("");
 
-  const canAccess = user?.role === "platformAdmin" || (user?.role === "staff" && (user.permissions ?? []).includes("atividades"));
+  const canAccess = user?.role !== "vendorAdmin" && userCan(user, "atividades.acessar");
 
   useEffect(() => {
     if (user && !canAccess) router.replace("/");

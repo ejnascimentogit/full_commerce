@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
+import { apiClient, PAYMENT_METHOD_LABEL, userCan } from "@ecommerce/api-client";
 import type { Customer, Order } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -56,11 +56,11 @@ export default function FinanceiroPage() {
   }
 
   useEffect(() => {
-    if (user && user.role !== "platformAdmin") router.replace("/");
+    if (user && !userCan(user, "financeiro.ver")) router.replace("/");
   }, [user, router]);
 
   useEffect(() => {
-    if (!user || user.role !== "platformAdmin") return;
+    if (!user || !userCan(user, "financeiro.ver")) return;
     Promise.all([apiClient.getAdminCustomers(), apiClient.getAdminOrders()]).then(([c, o]) => {
       setCustomers(c);
       setOrders(o);
@@ -144,7 +144,7 @@ export default function FinanceiroPage() {
 
   const selected = selectedId ? finances.get(selectedId) : undefined;
 
-  if (user?.role !== "platformAdmin") return null;
+  if (!userCan(user, "financeiro.ver")) return null;
 
   return (
     <AdminShell>

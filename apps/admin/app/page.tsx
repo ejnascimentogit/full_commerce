@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
+import { apiClient, ORDER_STATUS_LABEL, userCan } from "@ecommerce/api-client";
 import type { Activity, Order, OrderStatus, Product } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -14,7 +14,7 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
 
-  const canAccessAtividades = user?.role === "platformAdmin" || (user?.role === "staff" && (user.permissions ?? []).includes("atividades"));
+  const canAccessAtividades = user?.role !== "vendorAdmin" && userCan(user, "atividades.acessar");
 
   useEffect(() => {
     if (!user) return;

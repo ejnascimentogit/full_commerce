@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { AdminPermissionKey } from "@ecommerce/types";
+import type { PermissionKey } from "@ecommerce/types";
+import { userCanAny } from "@ecommerce/api-client";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { useStoreBrand } from "@/lib/use-store-brand";
 import { AppearanceControl } from "@/components/AppearanceControl";
@@ -17,7 +18,8 @@ interface NavItem {
   icon: string;
   platformOnly?: boolean;
   ownerOnly?: boolean;
-  permissionKey?: AdminPermissionKey;
+  // O item aparece se a pessoa da equipe tem pelo menos uma destas permissoes (perfil + ajustes). Sem lista: aparece pra todos.
+  permissionAny?: PermissionKey[];
   // Rotas que também deixam o item "ativo" no menu (telas de detalhe que continuam fora da pasta do item).
   alsoActiveOn?: string[];
   // Grupo (menu com sub-menu): o item só abre/fecha os filhos; aparece se pelo menos um filho for permitido.
@@ -26,24 +28,23 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/produtos", label: "Produtos", icon: "📦", permissionKey: "produtos" },
+  { href: "/produtos", label: "Produtos", icon: "📦", permissionAny: ["produtos.ver"] },
   {
     href: "/comercial",
     label: "Comercial",
     icon: "💼",
     children: [
-      // Vendas = Pedidos + Orçamentos + Perdidos (abas). Sem chave de permissão própria ainda -- reaproveita "pedidos"
-      // de propósito (ver .claude/skills/ecommerce/references/orcamento-implementacao.md).
-      { href: "/comercial/vendas", label: "Vendas", icon: "🧾", permissionKey: "pedidos", alsoActiveOn: ["/pedidos", "/orcamentos", "/perdidos"] },
-      { href: "/comercial/promocoes", label: "Promoções", icon: "🏷️", permissionKey: "promocoes" },
-      { href: "/comercial/atividades", label: "Atividades", icon: "📋", platformOnly: true, permissionKey: "atividades" },
+      // Vendas = Pedidos + Orcamentos + Perdidos (abas): aparece se a pessoa pode ver qualquer um dos tres; a tela mostra so as abas permitidas.
+      { href: "/comercial/vendas", label: "Vendas", icon: "🧾", permissionAny: ["pedidos.ver", "orcamentos.ver", "perdidos.ver"], alsoActiveOn: ["/pedidos", "/orcamentos", "/perdidos"] },
+      { href: "/comercial/promocoes", label: "Promoções", icon: "🏷️", permissionAny: ["promocoes.ver"] },
+      { href: "/comercial/atividades", label: "Atividades", icon: "📋", platformOnly: true, permissionAny: ["atividades.acessar"] },
       { href: "/comercial/mensagens", label: "Mensagens", icon: "💬", platformOnly: true },
     ],
   },
-  { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true, permissionKey: "clientes" },
-  { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true, permissionKey: "financeiro" },
-  { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true, permissionKey: "departamentos" },
-  { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true, permissionKey: "fornecedores" },
+  { href: "/clientes", label: "Clientes", icon: "👥", platformOnly: true, permissionAny: ["clientes.ver"] },
+  { href: "/financeiro", label: "Financeiro", icon: "💰", platformOnly: true, permissionAny: ["financeiro.ver"] },
+  { href: "/departamentos", label: "Departamentos", icon: "🗂️", platformOnly: true, permissionAny: ["departamentos.gerenciar"] },
+  { href: "/fornecedores", label: "Fornecedores", icon: "🏭", platformOnly: true, permissionAny: ["fornecedores.gerenciar"] },
   { href: "/configuracoes", label: "Configurações", icon: "⚙️", platformOnly: true },
   { href: "/empresas", label: "Empresas", icon: "🏢", ownerOnly: true },
   { href: "/ajuda", label: "Ajuda", icon: "❓" },
@@ -71,9 +72,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     if (item.ownerOnly) return !!user.isPlatformOwner;
     if (user.role === "staff") {
       // Configurações/Empresas nunca são concedíveis a staff, mesmo sem permissionKey.
-      if (item.platformOnly && !item.permissionKey) return false;
-      if (!item.permissionKey) return true; // Dashboard, Ajuda — sempre visíveis
-      return (user.permissions ?? []).includes(item.permissionKey);
+      if (item.platformOnly && !item.permissionAny) return false;
+      if (!item.permissionAny) return true; // Dashboard, Ajuda: sempre visiveis
+      return userCanAny(user, item.permissionAny);
     }
     if (item.platformOnly) return user.role === "platformAdmin";
     return true;
@@ -96,7 +97,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // direto pra primeira seção que a pessoa realmente pode acessar.
   useEffect(() => {
     if (loading || !user || user.role !== "staff" || pathname !== "/") return;
-    if (!(user.permissions ?? []).includes("pedidos")) {
+    if (!userCanAny(user, ["pedidos.ver"])) {
       const fallback = visibleNav.find((item) => item.href !== "/")?.href ?? "/ajuda";
       router.replace(fallback);
     }

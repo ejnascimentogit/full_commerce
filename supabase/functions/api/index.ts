@@ -13,7 +13,14 @@
 import { Hono, type Context } from "npm:hono@4";
 import { cors } from "npm:hono/cors";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { effectivePermissions, type Permission } from "./permissions.ts";
+import {
+  effectivePermissions,
+  legacyTabsFor,
+  PERMISSIONS,
+  sanitizePermissionList,
+  withRequirements,
+  type Permission,
+} from "./permissions.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -126,6 +133,12 @@ async function requireAdmin(c: Context) {
   // active === false só existe pra login "staff" desativado pelo dono da empresa —
   // platformAdmin/vendorAdmin nunca têm essa coluna setada como false.
   if (!data || data.active === false) throw new ApiError(401, "UNAUTHENTICATED");
+  // Equipe com perfil de acesso: carrega as permissoes do perfil junto com a pessoa. Se o perfil nao puder ser lido, a porta
+  // fecha (nenhuma permissao) em vez de cair na lista antiga.
+  if (data.role === "staff" && data.profile_id) {
+    const { data: profile, error: profileError } = await eco().from("access_profiles").select("*").eq("id", data.profile_id).maybeSingle();
+    data.profile_permissions = profileError ? [] : profilePermissionList(profile);
+  }
   return data;
 }
 
@@ -188,6 +201,62 @@ async function requireAnyPerm(c: Context, keys: Permission[]) {
     if (!keys.some((k) => mine.has(k))) throw new ApiError(403, "FORBIDDEN");
   }
   return admin;
+}
+
+// ---------- Perfis de acesso (apoio) ----------
+
+type Row = Record<string, unknown>;
+
+// Permissoes que um perfil concede. O perfil Administrador (is_admin) sempre tem tudo, qualquer que seja o conteudo gravado.
+function profilePermissionList(profile: Row | null | undefined): string[] {
+  if (!profile) return [];
+  return profile.is_admin ? [...PERMISSIONS] : ((profile.permissions as string[] | null) ?? []);
+}
+
+async function fetchProfile(companyId: unknown, profileId: unknown): Promise<Row | null> {
+  if (typeof profileId !== "string" || !profileId) return null;
+  const { data } = await eco().from("access_profiles").select("*").eq("id", profileId).eq("company_id", companyId as string).maybeSingle();
+  return data ?? null;
+}
+
+async function companyProfilesById(companyId: unknown): Promise<Map<string, Row>> {
+  const { data } = await eco().from("access_profiles").select("*").eq("company_id", companyId as string);
+  return new Map<string, Row>((data ?? []).map((p: Row) => [p.id as string, p] as const));
+}
+
+async function countProfileMembers(companyId: unknown, profileId: unknown): Promise<number> {
+  const { count } = await eco()
+    .from("admin_users")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId as string)
+    .eq("profile_id", profileId as string);
+  return count ?? 0;
+}
+
+// Historico de mudancas de acesso. Melhor esforco: se o registro falhar, a mudanca ja feita nao e desfeita.
+async function logAccess(admin: Row, action: string, targetType: string, target: { id?: unknown; name?: unknown }, details: Row = {}) {
+  const { error } = await eco().from("access_audit_log").insert({
+    company_id: admin.company_id,
+    actor_admin_id: admin.id,
+    actor_name: admin.name,
+    action,
+    target_type: targetType,
+    target_id: target.id ?? null,
+    target_name: String(target.name ?? ""),
+    details,
+  });
+  if (error) console.error("access_audit_log", error.message);
+}
+
+function mapAccessProfile(p: Row, memberCount: number) {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description ?? "",
+    permissions: p.is_admin ? [...PERMISSIONS] : (p.permissions ?? []),
+    isAdmin: !!p.is_admin,
+    memberCount,
+  };
 }
 
 // Hierarquia de visibilidade em Atividades: platformAdmin e quem é de um setor
@@ -289,7 +358,15 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
   };
 }
 
-function mapAdminUser(u: Record<string, unknown>) {
+function mapAdminUser(u: Record<string, unknown>, profile?: Record<string, unknown> | null) {
+  const hasProfile = !!u.profile_id;
+  const effective = effectivePermissions({
+    role: u.role as string,
+    permissions: u.permissions as string[] | null,
+    profilePermissions: hasProfile ? profilePermissionList(profile) : undefined,
+    grants: u.permission_grants as string[] | null | undefined,
+    revokes: u.permission_revokes as string[] | null | undefined,
+  });
   return {
     id: u.id,
     name: u.name,
@@ -297,7 +374,13 @@ function mapAdminUser(u: Record<string, unknown>) {
     role: u.role,
     vendorId: u.vendor_id ?? undefined,
     isPlatformOwner: u.company_id === DEMO_COMPANY_ID,
-    permissions: u.permissions ?? [],
+    // Lista antiga por aba, derivada da permissao efetiva: so pra telas antigas ainda publicadas. A tela nova usa effectivePermissions.
+    permissions: u.role === "staff" ? legacyTabsFor(effective) : u.permissions ?? [],
+    effectivePermissions: [...effective],
+    profileId: u.profile_id ?? undefined,
+    profileName: profile?.name ?? undefined,
+    permissionGrants: u.permission_grants ?? [],
+    permissionRevokes: u.permission_revokes ?? [],
     active: u.active ?? true,
     sectorId: u.sector_id ?? undefined,
     isSupervisor: u.is_supervisor ?? false,
@@ -306,7 +389,7 @@ function mapAdminUser(u: Record<string, unknown>) {
 }
 
 function mapStaffSector(s: Record<string, unknown>) {
-  return { id: s.id, name: s.name, seesAll: s.sees_all ?? false };
+  return { id: s.id, name: s.name, seesAll: s.sees_all ?? false, defaultProfileId: s.default_profile_id ?? undefined };
 }
 
 function mapCompany(c: Record<string, unknown>) {
@@ -1389,7 +1472,8 @@ app.post("/admin/auth/login", async (c) => {
   const { data: user } = await db().auth.getUser(token);
   const { data: adminUser } = await eco().from("admin_users").select("*").eq("auth_user_id", user.user!.id).maybeSingle();
   if (!adminUser) throw new ApiError(401, "INVALID_CREDENTIALS");
-  return c.json({ token, adminUser: mapAdminUser(adminUser) });
+  const profile = adminUser.profile_id ? await fetchProfile(adminUser.company_id, adminUser.profile_id) : null;
+  return c.json({ token, adminUser: mapAdminUser(adminUser, profile) });
 });
 
 app.post("/admin/auth/forgot-password", async (c) => {
@@ -1405,7 +1489,8 @@ app.get("/admin/auth/me", async (c) => {
   const user = await bearerUser(c);
   if (!user) return c.json(null);
   const { data: adminUser } = await eco().from("admin_users").select("*").eq("auth_user_id", user.id).maybeSingle();
-  return c.json(adminUser ? mapAdminUser(adminUser) : null);
+  const profile = adminUser?.profile_id ? await fetchProfile(adminUser.company_id, adminUser.profile_id) : null;
+  return c.json(adminUser ? mapAdminUser(adminUser, profile) : null);
 });
 
 // ---------- Admin: produtos ----------
@@ -1569,6 +1654,19 @@ app.patch("/vendors/:id", async (c) => {
   return c.json(mapVendor(data));
 });
 
+// Logo de fornecedor (marca da loja): so quem gerencia fornecedores. O logo da loja (/settings/logo) continua so do administrador.
+app.post("/vendors/logo", async (c) => {
+  await requirePerm(c, "fornecedores.gerenciar");
+  const form = await c.req.formData();
+  const file = form.get("file") as File;
+  if (!file) throw new ApiError(422, "FILE_REQUIRED");
+  const path = `vendor-logo-${Date.now()}-${file.name}`;
+  const { error } = await db().storage.from("ecommerce-site-assets").upload(path, file, { contentType: file.type, upsert: true });
+  if (error) throw new ApiError(500, "STORAGE_ERROR", error.message);
+  const { data } = db().storage.from("ecommerce-site-assets").getPublicUrl(path);
+  return c.json({ url: data.publicUrl });
+});
+
 // ---------- Admin: roteirização ----------
 
 app.post("/regions", async (c) => {
@@ -1607,7 +1705,7 @@ app.patch("/regions/:id", async (c) => {
 // ---------- Admin: clientes ----------
 
 app.get("/admin/customers", async (c) => {
-  const admin = await requirePerm(c, "clientes.ver");
+  const admin = await requireAnyPerm(c, ["clientes.ver", "financeiro.ver"]);
   const { data: customers, error } = await eco().from("customers").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   const results = await Promise.all(
@@ -1646,7 +1744,7 @@ app.patch("/admin/customers/:id", async (c) => {
 // ---------- Admin: pedidos e orçamentos ----------
 
 app.get("/admin/orders", async (c) => {
-  const admin = await requirePerm(c, "pedidos.ver");
+  const admin = await requireAnyPerm(c, ["pedidos.ver", "financeiro.ver"]);
   const status = c.req.query("status");
   let query = eco()
     .from("orders")
@@ -2107,6 +2205,10 @@ app.post("/admin/companies", async (c) => {
     throw new ApiError(500, "DB_ERROR", settingsError.message);
   }
 
+  // Perfis de acesso prontos (Administrador, Vendedor, Financeiro, Atendimento) pra empresa nova. Melhor esforco: a tela de perfis
+  // tambem cria na primeira abertura se faltar.
+  await eco().rpc("seed_default_access_profiles", { p_company_id: company.id });
+
   // Enderecos padrao + publicacao automatica da loja e do admin (ver prepareCompanyDeploy).
   const deploy = await prepareCompanyDeploy(company);
   return c.json({ ...mapCompany(deploy.company), deployStatus: deploy.dispatched ? "dispatched" : deploy.reason });
@@ -2374,13 +2476,21 @@ app.get("/admin/team-members", async (c) => {
     .eq("role", "staff")
     .order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json((data ?? []).map(mapAdminUser));
+  const profiles = await companyProfilesById(admin.company_id);
+  return c.json((data ?? []).map((m) => mapAdminUser(m, profiles.get(m.profile_id as string) ?? null)));
 });
 
 app.post("/admin/team-members", async (c) => {
   const admin = await requirePlatformAdmin(c);
-  const { name, email, password, permissions, sectorId, isSupervisor, isManager } = await c.req.json();
+  const { name, email, password, permissions, profileId, sectorId, isSupervisor, isManager } = await c.req.json();
   if (!name || !email || !password) throw new ApiError(422, "INVALID_INPUT", "Nome, e-mail e senha são obrigatórios.");
+
+  // Perfil de acesso: a tela nova sempre envia. Sem profileId (tela antiga ainda publicada), cai na lista antiga por aba.
+  let profile: Row | null = null;
+  if (profileId) {
+    profile = await fetchProfile(admin.company_id, profileId);
+    if (!profile) throw new ApiError(422, "PROFILE_NOT_FOUND", "Perfil de acesso inexistente.");
+  }
 
   const { data: created, error: createError } = await db().auth.admin.createUser({ email, password, email_confirm: true });
   if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
@@ -2393,7 +2503,8 @@ app.post("/admin/team-members", async (c) => {
       name,
       email,
       role: "staff",
-      permissions: permissions ?? [],
+      permissions: profile ? [] : permissions ?? [],
+      profile_id: profile ? profile.id : null,
       active: true,
       sector_id: sectorId || null,
       is_supervisor: isSupervisor ?? false,
@@ -2405,19 +2516,57 @@ app.post("/admin/team-members", async (c) => {
     await db().auth.admin.deleteUser(created.user.id);
     throw new ApiError(500, "DB_ERROR", error.message);
   }
-  return c.json(mapAdminUser(staffUser));
+  await logAccess(admin, "member.create", "member", staffUser, { profile: profile?.name ?? null });
+  return c.json(mapAdminUser(staffUser, profile));
 });
 
 app.patch("/admin/team-members/:id", async (c) => {
   const admin = await requirePlatformAdmin(c);
   const patch = await c.req.json();
+  const { data: current } = await eco()
+    .from("admin_users")
+    .select("*")
+    .eq("id", c.req.param("id"))
+    .eq("company_id", admin.company_id)
+    .eq("role", "staff")
+    .maybeSingle();
+  if (!current) throw new ApiError(404, "NOT_FOUND");
+
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
-  if ("permissions" in patch) row.permissions = patch.permissions;
+  // Lista antiga por aba: so vale enquanto a pessoa nao tem perfil.
+  if ("permissions" in patch && !current.profile_id) row.permissions = patch.permissions;
   if ("active" in patch) row.active = patch.active;
   if ("sectorId" in patch) row.sector_id = patch.sectorId || null;
   if ("isSupervisor" in patch) row.is_supervisor = patch.isSupervisor;
   if ("isManager" in patch) row.is_manager = patch.isManager;
+
+  // Perfil e ajustes so desta pessoa. Os ajustes ficam sempre relativos ao perfil: so entra em "liberadas" o que o perfil nao tem,
+  // e so entra em "bloqueadas" o que o perfil tem. Trocar de perfil limpa o que deixou de fazer sentido.
+  const previousProfile = current.profile_id ? await fetchProfile(admin.company_id, current.profile_id) : null;
+  let profile = previousProfile;
+  let accessChanged = false;
+  if ("profileId" in patch) {
+    if (!patch.profileId) throw new ApiError(422, "INVALID_INPUT", "Escolha um perfil de acesso.");
+    const next = await fetchProfile(admin.company_id, patch.profileId);
+    if (!next) throw new ApiError(422, "PROFILE_NOT_FOUND", "Perfil de acesso inexistente.");
+    profile = next;
+    row.profile_id = next.id;
+    row.permissions = [];
+    accessChanged = true;
+  }
+  if ("permissionGrants" in patch || "permissionRevokes" in patch) accessChanged = true;
+  if (accessChanged) {
+    const base = new Set<string>(profilePermissionList(profile));
+    const revokes = sanitizePermissionList("permissionRevokes" in patch ? patch.permissionRevokes : current.permission_revokes).filter((p) => base.has(p));
+    const grants = withRequirements(sanitizePermissionList("permissionGrants" in patch ? patch.permissionGrants : current.permission_grants)).filter(
+      (p) => !base.has(p) && !revokes.includes(p),
+    );
+    row.permission_grants = grants;
+    row.permission_revokes = revokes;
+  }
+
+  if (Object.keys(row).length === 0) return c.json(mapAdminUser(current, previousProfile));
   const { data, error } = await eco()
     .from("admin_users")
     .update(row)
@@ -2427,7 +2576,19 @@ app.patch("/admin/team-members/:id", async (c) => {
     .select("*")
     .single();
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json(mapAdminUser(data));
+
+  const sameList = (a: unknown, b: unknown) =>
+    JSON.stringify([...((a as string[] | null) ?? [])].sort()) === JSON.stringify([...((b as string[] | null) ?? [])].sort());
+  if (row.profile_id && row.profile_id !== current.profile_id) {
+    await logAccess(admin, "member.profile", "member", data, { from: previousProfile?.name ?? null, to: profile?.name ?? null });
+  }
+  if (accessChanged && (!sameList(current.permission_grants, data.permission_grants) || !sameList(current.permission_revokes, data.permission_revokes))) {
+    await logAccess(admin, "member.adjust", "member", data, { grants: data.permission_grants, revokes: data.permission_revokes });
+  }
+  if ("active" in patch && (current.active ?? true) !== (data.active ?? true)) {
+    await logAccess(admin, data.active ? "member.activate" : "member.deactivate", "member", data);
+  }
+  return c.json(mapAdminUser(data, profile));
 });
 
 // Setor/cargo — estrutural (não é só rótulo): governa quem vê o quê em
@@ -2464,6 +2625,16 @@ app.patch("/admin/staff-sectors/:id", async (c) => {
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
   if ("seesAll" in patch) row.sees_all = patch.seesAll;
+  // Perfil sugerido ao cadastrar gente nesse setor (so sugere; quem cadastra pode trocar).
+  if ("defaultProfileId" in patch) {
+    if (patch.defaultProfileId) {
+      const profile = await fetchProfile(admin.company_id, patch.defaultProfileId);
+      if (!profile) throw new ApiError(422, "PROFILE_NOT_FOUND", "Perfil de acesso inexistente.");
+      row.default_profile_id = profile.id;
+    } else {
+      row.default_profile_id = null;
+    }
+  }
   const { data, error } = await eco()
     .from("staff_sectors")
     .update(row)
@@ -2483,6 +2654,138 @@ app.delete("/admin/staff-sectors/:id", async (c) => {
   const { error } = await eco().from("staff_sectors").delete().eq("id", c.req.param("id")).eq("company_id", admin.company_id);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.body(null, 204);
+});
+
+// ---------- Admin: perfis de acesso ----------
+// Cada empresa tem os seus perfis (Administrador, Vendedor, Financeiro, Atendimento e os que criar). Tudo aqui e so do administrador
+// da empresa (Configuracoes). O perfil Administrador e protegido: nao se edita nem se exclui, e sempre tem todas as permissoes.
+
+app.get("/admin/access-profiles", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  // Empresa criada antes dos perfis (ou sem nenhum): cria os 4 perfis prontos. Se ja ha perfis, nao faz nada.
+  await eco().rpc("seed_default_access_profiles", { p_company_id: admin.company_id });
+  const { data, error } = await eco().from("access_profiles").select("*").eq("company_id", admin.company_id).order("sort_order").order("name");
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  const { data: members } = await eco()
+    .from("admin_users")
+    .select("profile_id")
+    .eq("company_id", admin.company_id)
+    .eq("role", "staff")
+    .not("profile_id", "is", null);
+  const counts = new Map<string, number>();
+  for (const m of members ?? []) counts.set(m.profile_id as string, (counts.get(m.profile_id as string) ?? 0) + 1);
+  return c.json((data ?? []).map((p: Row) => mapAccessProfile(p, counts.get(p.id as string) ?? 0)));
+});
+
+app.post("/admin/access-profiles", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const input = await c.req.json();
+  const name = String(input.name ?? "").trim().slice(0, 60);
+  if (!name) throw new ApiError(422, "INVALID_INPUT", "Dê um nome ao perfil.");
+  let permissions: string[] = withRequirements(sanitizePermissionList(input.permissions));
+  if (input.copyFromId) {
+    const source = await fetchProfile(admin.company_id, input.copyFromId);
+    if (!source) throw new ApiError(422, "PROFILE_NOT_FOUND", "Perfil de origem inexistente.");
+    permissions = profilePermissionList(source);
+  }
+  const { data, error } = await eco()
+    .from("access_profiles")
+    .insert({
+      company_id: admin.company_id,
+      name,
+      description: String(input.description ?? "").trim().slice(0, 200),
+      permissions,
+      sort_order: 500,
+    })
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new ApiError(422, "DUPLICATE_PROFILE", "Já existe um perfil com esse nome.");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+  await logAccess(admin, "profile.create", "profile", data, { permissions });
+  return c.json(mapAccessProfile(data, 0));
+});
+
+app.patch("/admin/access-profiles/:id", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const patch = await c.req.json();
+  const existing = await fetchProfile(admin.company_id, c.req.param("id"));
+  if (!existing) throw new ApiError(404, "NOT_FOUND");
+  if (existing.is_admin) {
+    throw new ApiError(422, "PROFILE_PROTECTED", "O perfil Administrador sempre tem todas as permissões e não pode ser alterado.");
+  }
+  const row: Row = {};
+  if ("name" in patch) {
+    const name = String(patch.name ?? "").trim().slice(0, 60);
+    if (!name) throw new ApiError(422, "INVALID_INPUT", "Dê um nome ao perfil.");
+    row.name = name;
+  }
+  if ("description" in patch) row.description = String(patch.description ?? "").trim().slice(0, 200);
+  if ("permissions" in patch) row.permissions = withRequirements(sanitizePermissionList(patch.permissions));
+  if (Object.keys(row).length === 0) return c.json(mapAccessProfile(existing, await countProfileMembers(admin.company_id, existing.id)));
+  row.updated_at = new Date().toISOString();
+  const { data, error } = await eco()
+    .from("access_profiles")
+    .update(row)
+    .eq("id", existing.id as string)
+    .eq("company_id", admin.company_id)
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") throw new ApiError(422, "DUPLICATE_PROFILE", "Já existe um perfil com esse nome.");
+    throw new ApiError(500, "DB_ERROR", error.message);
+  }
+  const before = new Set(profilePermissionList(existing));
+  const after = new Set(profilePermissionList(data));
+  await logAccess(admin, "profile.update", "profile", data, {
+    renamedFrom: existing.name !== data.name ? existing.name : undefined,
+    added: [...after].filter((p) => !before.has(p)),
+    removed: [...before].filter((p) => !after.has(p)),
+  });
+  return c.json(mapAccessProfile(data, await countProfileMembers(admin.company_id, data.id)));
+});
+
+app.delete("/admin/access-profiles/:id", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const existing = await fetchProfile(admin.company_id, c.req.param("id"));
+  if (!existing) throw new ApiError(404, "NOT_FOUND");
+  if (existing.is_admin) throw new ApiError(422, "PROFILE_PROTECTED", "O perfil Administrador não pode ser excluído.");
+  const inUse = await countProfileMembers(admin.company_id, existing.id);
+  if (inUse > 0) {
+    throw new ApiError(
+      422,
+      "PROFILE_IN_USE",
+      `Este perfil está em uso por ${inUse} ${inUse === 1 ? "pessoa" : "pessoas"}. Troque o perfil delas antes de excluir.`,
+    );
+  }
+  const { error } = await eco().from("access_profiles").delete().eq("id", existing.id as string).eq("company_id", admin.company_id);
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  await logAccess(admin, "profile.delete", "profile", existing);
+  return c.body(null, 204);
+});
+
+// Historico de mudancas de acesso da empresa (as 100 mais recentes).
+app.get("/admin/access-audit", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { data, error } = await eco()
+    .from("access_audit_log")
+    .select("*")
+    .eq("company_id", admin.company_id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(
+    (data ?? []).map((e: Row) => ({
+      id: e.id,
+      actorName: e.actor_name,
+      action: e.action,
+      targetType: e.target_type,
+      targetName: e.target_name,
+      details: e.details ?? {},
+      createdAt: e.created_at,
+    })),
+  );
 });
 
 // ---------- Admin: gestão de atividades ----------

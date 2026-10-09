@@ -13,6 +13,8 @@ import type {
   UpdateTeamMemberInput,
 } from "../types";
 import type {
+  AccessAuditEntry,
+  AccessProfile,
   Activity,
   ActivityClient,
   ActivityOutcome,
@@ -30,6 +32,7 @@ import type {
   OrderItem,
   OrderStatus,
   PaymentMethod,
+  PermissionKey,
   Product,
   Promotion,
   Quote,
@@ -51,6 +54,13 @@ import {
   listTeamMembers,
   updateTeamMember as updateTeamMemberStore,
 } from "./team-members-store";
+import {
+  createAccessProfile as createAccessProfileStore,
+  deleteAccessProfile as deleteAccessProfileStore,
+  listAccessAudit,
+  listAccessProfiles,
+  updateAccessProfile as updateAccessProfileStore,
+} from "./access-profiles-store";
 import {
   createStaffSector as createStaffSectorStore,
   deleteStaffSector as deleteStaffSectorStore,
@@ -579,6 +589,31 @@ export const mockApiClient: ApiClient = {
     deleteStaffSectorStore(id);
   },
 
+  async getAccessProfiles(): Promise<AccessProfile[]> {
+    await delay();
+    return listAccessProfiles();
+  },
+
+  async createAccessProfile(input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }): Promise<AccessProfile> {
+    await delay(200);
+    return createAccessProfileStore(input);
+  },
+
+  async updateAccessProfile(id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }): Promise<AccessProfile> {
+    await delay(200);
+    return updateAccessProfileStore(id, patch);
+  },
+
+  async deleteAccessProfile(id: string): Promise<void> {
+    await delay(200);
+    deleteAccessProfileStore(id);
+  },
+
+  async getAccessAudit(): Promise<AccessAuditEntry[]> {
+    await delay();
+    return listAccessAudit();
+  },
+
   async getActivityClients(): Promise<ActivityClient[]> {
     await delay();
     return listActivityClients();
@@ -742,6 +777,11 @@ export const mockApiClient: ApiClient = {
   },
 
   async uploadLogo(file: File): Promise<string> {
+    await delay(400);
+    return resizeImageToDataUrl(file, 400, 0.9);
+  },
+
+  async uploadVendorLogo(file: File): Promise<string> {
     await delay(400);
     return resizeImageToDataUrl(file, 400, 0.9);
   },
