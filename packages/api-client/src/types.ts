@@ -164,6 +164,10 @@ export interface ApiClient {
   // Cliente (loja)
   register(input: RegisterInput): Promise<Customer>;
   login(email: string, password: string): Promise<Customer>;
+  /** true se o e-mail é de um cliente cadastrado pelo painel que ainda não criou a senha (tela de primeiro acesso). */
+  checkFirstAccess(email: string): Promise<boolean>;
+  /** Primeiro acesso: confere e-mail + CPF/CNPJ do cadastro, grava a senha escolhida e já deixa o cliente logado. Só funciona uma vez. */
+  completeFirstAccess(input: { email: string; document: string; password: string }): Promise<Customer>;
   /** Manda um e-mail com link de redefinição — a troca de senha em si acontece na página que o link abre (fora do ApiClient, é direto com o Supabase Auth). Mock não envia e-mail de verdade, só simula sucesso. */
   resetPassword(email: string): Promise<void>;
   logout(): Promise<void>;

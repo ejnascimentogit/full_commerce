@@ -1111,6 +1111,47 @@ app.post("/auth/login", async (c) => {
   return c.json({ token, customer: mapCustomer(resolved, addresses ?? []) });
 });
 
+// ---------- Primeiro acesso (cliente cadastrado pelo painel) ----------
+
+async function findPendingFirstAccess(companyId: string, email: string) {
+  // ilike sem curingas: escapa % e _ para o e-mail ser comparado literalmente (sem diferenciar maiúsculas).
+  const literal = String(email ?? "").trim().replace(/[\\%_]/g, (m) => `\\${m}`);
+  if (!literal) return null;
+  const { data: customer } = await eco().from("customers").select("*").eq("company_id", companyId).ilike("email", literal).maybeSingle();
+  if (!customer?.auth_user_id) return null;
+  const { data: authUser } = await db().auth.admin.getUserById(customer.auth_user_id);
+  if (authUser?.user?.app_metadata?.first_access_pending !== true) return null;
+  return { customer, authUserId: customer.auth_user_id as string };
+}
+
+app.post("/auth/first-access/check", async (c) => {
+  const companyId = await resolveCompanyId(c);
+  const { email } = await c.req.json();
+  return c.json({ pending: (await findPendingFirstAccess(companyId, email)) !== null });
+});
+
+// Só vale uma vez (a marca é apagada ao definir a senha) e exige o CPF/CNPJ do cadastro junto com o e-mail,
+// para que saber só o e-mail não baste para tomar a conta.
+app.post("/auth/first-access", async (c) => {
+  const companyId = await resolveCompanyId(c);
+  const { email, document, password } = await c.req.json();
+  if (typeof password !== "string" || password.length < 6) throw new ApiError(422, "WEAK_PASSWORD");
+  const pending = await findPendingFirstAccess(companyId, email);
+  const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+  if (!pending || !digits(document) || digits(document) !== digits(pending.customer.document)) {
+    throw new ApiError(403, "FIRST_ACCESS_INVALID");
+  }
+  const { error: updateError } = await db().auth.admin.updateUserById(pending.authUserId, {
+    password,
+    app_metadata: { first_access_pending: false },
+  });
+  if (updateError) throw new ApiError(500, "AUTH_ERROR", updateError.message);
+  const token = await signInAndGetToken(pending.customer.email, password);
+  const resolved = await resolveCustomerRegion(pending.customer);
+  const { data: addresses } = await eco().from("addresses").select("*").eq("customer_id", resolved.id);
+  return c.json({ token, customer: mapCustomer(resolved, addresses ?? []) });
+});
+
 app.post("/auth/forgot-password", async (c) => {
   const { email } = await c.req.json();
   const origin = c.req.header("Origin") ?? ALLOWED_ORIGINS[0];
@@ -1730,6 +1771,8 @@ app.post("/admin/customers", async (c) => {
     email,
     password: crypto.randomUUID() + crypto.randomUUID(),
     email_confirm: true,
+    // Marca a conta como "sem senha própria": a loja mostra a tela de primeiro acesso (/auth/first-access).
+    app_metadata: { first_access_pending: true },
   });
   if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
 

@@ -7,6 +7,8 @@ import { mockCustomer } from "./data";
 // passwords (bcrypt/argon2) and never keep this file's shape.
 interface StoredCustomer extends Customer {
   password: string;
+  /** Cadastrado pelo painel e ainda sem senha própria. */
+  firstAccessPending?: boolean;
 }
 
 const STORAGE_KEY = "ecommerce.mock.customers";
@@ -115,6 +117,31 @@ export function updateCustomerAddress(addressId: string, patch: Partial<Omit<Add
     return address;
   }
   throw new Error(`Address not found: ${addressId}`);
+}
+
+export function isFirstAccessPending(email: string): boolean {
+  return findByEmail(email)?.firstAccessPending === true;
+}
+
+export function markFirstAccessPending(id: string): void {
+  const customers = readAll();
+  const found = customers.find((c) => c.id === id);
+  if (!found) return;
+  found.firstAccessPending = true;
+  writeAll(customers);
+}
+
+/** Confere o documento e grava a senha. Devolve undefined se não estiver pendente ou o documento não bater. */
+export function completeFirstAccess(email: string, document: string, password: string): Customer | undefined {
+  const customers = readAll();
+  const found = customers.find((c) => c.email.toLowerCase() === email.toLowerCase());
+  if (!found || !found.firstAccessPending) return undefined;
+  if (found.document.replace(/\D/g, "") !== document.replace(/\D/g, "")) return undefined;
+  found.password = password;
+  found.firstAccessPending = false;
+  writeAll(customers);
+  const { password: _password, firstAccessPending: _pending, ...customer } = found;
+  return customer;
 }
 
 export function verifyPassword(email: string, password: string): Customer | undefined {
