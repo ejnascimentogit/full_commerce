@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
-import type { AdminUser, Customer, DeliveryRegion } from "@ecommerce/types";
+import { apiClient, formatDocument, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
+import type { AdminUser, Customer, DeliveryRegion, DocumentType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,7 @@ export default function ClientesPage() {
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [creating, setCreating] = useState(false);
   const canEdit = userCan(user, "clientes.editar");
 
   useEffect(() => {
@@ -70,6 +71,15 @@ export default function ClientesPage() {
             placeholder="Buscar por nome, e-mail, documento ou código..."
             className="border border-slate-300 rounded-md px-3 py-2 text-sm w-80"
           />
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 whitespace-nowrap"
+            >
+              + Novo cliente
+            </button>
+          )}
         </div>
       </div>
 
@@ -125,6 +135,17 @@ export default function ClientesPage() {
         </table>
         {filtered.length === 0 && <p className="text-sm text-slate-500 p-6 text-center">Nenhum cliente encontrado.</p>}
       </div>
+
+      {creating && (
+        <NewCustomerModal
+          staff={staff}
+          onClose={() => setCreating(false)}
+          onSaved={() => {
+            setCreating(false);
+            refresh();
+          }}
+        />
+      )}
 
       {editing && (
         <EditCustomerModal
@@ -471,6 +492,230 @@ function EditCustomerModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+const INPUT = "w-full border border-slate-300 rounded-md px-3 py-2 text-sm";
+
+function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onClose: () => void; onSaved: () => void }) {
+  const [documentType, setDocumentType] = useState<DocumentType>("cnpj");
+  const [document, setDocument] = useState("");
+  const [name, setName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [referenceCode, setReferenceCode] = useState("");
+  const [preferredPaymentMethod, setPreferredPaymentMethod] = useState("");
+  const [assignedStaffId, setAssignedStaffId] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [street, setStreet] = useState("");
+  const [number, setNumber] = useState("");
+  const [complement, setComplement] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [cepError, setCepError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const digitCount = documentType === "cpf" ? 11 : 14;
+  const documentComplete = onlyDigits(document).length === digitCount;
+  const documentValid = documentComplete && isValidDocument(documentType, document);
+
+  function changeType(type: DocumentType) {
+    setDocumentType(type);
+    setDocument("");
+  }
+
+  async function handleZipBlur() {
+    const digits = onlyDigits(zipCode);
+    if (digits.length !== 8) return;
+    setCepError(null);
+    try {
+      const found = await lookupCep(digits);
+      if (!found) {
+        setCepError("CEP não encontrado.");
+        return;
+      }
+      setStreet(found.street);
+      setNeighborhood(found.neighborhood);
+      setCity(found.city);
+      setState(found.state);
+    } catch {
+      setCepError("Não foi possível buscar o CEP agora — preencha manualmente.");
+    }
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!documentValid) {
+      setError(`${documentType.toUpperCase()} inválido — confira os números digitados.`);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiClient.createAdminCustomer({
+        name,
+        email,
+        documentType,
+        document,
+        businessName: documentType === "cnpj" ? businessName || undefined : undefined,
+        phone,
+        address: { street, number, complement: complement || undefined, neighborhood, city, state, zipCode, label: "Entrega" },
+        referenceCode: referenceCode || undefined,
+        preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
+        assignedStaffId: assignedStaffId || undefined,
+      });
+      onSaved();
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      setError(
+        code === "EMAIL_IN_USE"
+          ? "Esse e-mail já está cadastrado."
+          : code === "INVALID_DOCUMENT"
+            ? `${documentType.toUpperCase()} inválido — confira os números digitados.`
+            : "Não foi possível cadastrar o cliente.",
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <form onSubmit={handleSave} className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="font-semibold text-slate-900 mb-4">Novo cliente</h2>
+
+        <div className="flex gap-3 mb-4">
+          {(["cnpj", "cpf"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => changeType(t)}
+              className={`flex-1 border rounded-md py-2 text-sm font-medium ${documentType === t ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"}`}
+            >
+              {t === "cnpj" ? "Pessoa jurídica (CNPJ)" : "Pessoa física (CPF)"}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{documentType === "cnpj" ? "Nome do responsável" : "Nome completo"}</label>
+            <input required value={name} onChange={(e) => setName(e.target.value)} className={INPUT} />
+          </div>
+          {documentType === "cnpj" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Razão social</label>
+              <input required value={businessName} onChange={(e) => setBusinessName(e.target.value)} className={INPUT} />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{documentType.toUpperCase()}</label>
+            <input
+              required
+              inputMode="numeric"
+              value={document}
+              onChange={(e) => setDocument(formatDocument(documentType, e.target.value))}
+              placeholder={documentType === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"}
+              className={`${INPUT} ${documentComplete && !documentValid ? "border-red-400" : ""}`}
+            />
+            {documentComplete && !documentValid && <p className="text-red-600 text-xs mt-1">{documentType.toUpperCase()} inválido.</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
+            <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+            <input required value={phone} onChange={(e) => setPhone(e.target.value)} className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Código de referência</label>
+            <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} className={INPUT} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Condição de pagamento</label>
+            <select value={preferredPaymentMethod} onChange={(e) => setPreferredPaymentMethod(e.target.value)} className={INPUT}>
+              <option value="">Não definida</option>
+              {PAYMENT_METHOD_ORDER.map((m) => (
+                <option key={m} value={m}>
+                  {PAYMENT_METHOD_LABEL[m]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Vendedor vinculado</label>
+            <select value={assignedStaffId} onChange={(e) => setAssignedStaffId(e.target.value)} className={INPUT}>
+              <option value="">Sem vendedor vinculado</option>
+              {staff.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="border border-slate-200 rounded-md p-3 space-y-3 mt-4">
+          <p className="text-sm font-medium text-slate-700">Endereço de entrega</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+              <input required value={zipCode} onChange={(e) => setZipCode(e.target.value)} onBlur={handleZipBlur} className={INPUT} />
+              {cepError && <p className="text-xs text-amber-600 mt-1">{cepError}</p>}
+            </div>
+            <div />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
+              <input required value={street} onChange={(e) => setStreet(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
+              <input required value={number} onChange={(e) => setNumber(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
+              <input value={complement} onChange={(e) => setComplement(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+              <input required value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+          <div className="grid grid-cols-[1fr_5rem] gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+              <input required value={city} onChange={(e) => setCity(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+              <input required value={state} onChange={(e) => setState(e.target.value.toUpperCase())} maxLength={2} className={`${INPUT} uppercase`} />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">A região de entrega é definida automaticamente pelo bairro.</p>
+        </div>
+
+        <p className="text-xs text-slate-500 mt-4">
+          O cliente não recebe senha: para entrar na loja ele usa "Esqueci minha senha" com o e-mail cadastrado.
+        </p>
+        {error && <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 mt-3">{error}</p>}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button type="button" onClick={onClose} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-md">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
+            {saving ? "Salvando..." : "Cadastrar cliente"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

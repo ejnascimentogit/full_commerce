@@ -38,6 +38,7 @@ const EXPECTED: Record<string, string> = {
   "POST /regions": "requirePlatformAdmin()",
   "PATCH /regions/:id": "requirePlatformAdmin()",
   "GET /admin/customers": FINANCEIRO_OU_CLIENTES,
+  "POST /admin/customers": P("clientes.editar"),
   "PATCH /admin/customers/:id": P("clientes.editar"),
   "POST /admin/customers/:id/addresses": P("clientes.editar"),
   "PATCH /admin/addresses/:id": P("clientes.editar"),

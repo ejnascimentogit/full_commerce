@@ -35,6 +35,7 @@ import type {
   CreateTeamMemberInput,
   Paginated,
   ProductQuery,
+  AdminCreateCustomerInput,
   RegisterInput,
   UpdatePromotionInput,
   UpdateProductInput,
@@ -223,6 +224,8 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<Order>(`/api/admin/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     getAdminCarts: () => request<Cart[]>("/api/admin/carts", { tokenKey: ADMIN_TOKEN_KEY }),
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
+    createAdminCustomer: (input: AdminCreateCustomerInput) =>
+      request<Customer>("/api/admin/customers", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     updateCustomer: (id, patch) =>
       request<Customer>(`/api/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     createCustomerAddress: (customerId: string, input: Omit<Address, "id">) =>

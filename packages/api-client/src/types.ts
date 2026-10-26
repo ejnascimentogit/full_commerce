@@ -121,6 +121,23 @@ export interface RegisterInput {
   referenceCode?: string;
 }
 
+/** Cadastro de cliente feito pelo admin (sem senha: o cliente define a dele em "Esqueci minha senha"). */
+export interface AdminCreateCustomerInput {
+  name: string;
+  email: string;
+  documentType: DocumentType;
+  document: string;
+  businessName?: string;
+  phone: string;
+  /** Primeiro endereço (padrão, de entrega). A região é resolvida pelo bairro. */
+  address: RegisterAddressInput;
+  /** Endereço comercial, quando diferente do de entrega. Opcional. */
+  businessAddress?: RegisterAddressInput;
+  referenceCode?: string;
+  preferredPaymentMethod?: PaymentMethod;
+  assignedStaffId?: string;
+}
+
 // "sku" fora dos dois — é gerado pelo backend na criação ({número da empresa} +
 // sequencial) e nunca muda depois, pra não ter risco de alguém digitar o código
 // de outro produto por engano.
@@ -268,6 +285,8 @@ export interface ApiClient {
   getAdminCarts(): Promise<Cart[]>;
   /** Lista todos os clientes cadastrados — só platformAdmin. */
   getAdminCustomers(): Promise<Customer[]>;
+  /** Cadastra um cliente novo pelo painel — exige a permissão clientes.editar. */
+  createAdminCustomer(input: AdminCreateCustomerInput): Promise<Customer>;
   /** Editar cadastro de cliente (nome, telefone, região, cód. de referência, status) — só platformAdmin. */
   updateCustomer(
     id: string,
