@@ -7,6 +7,7 @@ import type {
   CreateTeamMemberInput,
   Paginated,
   ProductQuery,
+  AdminCreateCustomerInput,
   RegisterInput,
   UpdatePromotionInput,
   UpdateProductInput,
@@ -734,6 +735,16 @@ export const mockApiClient: ApiClient = {
   async getAdminCustomers(): Promise<Customer[]> {
     await delay();
     return listCustomers();
+  },
+
+  async createAdminCustomer(input: AdminCreateCustomerInput): Promise<Customer> {
+    await delay(300);
+    if (!isValidDocument(input.documentType, input.document)) throw new Error("INVALID_DOCUMENT");
+    const region = matchRegionByNeighborhood(listRegions(), input.address.neighborhood);
+    // Sem setSessionCustomerId: quem cadastra é o admin, não vira o cliente logado.
+    const { preferredPaymentMethod, assignedStaffId, ...base } = input;
+    const customer = createCustomer({ ...base, password: `tmp-${Date.now()}`, regionId: region?.id });
+    return updateCustomerStore(customer.id, { preferredPaymentMethod, assignedStaffId });
   },
 
   async updateCustomer(id, patch): Promise<Customer> {

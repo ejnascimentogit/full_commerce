@@ -3,6 +3,7 @@ import { createRestApiClient } from "./rest";
 import type { ApiClient } from "./types";
 
 export type {
+  AdminCreateCustomerInput,
   ApiClient,
   CreateOrderInput,
   CreateOrderItemInput,

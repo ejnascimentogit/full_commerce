@@ -1717,6 +1717,67 @@ app.get("/admin/customers", async (c) => {
   return c.json(results);
 });
 
+app.post("/admin/customers", async (c) => {
+  const admin = await requirePerm(c, "clientes.editar");
+  const { name, email, documentType, document, businessName, phone, address, businessAddress, referenceCode, preferredPaymentMethod, assignedStaffId } =
+    await c.req.json();
+  const isValidDoc = documentType === "cpf" ? isValidCPF(document) : isValidCNPJ(document);
+  if (!isValidDoc) throw new ApiError(422, "INVALID_DOCUMENT");
+  if (!name || !email || !phone || !address?.street || !address?.neighborhood) throw new ApiError(422, "MISSING_FIELDS");
+
+  // O cliente não recebe senha do admin: a conta nasce com senha aleatória e ele define a dele em "Esqueci minha senha".
+  const { data: created, error: createError } = await db().auth.admin.createUser({
+    email,
+    password: crypto.randomUUID() + crypto.randomUUID(),
+    email_confirm: true,
+  });
+  if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
+
+  const { data: regions } = await eco().from("delivery_regions").select("*").eq("company_id", admin.company_id);
+  const region = matchRegionByNeighborhood(regions ?? [], address.neighborhood);
+  const { data: codeRow } = await eco().rpc("next_customer_code");
+
+  const { data: customer, error: insertError } = await eco()
+    .from("customers")
+    .insert({
+      company_id: admin.company_id,
+      auth_user_id: created.user.id,
+      name,
+      email,
+      document_type: documentType,
+      document,
+      business_name: businessName ?? null,
+      phone,
+      region_id: region?.id ?? null,
+      code: codeRow,
+      reference_code: referenceCode ?? null,
+      preferred_payment_method: preferredPaymentMethod ?? null,
+      assigned_staff_id: assignedStaffId ?? null,
+      status: "active",
+    })
+    .select("*")
+    .single();
+  if (insertError) {
+    await db().auth.admin.deleteUser(created.user.id);
+    throw new ApiError(500, "DB_ERROR", insertError.message);
+  }
+
+  const addressRows = [
+    { company_id: admin.company_id, customer_id: customer.id, ...toAddressRow(address), is_default: true, label: address.label ?? "Entrega" },
+  ];
+  if (businessAddress?.street) {
+    addressRows.push({
+      company_id: admin.company_id,
+      customer_id: customer.id,
+      ...toAddressRow(businessAddress),
+      is_default: false,
+      label: businessAddress.label ?? "Comercial",
+    });
+  }
+  const { data: insertedAddresses } = await eco().from("addresses").insert(addressRows).select("*");
+  return c.json(mapCustomer(customer, insertedAddresses ?? []), 201);
+});
+
 app.patch("/admin/customers/:id", async (c) => {
   const admin = await requirePerm(c, "clientes.editar");
   const patch = await c.req.json();
