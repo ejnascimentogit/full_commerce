@@ -9,6 +9,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
+  checkFirstAccess: (email: string) => Promise<boolean>;
+  completeFirstAccess: (input: { email: string; document: string; password: string }) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -32,6 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       login: async (email, password) => setCustomer(await apiClient.login(email, password)),
       register: async (input) => setCustomer(await apiClient.register(input)),
+      checkFirstAccess: async (email) => apiClient.checkFirstAccess(email),
+      completeFirstAccess: async (input) => setCustomer(await apiClient.completeFirstAccess(input)),
       resetPassword: async (email) => apiClient.resetPassword(email),
       logout: async () => {
         await apiClient.logout();

@@ -116,6 +116,9 @@ import {
 import { isValidDocument } from "../documents";
 import {
   createCustomer,
+  completeFirstAccess as completeFirstAccessStore,
+  isFirstAccessPending,
+  markFirstAccessPending,
   createCustomerAddress as createCustomerAddressStore,
   findById as findCustomerById,
   listAll as listCustomers,
@@ -277,6 +280,20 @@ export const mockApiClient: ApiClient = {
     await delay(300);
     const customer = verifyPassword(email, password);
     if (!customer) throw new Error("INVALID_CREDENTIALS");
+    setSessionCustomerId(customer.id);
+    return customer;
+  },
+
+  async checkFirstAccess(email: string): Promise<boolean> {
+    await delay(200);
+    return isFirstAccessPending(email);
+  },
+
+  async completeFirstAccess(input: { email: string; document: string; password: string }): Promise<Customer> {
+    await delay(300);
+    if (input.password.length < 6) throw new Error("WEAK_PASSWORD");
+    const customer = completeFirstAccessStore(input.email, input.document, input.password);
+    if (!customer) throw new Error("FIRST_ACCESS_INVALID");
     setSessionCustomerId(customer.id);
     return customer;
   },
@@ -743,7 +760,8 @@ export const mockApiClient: ApiClient = {
     const region = matchRegionByNeighborhood(listRegions(), input.address.neighborhood);
     // Sem setSessionCustomerId: quem cadastra é o admin, não vira o cliente logado.
     const { preferredPaymentMethod, assignedStaffId, ...base } = input;
-    const customer = createCustomer({ ...base, password: `tmp-${Date.now()}`, regionId: region?.id });
+    const customer = createCustomer({ ...base, password: `tmp-${Date.now()}-${Math.random()}`, regionId: region?.id });
+    markFirstAccessPending(customer.id);
     return updateCustomerStore(customer.id, { preferredPaymentMethod, assignedStaffId });
   },
 

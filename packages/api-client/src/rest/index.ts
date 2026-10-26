@@ -144,6 +144,21 @@ function createRestApiClient(baseUrl: string): ApiClient {
       setToken(CUSTOMER_TOKEN_KEY, result.token);
       return result.customer;
     },
+    checkFirstAccess: async (email: string) => {
+      const { pending } = await request<{ pending: boolean }>("/api/auth/first-access/check", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      return pending;
+    },
+    completeFirstAccess: async (input: { email: string; document: string; password: string }) => {
+      const { token, customer } = await request<{ token: string; customer: Customer }>("/api/auth/first-access", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setToken(CUSTOMER_TOKEN_KEY, token);
+      return customer;
+    },
     resetPassword: (email: string) =>
       request<void>("/api/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
     logout: async () => {

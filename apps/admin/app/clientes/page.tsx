@@ -516,6 +516,14 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [cepError, setCepError] = useState<string | null>(null);
+  const [bizZip, setBizZip] = useState("");
+  const [bizStreet, setBizStreet] = useState("");
+  const [bizNumber, setBizNumber] = useState("");
+  const [bizComplement, setBizComplement] = useState("");
+  const [bizNeighborhood, setBizNeighborhood] = useState("");
+  const [bizCity, setBizCity] = useState("");
+  const [bizState, setBizState] = useState("");
+  const [bizCepError, setBizCepError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -547,6 +555,25 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
     }
   }
 
+  async function handleBizZipBlur() {
+    const digits = onlyDigits(bizZip);
+    if (digits.length !== 8) return;
+    setBizCepError(null);
+    try {
+      const found = await lookupCep(digits);
+      if (!found) {
+        setBizCepError("CEP não encontrado.");
+        return;
+      }
+      setBizStreet(found.street);
+      setBizNeighborhood(found.neighborhood);
+      setBizCity(found.city);
+      setBizState(found.state);
+    } catch {
+      setBizCepError("Não foi possível buscar o CEP agora — preencha manualmente.");
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!documentValid) {
@@ -564,6 +591,9 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
         businessName: documentType === "cnpj" ? businessName || undefined : undefined,
         phone,
         address: { street, number, complement: complement || undefined, neighborhood, city, state, zipCode, label: "Entrega" },
+        businessAddress: bizStreet.trim()
+          ? { street: bizStreet, number: bizNumber, complement: bizComplement || undefined, neighborhood: bizNeighborhood, city: bizCity, state: bizState, zipCode: bizZip, label: "Comercial" }
+          : undefined,
         referenceCode: referenceCode || undefined,
         preferredPaymentMethod: (preferredPaymentMethod || undefined) as Customer["preferredPaymentMethod"],
         assignedStaffId: assignedStaffId || undefined,
@@ -700,6 +730,51 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
             </div>
           </div>
           <p className="text-xs text-slate-400">A região de entrega é definida automaticamente pelo bairro.</p>
+        </div>
+
+        <div className="border border-slate-200 rounded-md p-3 space-y-3 mt-4">
+          <p className="text-sm font-medium text-slate-700">
+            Endereço comercial <span className="text-xs text-slate-400 font-normal">(opcional)</span>
+          </p>
+          <p className="text-xs text-slate-400">Preencha só se o escritório/CD do cliente for diferente do endereço de entrega.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+              <input value={bizZip} onChange={(e) => setBizZip(e.target.value)} onBlur={handleBizZipBlur} className={INPUT} />
+              {bizCepError && <p className="text-xs text-amber-600 mt-1">{bizCepError}</p>}
+            </div>
+            <div />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
+              <input value={bizStreet} onChange={(e) => setBizStreet(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
+              <input value={bizNumber} onChange={(e) => setBizNumber(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
+              <input value={bizComplement} onChange={(e) => setBizComplement(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+              <input value={bizNeighborhood} onChange={(e) => setBizNeighborhood(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+          <div className="grid grid-cols-[1fr_5rem] gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+              <input value={bizCity} onChange={(e) => setBizCity(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+              <input value={bizState} onChange={(e) => setBizState(e.target.value.toUpperCase())} maxLength={2} className={`${INPUT} uppercase`} />
+            </div>
+          </div>
         </div>
 
         <p className="text-xs text-slate-500 mt-4">
