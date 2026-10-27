@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient, formatDocument, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
+import { apiClient, customerNumber, formatDocument, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { AdminUser, Customer, DeliveryRegion, DocumentType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -102,7 +102,7 @@ export default function ClientesPage() {
           <tbody className="divide-y divide-slate-100">
             {filtered.map((c) => (
               <tr key={c.id}>
-                <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{c.code ?? "—"}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{customerNumber(c.code)}</td>
                 <td className="px-4 py-2.5 font-medium text-slate-900">
                   {c.name}
                   {c.businessName && <span className="block text-xs text-slate-400 font-normal">{c.businessName}</span>}

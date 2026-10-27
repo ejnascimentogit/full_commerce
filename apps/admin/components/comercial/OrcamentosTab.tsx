@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, customerNumber } from "@ecommerce/api-client";
 import type { Customer, Quote, QuoteStatus } from "@ecommerce/types";
 import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
 import { money, productList } from "@/lib/whatsapp";
@@ -53,6 +53,7 @@ export function OrcamentosTab() {
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-2.5">Orcamento</th>
+              <th className="text-left px-4 py-2.5">Código</th>
               <th className="text-left px-4 py-2.5">Cliente</th>
               <th className="text-left px-4 py-2.5">Data</th>
               <th className="text-left px-4 py-2.5">Status</th>
@@ -67,7 +68,11 @@ export function OrcamentosTab() {
                 <Fragment key={quote.id}>
                 <tr>
                   <td className="px-4 py-2.5 font-medium text-slate-900">{quote.quoteNumber}</td>
-                  <td className="px-4 py-2.5 text-slate-700">{customer?.name ?? "-"}</td>
+                  <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{customerNumber(customer?.code)}</td>
+                  <td className="px-4 py-2.5 text-slate-700">
+                    {customer?.name ?? "-"}
+                    {customer?.businessName && <span className="block text-xs text-slate-400">{customer.businessName}</span>}
+                  </td>
                   <td className="px-4 py-2.5 text-slate-500">{new Date(quote.createdAt).toLocaleDateString("pt-BR")}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${QUOTE_STATUS_BADGE[quote.status]}`}>
@@ -87,7 +92,7 @@ export function OrcamentosTab() {
                 </tr>
                 {whatsappOpenId === quote.id && (
                   <tr>
-                    <td colSpan={6} className="px-4 pb-4 bg-white">
+                    <td colSpan={7} className="px-4 pb-4 bg-white">
                       <WhatsappPanel
                         kind="orcamentos"
                         customer={customer}

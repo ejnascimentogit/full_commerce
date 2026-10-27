@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
+import { apiClient, customerNumber, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
 import type { Customer, Order, OrderStatus } from "@ecommerce/types";
 import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
 import { money, productList } from "@/lib/whatsapp";
@@ -66,8 +66,11 @@ export function PedidosTab() {
               <Fragment key={order.id}>
               <tr>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{order.orderNumber}</td>
-                <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{customer?.code ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-700">{customer?.name ?? "—"}</td>
+                <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{customerNumber(customer?.code)}</td>
+                <td className="px-4 py-2.5 text-slate-700">
+                  {customer?.name ?? "—"}
+                  {customer?.businessName && <span className="block text-xs text-slate-400">{customer.businessName}</span>}
+                </td>
                 <td className="px-4 py-2.5 text-slate-500">{new Date(order.createdAt).toLocaleDateString("pt-BR")}</td>
                 <td className="px-4 py-2.5">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">{ORDER_STATUS_LABEL[order.status]}</span>
