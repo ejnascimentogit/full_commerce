@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, PAYMENT_METHOD_LABEL, userCan } from "@ecommerce/api-client";
+import { apiClient, customerNumber, PAYMENT_METHOD_LABEL, userCan } from "@ecommerce/api-client";
 import type { Customer, Order } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -192,7 +192,11 @@ export default function FinanceiroPage() {
                       onClick={() => setSelectedId(f.customer.id)}
                       className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${selectedId === f.customer.id ? "bg-brand-50" : ""}`}
                     >
-                      <p className="text-sm font-medium text-slate-900">{f.customer.name}</p>
+                      <p className="text-sm font-medium text-slate-900">
+                        <span className="font-mono text-xs text-slate-500 mr-1.5">{customerNumber(f.customer.code)}</span>
+                        {f.customer.name}
+                      </p>
+                      {f.customer.businessName && <p className="text-xs text-slate-400">{f.customer.businessName}</p>}
                       <div className="flex justify-between items-center mt-1">
                         <span className="text-xs text-slate-500">
                           {f.orderCount} pedido{f.orderCount === 1 ? "" : "s"}
