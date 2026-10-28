@@ -31,9 +31,9 @@ export default function AjudaAdminPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Ex: como funciona o SKU?"
-                className="flex-1 border border-slate-300 rounded-md px-4 py-2.5 text-sm"
+                className="flex-1 min-w-0 border border-slate-300 rounded-md px-4 py-2.5 text-sm"
               />
-              <button type="submit" className="bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700">
+              <button type="submit" className="shrink-0 bg-brand-600 text-white font-semibold rounded-md px-5 py-2.5 text-sm hover:bg-brand-700">
                 Perguntar
               </button>
             </form>

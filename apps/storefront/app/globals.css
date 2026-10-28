@@ -90,3 +90,41 @@ html.dark textarea {
   :where(html.dark) header .bg-white { background-color: #ffffff; }
   :where(html.dark) header .text-brand-700 { color: var(--color-brand-700); }
 }
+
+/* Celular (até 767px): tabelas rolam para o lado dentro do próprio cartão em vez de estourar a página, cabeçalhos de tela
+   com título + filtros quebram de linha, campos de busca ocupam a largura toda e os campos usam 16px (abaixo disso o
+   iPhone dá zoom ao tocar). Só vale em tela pequena; no computador nada muda. */
+@media (max-width: 767px) {
+  main div:has(> table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  main table {
+    min-width: 640px;
+  }
+  main .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  main .w-80,
+  main .w-72,
+  main .w-64 {
+    width: 100%;
+  }
+  main .flex.items-center.gap-2:has(> input, > select) {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  main td:not([colspan]),
+  main th {
+    white-space: nowrap;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

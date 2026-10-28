@@ -58,6 +58,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // Cada empresa tem a loja no mesmo padrao do admin (<nome>-admin -> <nome>-storefront); fora do padrao usa o endereco fixo.
   const [storefrontUrl, setStorefrontUrl] = useState(STOREFRONT_URL);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // Celular: o menu lateral vira uma gaveta que abre pelo botão ☰ e fecha ao trocar de tela.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [pathname]);
   useEffect(() => {
     const host = window.location.hostname;
     if (host.includes("-admin.")) setStorefrontUrl(`https://${host.replace("-admin.", "-storefront.")}`);
@@ -114,8 +117,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     // lateral rolar junto (sem ninguém notar em telas curtas), como quebrava o
     // "position: sticky" de qualquer coisa dentro do <main> (o navegador só sabe
     // recalcular a posição sticky quando o próprio ancestral com overflow rola).
-    <div className="h-screen flex">
-      <aside className="w-60 bg-slate-900 text-slate-200 flex flex-col shrink-0">
+    <div className="h-dvh flex flex-col md:flex-row">
+      <header className="md:hidden flex items-center gap-3 bg-slate-900 text-white px-4 py-3 shrink-0 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button type="button" aria-label="Abrir menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)} className="text-2xl leading-none px-1">
+          ☰
+        </button>
+        {brand?.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={brand.logoUrl} alt={brand.storeName} className="h-8 w-auto max-w-[180px] object-contain rounded" />
+        ) : (
+          <span className="font-bold truncate">{brand?.storeName ?? ""}</span>
+        )}
+        <span className="ml-auto text-xs text-slate-400">Painel Admin</span>
+      </header>
+      {menuOpen && <div className="md:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setMenuOpen(false)} aria-hidden />}
+      <aside
+        className={`bg-slate-900 text-slate-200 flex flex-col shrink-0 fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] transition-transform md:static md:z-auto md:w-60 md:max-w-none md:translate-x-0 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
         <div className="px-5 py-5 text-lg font-bold text-white border-b border-slate-800">
           {brand ? (
             brand.logoUrl ? (
@@ -196,7 +214,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="flex-1 p-8 overflow-auto">{children}</main>
+      <main className="flex-1 min-w-0 p-4 md:p-8 overflow-auto pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</main>
     </div>
   );
 }
