@@ -206,7 +206,7 @@ export default function AtividadesPage() {
       {loading ? (
         <p className="text-slate-500 text-sm">Carregando...</p>
       ) : (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none -mx-4 px-4 md:mx-0 md:px-0 pb-3 md:pb-0">
           {COLUMNS.map((col) => {
             const items = filtered.filter((a) => a.column === col.key);
             return (
@@ -224,7 +224,7 @@ export default function AtividadesPage() {
                   const activity = activities.find((a) => a.id === activityId);
                   if (activity && activity.column !== col.key) moveActivity(activity, col.key);
                 }}
-                className={`bg-slate-100 border rounded-lg p-3 min-h-[300px] ${dragOverColumn === col.key ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-300"}`}
+                className={`shrink-0 w-[82vw] snap-center md:w-auto md:shrink bg-slate-100 border rounded-lg p-3 min-h-[300px] ${dragOverColumn === col.key ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-300"}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-semibold text-slate-700">{col.label}</h2>
