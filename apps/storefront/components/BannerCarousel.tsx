@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Banner } from "@ecommerce/types";
 
 export function BannerCarousel({ banners }: { banners: Banner[] }) {
   const slides = banners.filter((b) => b.active).sort((a, b) => a.order - b.order);
   const [index, setIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     if (slides.length < 2) return;
@@ -31,8 +32,22 @@ export function BannerCarousel({ banners }: { banners: Banner[] }) {
     </div>
   );
 
+  // Celular: deslizar o dedo troca de banner.
+  const swipe = (endX: number) => {
+    if (touchStartX.current === null || slides.length < 2) return;
+    const dx = endX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    setIndex((i) => (dx < 0 ? (i + 1) % slides.length : (i - 1 + slides.length) % slides.length));
+  };
+
   return (
-    <div className="hidden md:block relative">
+    // No celular o banner aparece primeiro (antes do texto da página inicial); no computador fica ao lado, como sempre foi.
+    <div
+      className="relative order-first md:order-none"
+      onTouchStart={(e) => (touchStartX.current = e.touches[0].clientX)}
+      onTouchEnd={(e) => swipe(e.changedTouches[0].clientX)}
+    >
       {slide.linkUrl ? <Link href={slide.linkUrl}>{content}</Link> : content}
       {slides.length > 1 && (
         <div className="absolute bottom-3 right-3 flex gap-1.5">

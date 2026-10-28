@@ -38,7 +38,7 @@ export default function HomePage() {
       <Header categories={categories} />
 
       <section className="bg-white border-b border-slate-200">
-        <div className="mx-auto max-w-7xl px-4 py-10 grid md:grid-cols-2 gap-8 items-center">
+        <div className="mx-auto max-w-7xl px-4 py-6 md:py-10 grid md:grid-cols-2 gap-6 md:gap-8 items-center">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight">
               {settings ? settings.siteCopy.heroTitle || "A melhor forma de abastecer o seu negócio." : "\u00a0"}
