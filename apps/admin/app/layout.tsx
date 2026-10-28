@@ -1,9 +1,19 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AdminAuthProvider } from "@/lib/admin-auth-context";
 import { ThemeInjector } from "@/components/ThemeInjector";
+import { PwaRegister } from "@/components/PwaRegister";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f172a",
+};
 
 export const metadata: Metadata = {
+  appleWebApp: { capable: true, title: "Full-Commerce Admin", statusBarStyle: "default" },
+  icons: { apple: "/apple-touch-icon.png" },
   title: "Painel Admin",
   description: "Painel de gestão do e-commerce.",
 };
@@ -37,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="antialiased text-slate-900">
         <ThemeInjector />
+        <PwaRegister />
         <AdminAuthProvider>{children}</AdminAuthProvider>
       </body>
     </html>

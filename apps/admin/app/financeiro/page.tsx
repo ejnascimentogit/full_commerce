@@ -174,7 +174,7 @@ export default function FinanceiroPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-[22rem_1fr] gap-5 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-[22rem_1fr] gap-5 items-start">
             <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
               <div className="p-3 border-b border-slate-100">
                 <input
@@ -234,7 +234,7 @@ export default function FinanceiroPage() {
                         Editar cadastro
                       </Link>
                     </div>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="bg-slate-50 rounded-md p-3">
                         <p className="text-xs text-slate-500 mb-0.5">Total gasto</p>
                         <p className="text-base font-bold text-slate-900">{money(selected.totalSpent)}</p>

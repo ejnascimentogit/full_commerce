@@ -52,7 +52,7 @@ function CatalogoContent() {
       <Header categories={categories} />
 
       <div className="mx-auto max-w-7xl px-4 py-6 grid md:grid-cols-[220px_1fr] gap-6">
-        <aside className="space-y-6">
+        <aside className="hidden md:block space-y-6">
           <div>
             <h2 className="font-semibold text-sm text-slate-900 mb-2">Departamentos</h2>
             <ul className="space-y-1 text-sm">

@@ -21,19 +21,19 @@ export function Header({ categories }: { categories: Category[] }) {
 
   return (
     <header className="bg-brand-600 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-4 flex items-center gap-6">
+      <div className="mx-auto max-w-7xl px-4 py-3 md:py-4 flex flex-wrap items-center gap-x-4 gap-y-3 md:gap-6">
         <LogoLink />
 
-        <form onSubmit={handleSearch} className="flex-1 max-w-2xl" role="search">
+        <form onSubmit={handleSearch} className="order-last basis-full md:order-none md:basis-0 flex-1 md:max-w-2xl" role="search">
           <input
             type="search"
             name="q"
             placeholder="Pesquisar produtos..."
-            className="w-full rounded-md px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className="w-full rounded-md bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
         </form>
 
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex items-center gap-4 shrink-0 ml-auto md:ml-0">
           <AccountMenu />
           <CartBadge />
         </div>
