@@ -111,7 +111,19 @@ Dois papéis (`platformAdmin` vê tudo; `vendorAdmin` só o próprio fornecedor)
 
 ## Multi-tenant: tipos de e-commerce
 
-Cada `Company` cadastrada em **Empresas** roda isolada (produtos, clientes, configurações próprias). Até aqui, tudo neste documento descreve o tipo `wholesale` (atacado B2B, fullcommerce e Odoya). Está sendo desenhado um segundo tipo, `televendas` — varejo B2C por telemarketing com crediário próprio, primeira empresa: **Almir Móveis e Eletro** — que ativa telas diferentes no admin (Central de Vendas, Carrinhos Abandonados, Potencial de Recompra) e um layout de storefront diferente, sem alterar o comportamento de nenhuma empresa `wholesale` já existente. Especificação completa em [`.claude/skills/ecommerce/references/televendas.md`](.claude/skills/ecommerce/references/televendas.md).
+Cada `Company` cadastrada em **Empresas** roda isolada (produtos, clientes, configurações próprias). Até aqui, tudo neste documento descreve o tipo `wholesale` (atacado B2B, fullcommerce e EGR ATACADISTA). Está sendo desenhado um segundo tipo, `televendas` — varejo B2C por telemarketing com crediário próprio, primeira empresa: **Almir Móveis e Eletro** — que ativa telas diferentes no admin (Central de Vendas, Carrinhos Abandonados, Potencial de Recompra) e um layout de storefront diferente, sem alterar o comportamento de nenhuma empresa `wholesale` já existente. Especificação completa em [`.claude/skills/ecommerce/references/televendas.md`](.claude/skills/ecommerce/references/televendas.md).
+
+### Empresas cadastradas (2026-10-28)
+
+| Nº | Empresa | Endereços | Observação |
+|---|---|---|---|
+| 1 | Full-Commerce (demo) | sem domínio próprio (cai aqui por padrão) | ambiente de demonstração e conta do dono da plataforma |
+| 2 | **EGR ATACADISTA** (Lagoa do Carro-PE) | `egr-storefront.ejnascimento1.workers.dev` e `egr-admin.ejnascimento1.workers.dev` | **substituiu a Odoya** (pedido do dono do projeto: não vamos mais fazer nada com a Odoya). A empresa 2 estava vazia (0 clientes, produtos e pedidos), então foi **renomeada no lugar**, mantendo o número 2 (prefixo `2xxxxx` dos produtos) e os 4 perfis de acesso. Cor de marca preta (`#1d1d1d`). |
+| 3 | Almir Móveis e Eletro | `almir-storefront...` e `almir-admin...` | |
+
+- **Logins da EGR:** suporte Full-Commerce `adm_egr@fullcommerce.com.br` (nome "Suporte Full-Commerce — EGR ATACADISTA", padrão da Almir, senha inicial `123456`) criado em **Empresas → EGR ATACADISTA → Criar login**; o administrador do cliente (**Diego**) será criado no mesmo lugar quando o e-mail dele for informado.
+- **Odoya:** removidos do repositório os arquivos `wrangler.odoya.jsonc` e os scripts `cf:deploy:odoya`. Os sites antigos `odoya-storefront` e `odoya-admin` continuam no ar no Cloudflare até serem **apagados à mão** (Cloudflare → Workers); enquanto existirem, mostram a loja de demonstração (empresa 1), porque o endereço deles já não pertence a nenhuma empresa. As duas linhas `odoya-*` da lista `ALLOWED_ORIGINS` da Edge Function `api` e os comentários que citam a Odoya saem na próxima publicação da função.
+- **Publicação:** os sites da EGR foram publicados pelo fluxo automático (`deploy-company.yml`, nome base `egr`).
 
 ## Pendências conhecidas
 

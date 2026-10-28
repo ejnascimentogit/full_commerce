@@ -70,7 +70,7 @@ export default function EmpresasPage() {
 
   async function handlePublish(company: Company) {
     const ok = window.confirm(
-      `Publicar a loja e o admin de "${company.name}" na Cloudflare?\n\nLeva alguns minutos. Se a empresa já tem sites publicados à mão com esses nomes (ex: Odoya), eles serão substituídos pela versão atual do sistema.`,
+      `Publicar a loja e o admin de "${company.name}" na Cloudflare?\n\nLeva alguns minutos. Se a empresa já tem sites publicados à mão com esses nomes (ex: sites antigos criados à mão), eles serão substituídos pela versão atual do sistema.`,
     );
     if (!ok) return;
     try {
@@ -448,7 +448,7 @@ function CompanyFormModal({
           <h3 className="text-sm font-semibold text-slate-900">Identificação</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Nome da empresa *">
-              <input required value={form.name} onChange={(e) => handleNameChange(e.target.value)} placeholder="Ex: Odoya" className={inputClass} />
+              <input required value={form.name} onChange={(e) => handleNameChange(e.target.value)} placeholder="Ex: EGR Atacadista" className={inputClass} />
             </Field>
             <Field label="Identificador interno (slug) *">
               <input
@@ -479,7 +479,7 @@ function CompanyFormModal({
               onChange={(e) => set("ecommerceType", e.target.value as EcommerceType)}
               className={`${inputClass} bg-white disabled:bg-slate-50 disabled:text-slate-500`}
             >
-              <option value="wholesale">Multi-fornecedor (padrão) — atacado B2B, como Odoya</option>
+              <option value="wholesale">Multi-fornecedor (padrão) — atacado B2B, como a EGR Atacadista</option>
               <option value="televendas">Televendas — varejo B2C com crediário próprio</option>
             </select>
             <p className="text-xs text-slate-500 mt-1">
@@ -636,7 +636,7 @@ function EditCompanyModal({ company, onClose, onSaved }: { company: Company; onC
           <input
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
-            placeholder="ex: odoya.com.br"
+            placeholder="ex: egratacadista.com.br"
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono"
           />
         </div>
@@ -645,7 +645,7 @@ function EditCompanyModal({ company, onClose, onSaved }: { company: Company; onC
           <input
             value={adminDomain}
             onChange={(e) => setAdminDomain(e.target.value)}
-            placeholder="ex: admin.odoya.com.br"
+            placeholder="ex: admin.egratacadista.com.br"
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono"
           />
         </div>

@@ -158,7 +158,7 @@ O dono da loja cria sua própria conta `platformAdmin` em `/criar-conta` no admi
 
 ## Tipos de e-commerce (multi-tenant) — `wholesale` vs `televendas`
 
-Tudo neste documento até aqui descreve o modelo **`wholesale`** (atacado B2B multi-fornecedor, inspirado no Praso) — é o padrão implícito de toda `Company` cadastrada até agora (fullcommerce, Odoya). A plataforma é multi-tenant: cada `Company` tem seus próprios produtos, clientes e configurações, totalmente isolados das outras (tela **Empresas**, só `platformOwner` vê).
+Tudo neste documento até aqui descreve o modelo **`wholesale`** (atacado B2B multi-fornecedor, inspirado no Praso) — é o padrão implícito de toda `Company` cadastrada até agora (fullcommerce, EGR ATACADISTA). A plataforma é multi-tenant: cada `Company` tem seus próprios produtos, clientes e configurações, totalmente isolados das outras (tela **Empresas**, só `platformOwner` vê).
 
 Existe um segundo tipo, **`televendas`** — varejo B2C por telemarketing com crediário próprio (primeira empresa desse tipo: Almir Móveis e Eletro) — escolhido no campo `Company.ecommerceType` na criação da empresa. Esse campo liga/desliga telas do admin e troca o layout do storefront **sem alterar nada do comportamento `wholesale` já existente** — toda mudança é aditiva (campo novo com default `wholesale`, telas novas condicionadas ao tipo). Especificação completa em [references/televendas.md](references/televendas.md) — consulte antes de mexer em `Company`, `PaymentTerm`, `Cart` ou no menu do admin (`AdminShell.tsx`).
 

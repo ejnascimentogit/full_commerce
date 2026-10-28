@@ -25,5 +25,5 @@ Sem o segundo, a empresa e criada normalmente e os enderecos sao definidos, mas 
 
 ## Atencao
 
-- Empresas com sites publicados a mao (ex: Odoya, via `cf:deploy:odoya`) sao substituidas se alguem clicar em Publicar sites.
+- Empresas com sites publicados a mao (ex: sites antigos criados à mão com o mesmo nome) sao substituidas se alguem clicar em Publicar sites.
 - Quando o dominio proprio for comprado, o caminho ideal e um unico worker com rota curinga (`*.dominio`), sem publicar nada por empresa.
