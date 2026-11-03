@@ -140,6 +140,8 @@ export default function CriarContaPage() {
       setError(
         code === "EMAIL_IN_USE"
           ? "Esse e-mail já está cadastrado."
+          : code === "DOCUMENT_IN_USE"
+            ? `Este ${documentType.toUpperCase()} já tem cadastro. Entre com o seu e-mail ou use "Esqueci minha senha".`
           : code === "INVALID_DOCUMENT"
             ? `${documentType.toUpperCase()} inválido — confira os números digitados.`
             : "Não foi possível criar a conta.",

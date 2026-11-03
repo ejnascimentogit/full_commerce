@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient, customerNumber, formatDocument, formatPhone, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
+import { apiClient, customerNumber, findByDocument, formatDocument, formatPhone, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { AdminUser, Customer, DeliveryRegion, DocumentType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -126,6 +126,7 @@ export default function ClientesPage() {
       {creating && (
         <NewCustomerModal
           staff={staff}
+          customers={customers}
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false);
@@ -504,7 +505,7 @@ function registeredBy(c: Customer): string {
   return c.createdByName ? `${c.createdByName} (painel)` : "Painel (usuário não registrado)";
 }
 
-function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onClose: () => void; onSaved: () => void }) {
+function NewCustomerModal({ staff, customers, onClose, onSaved }: { staff: AdminUser[]; customers: Customer[]; onClose: () => void; onSaved: () => void }) {
   const [documentType, setDocumentType] = useState<DocumentType>("cnpj");
   const [document, setDocument] = useState("");
   const [name, setName] = useState("");
@@ -537,6 +538,8 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
   const digitCount = documentType === "cpf" ? 11 : 14;
   const documentComplete = onlyDigits(document).length === digitCount;
   const documentValid = documentComplete && isValidDocument(documentType, document);
+  // CNPJ/CPF já cadastrado nesta empresa: avisa na hora e não deixa cadastrar de novo.
+  const duplicate = documentValid ? findByDocument(customers, document) : undefined;
 
   function changeType(type: DocumentType) {
     setDocumentType(type);
@@ -603,6 +606,10 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
       setError(`${documentType.toUpperCase()} inválido — confira os números digitados.`);
       return;
     }
+    if (duplicate) {
+      setError(`Este ${documentType.toUpperCase()} já está cadastrado (código ${customerNumber(duplicate.code)}).`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -627,6 +634,8 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
       setError(
         code === "EMAIL_IN_USE"
           ? "Esse e-mail já está cadastrado."
+          : code === "DOCUMENT_IN_USE"
+            ? `Este ${documentType.toUpperCase()} já está cadastrado.`
           : code === "INVALID_DOCUMENT"
             ? `${documentType.toUpperCase()} inválido — confira os números digitados.`
             : "Não foi possível cadastrar o cliente.",
@@ -675,6 +684,11 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
               className={`${INPUT} ${documentComplete && !documentValid ? "border-red-400" : ""}`}
             />
             {documentComplete && !documentValid && <p className="text-red-600 text-xs mt-1">{documentType.toUpperCase()} inválido.</p>}
+            {duplicate && (
+              <p className="text-red-700 bg-red-50 border border-red-200 rounded-md text-xs mt-1 px-2 py-1.5" role="alert">
+                ⚠ Este {documentType.toUpperCase()} já está cadastrado: <strong>{duplicate.businessName || duplicate.name}</strong> (código {customerNumber(duplicate.code)}). Não é possível cadastrar de novo.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
@@ -820,7 +834,7 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
           <button type="button" onClick={onClose} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-md">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
+          <button type="submit" disabled={saving || !!duplicate} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
             {saving ? "Salvando..." : "Cadastrar cliente"}
           </button>
         </div>
