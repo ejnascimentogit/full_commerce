@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient, customerNumber, formatDocument, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
+import { apiClient, customerNumber, formatDocument, formatPhone, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { AdminUser, Customer, DeliveryRegion, DocumentType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -103,7 +103,7 @@ export default function ClientesPage() {
                 <td className="px-4 py-2.5 text-slate-700">{c.businessName || "—"}</td>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{c.name}</td>
                 <td className="px-4 py-2.5 text-slate-500">{c.email}</td>
-                <td className="px-4 py-2.5 text-slate-500">{c.phone}</td>
+                <td className="px-4 py-2.5 text-slate-500">{formatPhone(c.phone)}</td>
                 <td className="px-4 py-2.5">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                     {c.status === "active" ? "Ativo" : "Inativo"}
@@ -165,7 +165,7 @@ function EditCustomerModal({
 }) {
   const [name, setName] = useState(customer.name);
   const [businessName, setBusinessName] = useState(customer.businessName ?? "");
-  const [phone, setPhone] = useState(customer.phone);
+  const [phone, setPhone] = useState(formatPhone(customer.phone));
   const [regionId, setRegionId] = useState(customer.regionId ?? "");
   const [referenceCode, setReferenceCode] = useState(customer.referenceCode ?? "");
   const [preferredPaymentMethod, setPreferredPaymentMethod] = useState(customer.preferredPaymentMethod ?? "");
@@ -397,7 +397,7 @@ function EditCustomerModal({
           )}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+            <input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} inputMode="tel" placeholder="(00) 00000-0000" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Região de entrega</label>
@@ -663,7 +663,7 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-            <input required value={phone} onChange={(e) => setPhone(e.target.value)} className={INPUT} />
+            <input required value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} inputMode="tel" placeholder="(00) 00000-0000" className={INPUT} />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Código de referência</label>

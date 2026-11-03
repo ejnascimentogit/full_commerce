@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, userCan } from "@ecommerce/api-client";
+import { apiClient, formatPhone, userCan } from "@ecommerce/api-client";
 import type { Activity, ActivityClient, ActivityColumn, ActivityOutcome, ActivityPriority, AdminUser, Customer, StaffSector } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -477,7 +477,7 @@ function CreateActivityModal({
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <input value={leadName} onChange={(e) => setLeadName(e.target.value)} placeholder="Nome" className="border border-slate-300 rounded-md px-3 py-2 text-sm" />
-              <input value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} placeholder="Telefone (opcional)" className="border border-slate-300 rounded-md px-3 py-2 text-sm" />
+              <input value={leadPhone} onChange={(e) => setLeadPhone(formatPhone(e.target.value))} placeholder="Telefone (opcional)" className="border border-slate-300 rounded-md px-3 py-2 text-sm" />
             </div>
           )}
         </div>
