@@ -202,6 +202,10 @@ export interface Customer {
   /** Vendedor/atendente (AdminUser role "staff") vinculado a este cliente -- usado pelo modo de atribuicao "vendedor_vinculado" das Atividades Automaticas (ver StoreSettings.atividadeAutoModoAtribuicao). Ausente = sem vendedor vinculado, cai pro comportamento manual pra esse cliente especifico. */
   assignedStaffId?: string;
   createdAt: string;
+  /** Por onde o cadastro nasceu: "loja" (o próprio cliente se cadastrou) ou "painel" (alguém da equipe cadastrou pela tela de Clientes). Ausente = loja. */
+  createdVia?: "loja" | "painel";
+  /** Nome de quem cadastrou pelo painel (a pessoa logada na tela de Clientes naquele momento). Só existe quando createdVia = "painel"; cadastros feitos antes deste registro ficam sem nome. */
+  createdByName?: string;
   status: "active" | "inactive";
 }
 

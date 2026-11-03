@@ -354,6 +354,8 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
     preferredPaymentMethod: c.preferred_payment_method ?? undefined,
       assignedStaffId: c.assigned_staff_id ?? undefined,
     createdAt: c.created_at,
+    createdVia: c.created_via ?? "loja",
+    createdByName: c.created_by_name ?? undefined,
     status: c.status,
   };
 }
@@ -1796,6 +1798,9 @@ app.post("/admin/customers", async (c) => {
       reference_code: referenceCode ?? null,
       preferred_payment_method: preferredPaymentMethod ?? null,
       assigned_staff_id: assignedStaffId ?? null,
+      // Quem cadastrou: a pessoa que está usando a tela de Clientes agora (não o administrador do sistema em geral).
+      created_via: "painel",
+      created_by_name: admin.name ?? null,
       status: "active",
     })
     .select("*")

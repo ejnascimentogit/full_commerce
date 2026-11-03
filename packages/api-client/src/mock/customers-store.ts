@@ -75,6 +75,7 @@ export function createCustomer(input: CreateCustomerInput): Customer {
     code: `CLI-${1001 + customers.length}`,
     addresses,
     createdAt: new Date().toISOString(),
+    createdVia: "loja",
     status: "active",
   };
   customers.push(customer);

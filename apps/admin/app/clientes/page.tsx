@@ -275,6 +275,14 @@ function EditCustomerModal({
             <span className="text-slate-500">{customer.documentType === "cnpj" ? "CNPJ" : "CPF"}</span>
             <span className="text-slate-900 font-mono">{customer.document}</span>
           </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Cadastrado em</span>
+            <span className="text-slate-900">{formatDateTime(customer.createdAt)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Cadastrado por</span>
+            <span className="text-slate-900 text-right">{registeredBy(customer)}</span>
+          </div>
           {extraAddresses.length > 0 && (
             <div>
               <span className="text-slate-500 block mb-1">Outro{extraAddresses.length > 1 ? "s" : ""} endereço{extraAddresses.length > 1 ? "s" : ""}</span>
@@ -484,6 +492,17 @@ function EditCustomerModal({
 }
 
 const INPUT = "w-full border border-slate-300 rounded-md px-3 py-2 text-sm";
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+// Quem cadastrou: pela loja = o próprio cliente; pela tela de Clientes = a pessoa logada no painel naquele momento.
+function registeredBy(c: Customer): string {
+  if (c.createdVia !== "painel") return "Cliente (cadastro pela loja)";
+  return c.createdByName ? `${c.createdByName} (painel)` : "Painel (usuário não registrado)";
+}
 
 function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onClose: () => void; onSaved: () => void }) {
   const [documentType, setDocumentType] = useState<DocumentType>("cnpj");
