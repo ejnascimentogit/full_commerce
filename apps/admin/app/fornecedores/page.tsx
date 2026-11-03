@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient, userCan } from "@ecommerce/api-client";
+import { apiClient, formatCNPJ, userCan } from "@ecommerce/api-client";
 import type { Vendor } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -109,7 +109,7 @@ export default function FornecedoresPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">CNPJ</label>
-              <input required value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+              <input required value={cnpj} onChange={(e) => setCnpj(formatCNPJ(e.target.value))} inputMode="numeric" placeholder="00.000.000/0000-00" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -194,7 +194,7 @@ export default function FornecedoresPage() {
                 </td>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{v.name}</td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{v.code ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-500">{v.cnpj}</td>
+                <td className="px-4 py-2.5 text-slate-500">{formatCNPJ(v.cnpj)}</td>
                 <td className="px-4 py-2.5">
                   <button
                     type="button"
@@ -240,7 +240,7 @@ export default function FornecedoresPage() {
 
 function EditVendorModal({ vendor, onClose, onSaved }: { vendor: Vendor; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(vendor.name);
-  const [cnpj, setCnpj] = useState(vendor.cnpj);
+  const [cnpj, setCnpj] = useState(formatCNPJ(vendor.cnpj));
   const [code, setCode] = useState(vendor.code ?? "");
   const [referenceCode, setReferenceCode] = useState(vendor.referenceCode ?? "");
   const [description, setDescription] = useState(vendor.description ?? "");
@@ -275,7 +275,7 @@ function EditVendorModal({ vendor, onClose, onSaved }: { vendor: Vendor; onClose
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">CNPJ</label>
-          <input required value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+          <input required value={cnpj} onChange={(e) => setCnpj(formatCNPJ(e.target.value))} inputMode="numeric" placeholder="00.000.000/0000-00" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

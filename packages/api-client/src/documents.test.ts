@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findByDocument,
   formatCNPJ,
   formatCPF,
   formatDocument,
@@ -90,5 +91,22 @@ describe("formatCPF / formatCNPJ / formatDocument", () => {
   it("formatDocument delega para o formatador certo conforme o tipo", () => {
     expect(formatDocument("cpf", "52998224725")).toBe("529.982.247-25");
     expect(formatDocument("cnpj", "11444777000161")).toBe("11.444.777/0001-61");
+  });
+});
+
+describe("findByDocument", () => {
+  const lista = [
+    { name: "A", document: "34.291.384/0001-60" },
+    { name: "B", document: "02504471424" },
+  ];
+  it("acha pelo número, não importa a pontuação de cada lado", () => {
+    expect(findByDocument(lista, "34291384000160")?.name).toBe("A");
+    expect(findByDocument(lista, "34.291.384/0001-60")?.name).toBe("A");
+    expect(findByDocument(lista, "025.044.714-24")?.name).toBe("B");
+  });
+  it("não acha o que não existe nem aceita vazio", () => {
+    expect(findByDocument(lista, "11.623.188/0003-02")).toBeUndefined();
+    expect(findByDocument(lista, "")).toBeUndefined();
+    expect(findByDocument(lista, "abc")).toBeUndefined();
   });
 });

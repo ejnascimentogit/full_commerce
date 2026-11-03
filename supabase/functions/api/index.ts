@@ -354,6 +354,8 @@ function mapCustomer(c: Record<string, unknown>, addresses: Record<string, unkno
     preferredPaymentMethod: c.preferred_payment_method ?? undefined,
       assignedStaffId: c.assigned_staff_id ?? undefined,
     createdAt: c.created_at,
+    createdVia: c.created_via ?? "loja",
+    createdByName: c.created_by_name ?? undefined,
     status: c.status,
   };
 }
@@ -915,6 +917,18 @@ function isValidCNPJ(value: string): boolean {
   return cnpj === cnpj.slice(0, 12) + String(d1) + String(d2);
 }
 
+// Já existe cliente com este CPF/CNPJ nesta empresa? Compara os números (aceita o documento gravado com ou sem pontuação).
+async function documentInUse(companyId: string, documentValue: string): Promise<boolean> {
+  const digits = String(documentValue ?? "").replace(/\D/g, "");
+  if (!digits) return false;
+  const masked =
+    digits.length === 11
+      ? digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
+      : digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  const { data } = await eco().from("customers").select("id").eq("company_id", companyId).in("document", [digits, masked]).limit(1);
+  return (data ?? []).length > 0;
+}
+
 // ---------- Rotas públicas (catálogo) ----------
 
 app.get("/regions", async (c) => {
@@ -1039,6 +1053,7 @@ app.post("/auth/register", async (c) => {
   const { name, email, password, documentType, document, businessName, phone, address, businessAddress, referenceCode } = body;
   const isValidDoc = documentType === "cpf" ? isValidCPF(document) : isValidCNPJ(document);
   if (!isValidDoc) throw new ApiError(422, "INVALID_DOCUMENT");
+  if (await documentInUse(companyId, document)) throw new ApiError(422, "DOCUMENT_IN_USE");
 
   const { data: created, error: createError } = await db().auth.admin.createUser({ email, password, email_confirm: true });
   if (createError || !created.user) throw new ApiError(422, "EMAIL_IN_USE", createError?.message);
@@ -1765,6 +1780,7 @@ app.post("/admin/customers", async (c) => {
   const isValidDoc = documentType === "cpf" ? isValidCPF(document) : isValidCNPJ(document);
   if (!isValidDoc) throw new ApiError(422, "INVALID_DOCUMENT");
   if (!name || !email || !phone || !address?.street || !address?.neighborhood) throw new ApiError(422, "MISSING_FIELDS");
+  if (await documentInUse(admin.company_id, document)) throw new ApiError(422, "DOCUMENT_IN_USE");
 
   // O cliente não recebe senha do admin: a conta nasce com senha aleatória e ele define a dele em "Esqueci minha senha".
   const { data: created, error: createError } = await db().auth.admin.createUser({
@@ -1796,6 +1812,9 @@ app.post("/admin/customers", async (c) => {
       reference_code: referenceCode ?? null,
       preferred_payment_method: preferredPaymentMethod ?? null,
       assigned_staff_id: assignedStaffId ?? null,
+      // Quem cadastrou: a pessoa que está usando a tela de Clientes agora (não o administrador do sistema em geral).
+      created_via: "painel",
+      created_by_name: admin.name ?? null,
       status: "active",
     })
     .select("*")

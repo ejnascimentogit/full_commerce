@@ -762,7 +762,10 @@ export const mockApiClient: ApiClient = {
     const { preferredPaymentMethod, assignedStaffId, ...base } = input;
     const customer = createCustomer({ ...base, password: `tmp-${Date.now()}-${Math.random()}`, regionId: region?.id });
     markFirstAccessPending(customer.id);
-    return updateCustomerStore(customer.id, { preferredPaymentMethod, assignedStaffId });
+    // Quem cadastrou = a pessoa logada no painel agora.
+    const sessionAdminId = getAdminSessionUserId();
+    const admin = sessionAdminId ? findAdminUserById(sessionAdminId) : undefined;
+    return updateCustomerStore(customer.id, { preferredPaymentMethod, assignedStaffId, createdVia: "painel", createdByName: admin?.name });
   },
 
   async updateCustomer(id, patch): Promise<Customer> {

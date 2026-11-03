@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiClient, customerNumber, formatDocument, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
+import { apiClient, customerNumber, findByDocument, formatDocument, formatPhone, isValidDocument, lookupCep, onlyDigits, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { AdminUser, Customer, DeliveryRegion, DocumentType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -103,7 +103,7 @@ export default function ClientesPage() {
                 <td className="px-4 py-2.5 text-slate-700">{c.businessName || "—"}</td>
                 <td className="px-4 py-2.5 font-medium text-slate-900">{c.name}</td>
                 <td className="px-4 py-2.5 text-slate-500">{c.email}</td>
-                <td className="px-4 py-2.5 text-slate-500">{c.phone}</td>
+                <td className="px-4 py-2.5 text-slate-500">{formatPhone(c.phone)}</td>
                 <td className="px-4 py-2.5">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                     {c.status === "active" ? "Ativo" : "Inativo"}
@@ -126,6 +126,7 @@ export default function ClientesPage() {
       {creating && (
         <NewCustomerModal
           staff={staff}
+          customers={customers}
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false);
@@ -165,7 +166,7 @@ function EditCustomerModal({
 }) {
   const [name, setName] = useState(customer.name);
   const [businessName, setBusinessName] = useState(customer.businessName ?? "");
-  const [phone, setPhone] = useState(customer.phone);
+  const [phone, setPhone] = useState(formatPhone(customer.phone));
   const [regionId, setRegionId] = useState(customer.regionId ?? "");
   const [referenceCode, setReferenceCode] = useState(customer.referenceCode ?? "");
   const [preferredPaymentMethod, setPreferredPaymentMethod] = useState(customer.preferredPaymentMethod ?? "");
@@ -274,6 +275,14 @@ function EditCustomerModal({
           <div className="flex justify-between gap-3">
             <span className="text-slate-500">{customer.documentType === "cnpj" ? "CNPJ" : "CPF"}</span>
             <span className="text-slate-900 font-mono">{customer.document}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Cadastrado em</span>
+            <span className="text-slate-900">{formatDateTime(customer.createdAt)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="text-slate-500">Cadastrado por</span>
+            <span className="text-slate-900 text-right">{registeredBy(customer)}</span>
           </div>
           {extraAddresses.length > 0 && (
             <div>
@@ -397,7 +406,7 @@ function EditCustomerModal({
           )}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+            <input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} inputMode="tel" placeholder="(00) 00000-0000" className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Região de entrega</label>
@@ -485,7 +494,18 @@ function EditCustomerModal({
 
 const INPUT = "w-full border border-slate-300 rounded-md px-3 py-2 text-sm";
 
-function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onClose: () => void; onSaved: () => void }) {
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+// Quem cadastrou: pela loja = o próprio cliente; pela tela de Clientes = a pessoa logada no painel naquele momento.
+function registeredBy(c: Customer): string {
+  if (c.createdVia !== "painel") return "Cliente (cadastro pela loja)";
+  return c.createdByName ? `${c.createdByName} (painel)` : "Painel (usuário não registrado)";
+}
+
+function NewCustomerModal({ staff, customers, onClose, onSaved }: { staff: AdminUser[]; customers: Customer[]; onClose: () => void; onSaved: () => void }) {
   const [documentType, setDocumentType] = useState<DocumentType>("cnpj");
   const [document, setDocument] = useState("");
   const [name, setName] = useState("");
@@ -518,6 +538,8 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
   const digitCount = documentType === "cpf" ? 11 : 14;
   const documentComplete = onlyDigits(document).length === digitCount;
   const documentValid = documentComplete && isValidDocument(documentType, document);
+  // CNPJ/CPF já cadastrado nesta empresa: avisa na hora e não deixa cadastrar de novo.
+  const duplicate = documentValid ? findByDocument(customers, document) : undefined;
 
   function changeType(type: DocumentType) {
     setDocumentType(type);
@@ -584,6 +606,10 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
       setError(`${documentType.toUpperCase()} inválido — confira os números digitados.`);
       return;
     }
+    if (duplicate) {
+      setError(`Este ${documentType.toUpperCase()} já está cadastrado (código ${customerNumber(duplicate.code)}).`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -608,6 +634,8 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
       setError(
         code === "EMAIL_IN_USE"
           ? "Esse e-mail já está cadastrado."
+          : code === "DOCUMENT_IN_USE"
+            ? `Este ${documentType.toUpperCase()} já está cadastrado.`
           : code === "INVALID_DOCUMENT"
             ? `${documentType.toUpperCase()} inválido — confira os números digitados.`
             : "Não foi possível cadastrar o cliente.",
@@ -656,6 +684,11 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
               className={`${INPUT} ${documentComplete && !documentValid ? "border-red-400" : ""}`}
             />
             {documentComplete && !documentValid && <p className="text-red-600 text-xs mt-1">{documentType.toUpperCase()} inválido.</p>}
+            {duplicate && (
+              <p className="text-red-700 bg-red-50 border border-red-200 rounded-md text-xs mt-1 px-2 py-1.5" role="alert">
+                ⚠ Este {documentType.toUpperCase()} já está cadastrado: <strong>{duplicate.businessName || duplicate.name}</strong> (código {customerNumber(duplicate.code)}). Não é possível cadastrar de novo.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
@@ -663,7 +696,7 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
-            <input required value={phone} onChange={(e) => setPhone(e.target.value)} className={INPUT} />
+            <input required value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} inputMode="tel" placeholder="(00) 00000-0000" className={INPUT} />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Código de referência</label>
@@ -801,7 +834,7 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
           <button type="button" onClick={onClose} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-md">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
+          <button type="submit" disabled={saving || !!duplicate} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700 disabled:opacity-50">
             {saving ? "Salvando..." : "Cadastrar cliente"}
           </button>
         </div>

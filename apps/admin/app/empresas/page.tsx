@@ -4,7 +4,7 @@ import { prepareLogoFile } from "@/lib/prepare-logo";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@ecommerce/api-client";
+import { apiClient, formatCNPJ, formatPhone } from "@ecommerce/api-client";
 import type { Company, CompanyAdminLogin, CompanyProfile, EcommerceType } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -244,7 +244,7 @@ function toForm(company: Company | null): FormState {
     ecommerceType: company?.ecommerceType ?? "wholesale",
     legalName: p.legalName ?? "",
     tradeName: p.tradeName ?? "",
-    cnpj: p.cnpj ?? "",
+    cnpj: formatCNPJ(p.cnpj ?? ""),
     stateRegistration: p.stateRegistration ?? "",
     email: p.email ?? "",
     phone: p.phone ?? "",
@@ -466,7 +466,7 @@ function CompanyFormModal({
               <input value={form.tradeName} onChange={(e) => set("tradeName", e.target.value)} className={inputClass} />
             </Field>
             <Field label="CNPJ">
-              <input value={form.cnpj} onChange={(e) => set("cnpj", e.target.value)} placeholder="00.000.000/0000-00" className={inputClass} />
+              <input value={form.cnpj} onChange={(e) => set("cnpj", formatCNPJ(e.target.value))} placeholder="00.000.000/0000-00" className={inputClass} />
             </Field>
             <Field label="Inscrição estadual">
               <input value={form.stateRegistration} onChange={(e) => set("stateRegistration", e.target.value)} className={inputClass} />
@@ -518,13 +518,13 @@ function CompanyFormModal({
               <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputClass} />
             </Field>
             <Field label="Telefone da empresa">
-              <input value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(00) 0000-0000" className={inputClass} />
+              <input value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(00) 0000-0000" className={inputClass} />
             </Field>
             <Field label="Nome do responsável">
               <input value={form.responsibleName} onChange={(e) => set("responsibleName", e.target.value)} className={inputClass} />
             </Field>
             <Field label="Telefone / WhatsApp do responsável">
-              <input value={form.responsiblePhone} onChange={(e) => set("responsiblePhone", e.target.value)} placeholder="(00) 00000-0000" className={inputClass} />
+              <input value={form.responsiblePhone} onChange={(e) => set("responsiblePhone", formatPhone(e.target.value))} placeholder="(00) 00000-0000" className={inputClass} />
             </Field>
           </div>
         </section>

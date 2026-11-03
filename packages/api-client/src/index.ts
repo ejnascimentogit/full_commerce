@@ -33,9 +33,10 @@ export {
   unitPriceOf,
 } from "./domain";
 export type { BrandPalette, ShippingSettings } from "./domain";
-export { formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
+export { findByDocument, formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
 export { lookupCep, formatCep } from "./cep";
 export { customerNumber } from "./customer-code";
+export { formatPhone } from "./phone";
 export type { CepAddress } from "./cep";
 export { ADMIN_FAQ, buildCustomerFaq, searchFaq } from "./faq";
 export type { FaqEntry } from "./faq";

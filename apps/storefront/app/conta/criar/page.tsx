@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatCep, formatDocument, isValidDocument, lookupCep, onlyDigits } from "@ecommerce/api-client";
+import { formatCep, formatDocument, formatPhone, isValidDocument, lookupCep, onlyDigits } from "@ecommerce/api-client";
 import type { DocumentType } from "@ecommerce/types";
 import { useAuth } from "@/lib/auth-context";
 import { PasswordField } from "@/components/PasswordField";
@@ -140,6 +140,8 @@ export default function CriarContaPage() {
       setError(
         code === "EMAIL_IN_USE"
           ? "Esse e-mail já está cadastrado."
+          : code === "DOCUMENT_IN_USE"
+            ? `Este ${documentType.toUpperCase()} já tem cadastro. Entre com o seu e-mail ou use "Esqueci minha senha".`
           : code === "INVALID_DOCUMENT"
             ? `${documentType.toUpperCase()} inválido — confira os números digitados.`
             : "Não foi possível criar a conta.",
@@ -195,7 +197,7 @@ export default function CriarContaPage() {
         </div>
 
         <Field label="E-mail" type="email" value={email} onChange={setEmail} required />
-        <Field label="Telefone" value={phone} onChange={setPhone} required />
+        <Field label="Telefone" value={phone} onChange={(v) => setPhone(formatPhone(v))} required />
         <Field label="Código que você usa pra gente (opcional)" value={referenceCode} onChange={setReferenceCode} />
         <PasswordField label="Senha" value={password} onChange={setPassword} required minLength={6} />
 

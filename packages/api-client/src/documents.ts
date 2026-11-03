@@ -47,6 +47,13 @@ export function isValidDocument(documentType: "cpf" | "cnpj", value: string): bo
   return documentType === "cpf" ? isValidCPF(value) : isValidCNPJ(value);
 }
 
+/** Acha, numa lista, quem já tem este CPF/CNPJ (compara só os números, então "34.291.384/0001-60" e "34291384000160" são o mesmo). */
+export function findByDocument<T extends { document: string }>(list: readonly T[], value: string): T | undefined {
+  const digits = onlyDigits(value);
+  if (!digits) return undefined;
+  return list.find((item) => onlyDigits(item.document) === digits);
+}
+
 export function formatCPF(value: string): string {
   const digits = onlyDigits(value).slice(0, 11);
   return digits

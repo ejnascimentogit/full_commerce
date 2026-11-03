@@ -64,6 +64,10 @@ export function createCustomer(input: CreateCustomerInput): Customer {
   if (customers.some((c) => c.email.toLowerCase() === input.email.toLowerCase())) {
     throw new Error("EMAIL_IN_USE");
   }
+  const docDigits = input.document.replace(/\D/g, "");
+  if (docDigits && customers.some((c) => c.document.replace(/\D/g, "") === docDigits)) {
+    throw new Error("DOCUMENT_IN_USE");
+  }
   const { address, businessAddress, ...rest } = input;
   const addresses: Address[] = [{ ...address, id: `addr-${Date.now()}`, isDefault: true, label: "Entrega" }];
   if (businessAddress) {
@@ -75,6 +79,7 @@ export function createCustomer(input: CreateCustomerInput): Customer {
     code: `CLI-${1001 + customers.length}`,
     addresses,
     createdAt: new Date().toISOString(),
+    createdVia: "loja",
     status: "active",
   };
   customers.push(customer);
