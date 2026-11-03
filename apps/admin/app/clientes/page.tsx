@@ -88,13 +88,10 @@ export default function ClientesPage() {
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-2.5">Código</th>
+              <th className="text-left px-4 py-2.5">Razão social</th>
               <th className="text-left px-4 py-2.5">Nome</th>
-              <th className="text-left px-4 py-2.5">Documento</th>
               <th className="text-left px-4 py-2.5">E-mail</th>
               <th className="text-left px-4 py-2.5">Telefone</th>
-              <th className="text-left px-4 py-2.5">Região</th>
-              <th className="text-left px-4 py-2.5">Cód. referência</th>
-              <th className="text-left px-4 py-2.5">Pagamento</th>
               <th className="text-left px-4 py-2.5">Status</th>
               <th className="text-left px-4 py-2.5"></th>
             </tr>
@@ -103,20 +100,10 @@ export default function ClientesPage() {
             {filtered.map((c) => (
               <tr key={c.id}>
                 <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{customerNumber(c.code)}</td>
-                <td className="px-4 py-2.5 font-medium text-slate-900">
-                  {c.name}
-                  {c.businessName && <span className="block text-xs text-slate-400 font-normal">{c.businessName}</span>}
-                </td>
-                <td className="px-4 py-2.5 text-slate-500">{c.document}</td>
+                <td className="px-4 py-2.5 text-slate-700">{c.businessName || "—"}</td>
+                <td className="px-4 py-2.5 font-medium text-slate-900">{c.name}</td>
                 <td className="px-4 py-2.5 text-slate-500">{c.email}</td>
                 <td className="px-4 py-2.5 text-slate-500">{c.phone}</td>
-                <td className="px-4 py-2.5 text-slate-500">
-                  {c.regionId ? (regions.find((r) => r.id === c.regionId)?.name ?? "—") : <span className="text-amber-600">Fora de zona</span>}
-                </td>
-                <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{c.referenceCode ?? "—"}</td>
-                <td className="px-4 py-2.5 text-slate-500">
-                  {c.preferredPaymentMethod ? PAYMENT_METHOD_LABEL[c.preferredPaymentMethod] : "—"}
-                </td>
                 <td className="px-4 py-2.5">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${c.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                     {c.status === "active" ? "Ativo" : "Inativo"}
@@ -524,6 +511,7 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
   const [bizCity, setBizCity] = useState("");
   const [bizState, setBizState] = useState("");
   const [bizCepError, setBizCepError] = useState<string | null>(null);
+  const [confirmCopy, setConfirmCopy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -553,6 +541,22 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
     } catch {
       setCepError("Não foi possível buscar o CEP agora — preencha manualmente.");
     }
+  }
+
+  const bizFilled = [bizZip, bizStreet, bizNumber, bizComplement, bizNeighborhood, bizCity, bizState].some((v) => v.trim() !== "");
+  const deliveryFilled = [zipCode, street, number, complement, neighborhood, city, state].some((v) => v.trim() !== "");
+
+  // Copia o endereço comercial inteiro para o de entrega (só depois do "sim" no aviso).
+  function copyBusinessToDelivery() {
+    setZipCode(bizZip);
+    setStreet(bizStreet);
+    setNumber(bizNumber);
+    setComplement(bizComplement);
+    setNeighborhood(bizNeighborhood);
+    setCity(bizCity);
+    setState(bizState);
+    setCepError(null);
+    setConfirmCopy(false);
   }
 
   async function handleBizZipBlur() {
@@ -690,7 +694,63 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
         </div>
 
         <div className="border border-slate-200 rounded-md p-3 space-y-3 mt-4">
-          <p className="text-sm font-medium text-slate-700">Endereço de entrega</p>
+          <p className="text-sm font-medium text-slate-700">
+            Endereço comercial <span className="text-xs text-slate-400 font-normal">(opcional)</span>
+          </p>
+          <p className="text-xs text-slate-400">Endereço do escritório/CD do cliente. Se a entrega for no mesmo lugar, use o botão "Copiar do endereço comercial" no bloco abaixo.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+              <input value={bizZip} onChange={(e) => setBizZip(e.target.value)} onBlur={handleBizZipBlur} className={INPUT} />
+              {bizCepError && <p className="text-xs text-amber-600 mt-1">{bizCepError}</p>}
+            </div>
+            <div />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
+              <input value={bizStreet} onChange={(e) => setBizStreet(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
+              <input value={bizNumber} onChange={(e) => setBizNumber(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
+              <input value={bizComplement} onChange={(e) => setBizComplement(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+              <input value={bizNeighborhood} onChange={(e) => setBizNeighborhood(e.target.value)} className={INPUT} />
+            </div>
+          </div>
+          <div className="grid grid-cols-[1fr_5rem] gap-2">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+              <input value={bizCity} onChange={(e) => setBizCity(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+              <input value={bizState} onChange={(e) => setBizState(e.target.value.toUpperCase())} maxLength={2} className={`${INPUT} uppercase`} />
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-slate-200 rounded-md p-3 space-y-3 mt-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-sm font-medium text-slate-700">Endereço de entrega</p>
+            <button
+              type="button"
+              disabled={!bizFilled}
+              onClick={() => setConfirmCopy(true)}
+              title={bizFilled ? "Copia o endereço comercial para a entrega" : "Preencha o endereço comercial primeiro"}
+              className="text-xs font-medium text-brand-600 border border-brand-600 rounded-md px-2.5 py-1 hover:bg-brand-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ⧉ Copiar do endereço comercial
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
@@ -732,51 +792,6 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
           <p className="text-xs text-slate-400">A região de entrega é definida automaticamente pelo bairro.</p>
         </div>
 
-        <div className="border border-slate-200 rounded-md p-3 space-y-3 mt-4">
-          <p className="text-sm font-medium text-slate-700">
-            Endereço comercial <span className="text-xs text-slate-400 font-normal">(opcional)</span>
-          </p>
-          <p className="text-xs text-slate-400">Preencha só se o escritório/CD do cliente for diferente do endereço de entrega.</p>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
-              <input value={bizZip} onChange={(e) => setBizZip(e.target.value)} onBlur={handleBizZipBlur} className={INPUT} />
-              {bizCepError && <p className="text-xs text-amber-600 mt-1">{bizCepError}</p>}
-            </div>
-            <div />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Rua</label>
-              <input value={bizStreet} onChange={(e) => setBizStreet(e.target.value)} className={INPUT} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Número</label>
-              <input value={bizNumber} onChange={(e) => setBizNumber(e.target.value)} className={INPUT} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Complemento</label>
-              <input value={bizComplement} onChange={(e) => setBizComplement(e.target.value)} className={INPUT} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
-              <input value={bizNeighborhood} onChange={(e) => setBizNeighborhood(e.target.value)} className={INPUT} />
-            </div>
-          </div>
-          <div className="grid grid-cols-[1fr_5rem] gap-2">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
-              <input value={bizCity} onChange={(e) => setBizCity(e.target.value)} className={INPUT} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
-              <input value={bizState} onChange={(e) => setBizState(e.target.value.toUpperCase())} maxLength={2} className={`${INPUT} uppercase`} />
-            </div>
-          </div>
-        </div>
-
         <p className="text-xs text-slate-500 mt-4">
           O cliente não recebe senha: para entrar na loja ele usa "Esqueci minha senha" com o e-mail cadastrado.
         </p>
@@ -791,6 +806,25 @@ function NewCustomerModal({ staff, onClose, onSaved }: { staff: AdminUser[]; onC
           </button>
         </div>
       </form>
+      {confirmCopy && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-5">
+            <h3 className="font-semibold text-slate-900 mb-2">Copiar o endereço comercial?</h3>
+            <p className="text-sm text-slate-600">
+              O endereço comercial será copiado para o endereço de entrega.
+              {deliveryFilled && " O que já está digitado na entrega será substituído."}
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <button type="button" onClick={() => setConfirmCopy(false)} className="text-sm text-slate-600 px-4 py-2 hover:bg-slate-50 rounded-md">
+                Cancelar
+              </button>
+              <button type="button" onClick={copyBusinessToDelivery} className="bg-brand-600 text-white font-semibold rounded-md px-4 py-2 text-sm hover:bg-brand-700">
+                Sim, copiar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
