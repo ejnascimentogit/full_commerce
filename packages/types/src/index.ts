@@ -25,6 +25,8 @@ export type PermissionKey =
   | "pedidos.ver"
   | "pedidos.status"
   | "pedidos.ajustar"
+  | "pedidos.criar"
+  | "pedidos.alterar_plano"
   | "orcamentos.ver"
   | "orcamentos.responder"
   | "orcamentos.converter"
@@ -47,6 +49,8 @@ export interface AccessProfile {
   description: string;
   permissions: PermissionKey[];
   isAdmin: boolean;
+  /** Força de vendas: desconto máximo (%) por item que quem tem este perfil pode dar no Novo pedido. Administrador = 100. */
+  maxDiscountPercent?: number;
   /** Quantas pessoas da equipe usam este perfil hoje (perfil em uso não pode ser excluído). */
   memberCount: number;
 }
@@ -99,6 +103,8 @@ export interface AdminUser {
   /** ajustes só desta pessoa em relação ao perfil: o que foi liberado a mais e o que foi bloqueado. */
   permissionGrants?: PermissionKey[];
   permissionRevokes?: PermissionKey[];
+  /** Desconto máximo (%) por item no Novo pedido, já resolvido pelo servidor (administrador = 100, sem perfil = 0). */
+  maxDiscountPercent?: number;
 }
 
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */
@@ -334,6 +340,10 @@ export interface OrderItem {
   quantity: number;
   estimatedSubtotal: number;
   finalSubtotal?: number;
+  /** Pedido digitado pelo vendedor: preço de tabela (com promoção automática) antes do desconto do vendedor. unitPrice é o líquido. */
+  listPrice?: number;
+  /** Pedido digitado pelo vendedor: desconto (%) dado no item. Ausente = sem desconto. */
+  discountPercent?: number;
 }
 
 export interface Order {
@@ -356,6 +366,54 @@ export interface Order {
   createdAt: string;
   /** Registro em Supabase de cada ajuste feito na separação — quem mudou, quando, valor antes/depois. Complementa OrderItem.finalSubtotal (que só guarda o resultado atual). */
   itemAdjustments?: OrderItemAdjustment[];
+  /** De onde veio: "loja" (o cliente comprou) ou "painel" (o vendedor digitou no Novo pedido). Pedidos antigos = "loja". */
+  origin?: "loja" | "painel";
+  /** Nome de quem digitou, quando origin = "painel" (gravado na hora, não muda se a pessoa for renomeada). */
+  sellerName?: string;
+  /** Observação do vendedor no pedido. */
+  note?: string;
+}
+
+// ---------- Força de vendas (Novo pedido digitado pelo vendedor) ----------
+
+/** Produto na tabela do vendedor: listPrice = preço de tabela; promoPrice = preço com promoção automática, quando houver. */
+export interface SalesProduct extends Product {
+  listPrice: number;
+  promoPrice?: number;
+}
+
+export interface SalesOrderLine {
+  productId: string;
+  quantity: number;
+  /** Desconto do vendedor no item, em %, limitado por AdminUser.maxDiscountPercent (o servidor confere). */
+  discountPercent: number;
+}
+
+/** Conteúdo de um rascunho: tudo que o vendedor já preencheu, pra continuar depois de qualquer aparelho. */
+export interface OrderDraftData {
+  addressId?: string;
+  paymentMethod?: PaymentMethod;
+  installments?: number;
+  note?: string;
+  items: SalesOrderLine[];
+}
+
+export interface OrderDraft {
+  id: string;
+  customerId: string;
+  data: OrderDraftData;
+  updatedAt: string;
+}
+
+export interface CreateAdminOrderInput {
+  customerId: string;
+  addressId: string;
+  paymentMethod: PaymentMethod;
+  installments?: number;
+  note?: string;
+  items: SalesOrderLine[];
+  /** Rascunho que virou pedido: o servidor apaga. */
+  draftId?: string;
 }
 
 export interface OrderItemAdjustment {

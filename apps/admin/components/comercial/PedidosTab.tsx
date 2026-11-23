@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, customerNumber, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL } from "@ecommerce/api-client";
+import { apiClient, customerNumber, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, userCan } from "@ecommerce/api-client";
 import type { Customer, Order, OrderStatus } from "@ecommerce/types";
 import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
 import { money, productList } from "@/lib/whatsapp";
@@ -30,8 +30,14 @@ export function PedidosTab() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-slate-500">Pedidos feitos pelos clientes na loja.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <p className="text-sm text-slate-500">Pedidos feitos pelos clientes na loja e digitados pelos vendedores.</p>
+        <div className="flex items-center gap-2">
+        {userCan(user, "pedidos.criar") && (
+          <Link href="/comercial/vendas/novo-pedido" className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-md">
+            + Novo pedido
+          </Link>
+        )}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "")}
@@ -44,6 +50,7 @@ export function PedidosTab() {
             </option>
           ))}
         </select>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -65,7 +72,12 @@ export function PedidosTab() {
               return (
               <Fragment key={order.id}>
               <tr>
-                <td className="px-4 py-2.5 font-medium text-slate-900">{order.orderNumber}</td>
+                <td className="px-4 py-2.5 font-medium text-slate-900">
+                  {order.orderNumber}
+                  {order.origin === "painel" && (
+                    <span className="block text-xs font-normal text-slate-400">Vendedor: {order.sellerName ?? "painel"}</span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{customerNumber(customer?.code)}</td>
                 <td className="px-4 py-2.5 text-slate-700">
                   {customer?.name ?? "—"}

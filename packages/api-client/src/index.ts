@@ -36,6 +36,15 @@ export type { BrandPalette, ShippingSettings } from "./domain";
 export { findByDocument, formatCPF, formatCNPJ, formatDocument, isValidCPF, isValidCNPJ, isValidDocument, onlyDigits } from "./documents";
 export { lookupCep, formatCep } from "./cep";
 export { customerNumber } from "./customer-code";
+export {
+  customersInPortfolio,
+  netUnitPrice,
+  salesBasePrice,
+  salesLineSubtotal,
+  salesOrderAlerts,
+  salesOrderTotals,
+} from "./sales";
+export type { SalesAlert, SalesAlertLevel, SalesOrderTotals } from "./sales";
 export { formatPhone } from "./phone";
 export type { CepAddress } from "./cep";
 export { ADMIN_FAQ, buildCustomerFaq, searchFaq } from "./faq";

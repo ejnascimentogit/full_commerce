@@ -27,9 +27,13 @@ import type {
   Company,
   CompanyDeployResult,
   CompanyAdminLogin,
+  CreateAdminOrderInput,
   Customer,
   DeliveryRegion,
   Order,
+  OrderDraft,
+  OrderDraftData,
+  SalesProduct,
   OrderItem,
   OrderStatus,
   PaymentMethod,
@@ -58,6 +62,7 @@ import {
 import {
   createAccessProfile as createAccessProfileStore,
   deleteAccessProfile as deleteAccessProfileStore,
+  findProfile,
   listAccessAudit,
   listAccessProfiles,
   updateAccessProfile as updateAccessProfileStore,
@@ -127,6 +132,8 @@ import {
   verifyPassword,
 } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
+import { deleteDraft as deleteDraftStore, listDrafts, saveDraft as saveDraftStore } from "./order-drafts-store";
+import { customersInPortfolio, netUnitPrice, salesBasePrice } from "../sales";
 import {
   clearAdminSession,
   createAdminUser,
@@ -198,6 +205,20 @@ function convertQuoteToOrderMock(
   const saved = saveOrder(order);
   updateQuoteStore(quote.id, { convertedOrderId: saved.id, status: "converted", addressId: finalAddressId });
   return saved;
+}
+
+function mockCurrentAdmin(): AdminUser {
+  const id = getAdminSessionUserId();
+  const user = id ? findAdminUserById(id) : undefined;
+  if (!user) throw new Error("UNAUTHENTICATED");
+  return user;
+}
+
+function mockMaxDiscount(admin: AdminUser): number {
+  if (admin.role === "platformAdmin") return 100;
+  if (admin.role !== "staff" || !admin.profileId) return 0;
+  const profile = findProfile(admin.profileId);
+  return profile?.isAdmin ? 100 : profile?.maxDiscountPercent ?? 0;
 }
 
 export const mockApiClient: ApiClient = {
@@ -742,6 +763,93 @@ export const mockApiClient: ApiClient = {
     const quote = findQuoteByIdStore(id);
     if (!quote) throw new Error("NOT_FOUND");
     return convertQuoteToOrderMock(id, quote.customerId, input);
+  },
+
+  // ---------- Força de vendas (mock): carteira = o próprio vendedor; administrador vê todos ----------
+  async getSalesCustomers(): Promise<Customer[]> {
+    await delay();
+    const admin = mockCurrentAdmin();
+    return customersInPortfolio(listCustomers(), admin.role === "platformAdmin" || admin.isManager ? null : [admin.id]);
+  },
+
+  async getSalesCustomerOrders(customerId: string): Promise<Order[]> {
+    await delay();
+    return findOrdersByCustomer(customerId).slice(0, 10);
+  },
+
+  async getSalesProducts(): Promise<SalesProduct[]> {
+    await delay();
+    return listProducts()
+      .filter((p) => p.status === "active")
+      .map((p) => ({ ...p, listPrice: unitPriceOf(p) }));
+  },
+
+  async createAdminOrder(input: CreateAdminOrderInput): Promise<Order> {
+    await delay(400);
+    const admin = mockCurrentAdmin();
+    const customer = findCustomerById(input.customerId);
+    if (!customer) throw new Error("CUSTOMER_NOT_FOUND");
+    const address = customer.addresses.find((a) => a.id === input.addressId);
+    if (!address) throw new Error("ADDRESS_NOT_FOUND");
+    if (!input.items.length) throw new Error("EMPTY_ORDER");
+    const maxDiscount = mockMaxDiscount(admin);
+    const items: OrderItem[] = input.items.map((line) => {
+      const product = findProductById(line.productId);
+      if (!product) throw new Error("PRODUCT_NOT_FOUND");
+      if (line.discountPercent > maxDiscount) throw new Error("DISCOUNT_ABOVE_LIMIT");
+      const listPrice = salesBasePrice({ listPrice: unitPriceOf(product) });
+      const unitPrice = netUnitPrice(listPrice, line.discountPercent);
+      const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
+      return {
+        ...buildOrderItem(product, line.quantity),
+        unitPrice,
+        estimatedSubtotal: Math.round(unitPrice * weight * line.quantity * 100) / 100,
+        listPrice,
+        discountPercent: line.discountPercent || undefined,
+      };
+    });
+    const subtotal = items.reduce((sum, i) => sum + i.estimatedSubtotal, 0);
+    const settings = getSettings();
+    if (settings.minOrderValue && subtotal < settings.minOrderValue) throw new Error("BELOW_MIN_ORDER_VALUE");
+    const totals = calculateOrderTotals(items, calculateShipping(customer, settings));
+    const now = new Date().toISOString();
+    const order = saveOrder({
+      id: `order-${Date.now()}`,
+      orderNumber: nextOrderNumber(),
+      customerId: customer.id,
+      items,
+      shippingAddress: address,
+      regionId: customer.regionId,
+      paymentMethod: input.paymentMethod,
+      installments: input.paymentMethod === "credit" ? input.installments : undefined,
+      ...totals,
+      status: "PAID",
+      statusHistory: [
+        { status: "PENDING", changedAt: now },
+        { status: "PAID", changedAt: now },
+      ],
+      createdAt: now,
+      origin: "painel",
+      sellerName: admin.name,
+      note: input.note,
+    });
+    if (input.draftId) deleteDraftStore(admin.id, input.draftId);
+    return order;
+  },
+
+  async getOrderDrafts(): Promise<OrderDraft[]> {
+    await delay();
+    return listDrafts(mockCurrentAdmin().id);
+  },
+
+  async saveOrderDraft(id: string, input: { customerId: string; data: OrderDraftData }): Promise<OrderDraft> {
+    await delay(200);
+    return saveDraftStore(mockCurrentAdmin().id, id, input.customerId, input.data);
+  },
+
+  async deleteOrderDraft(id: string): Promise<void> {
+    await delay(200);
+    deleteDraftStore(mockCurrentAdmin().id, id);
   },
 
   async getAdminCarts(): Promise<Cart[]> {

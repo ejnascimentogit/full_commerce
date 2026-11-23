@@ -23,6 +23,8 @@ interface Draft {
   name: string;
   description: string;
   permissions: PermissionKey[];
+  /** Desconto máximo (%) por item no Novo pedido (força de vendas). Texto pra deixar o campo editável livremente. */
+  maxDiscountPercent: string;
 }
 
 function labels(keys: unknown): string {
@@ -95,17 +97,22 @@ export function PerfisSection() {
 
   function startNew() {
     setError(null);
-    setDraft({ name: "", description: "", permissions: [] });
+    setDraft({ name: "", description: "", permissions: [], maxDiscountPercent: "0" });
   }
 
   function startCopy(p: AccessProfile) {
     setError(null);
-    setDraft({ name: `${p.name} (cópia)`, description: p.description, permissions: [...p.permissions] });
+    setDraft({
+      name: `${p.name} (cópia)`,
+      description: p.description,
+      permissions: [...p.permissions],
+      maxDiscountPercent: String(p.maxDiscountPercent ?? 0),
+    });
   }
 
   function startEdit(p: AccessProfile) {
     setError(null);
-    setDraft({ id: p.id, name: p.name, description: p.description, permissions: [...p.permissions] });
+    setDraft({ id: p.id, name: p.name, description: p.description, permissions: [...p.permissions], maxDiscountPercent: String(p.maxDiscountPercent ?? 0) });
   }
 
   function setAll(on: boolean, keys: PermissionKey[] = ALL_PERMISSION_KEYS) {
@@ -118,7 +125,8 @@ export function PerfisSection() {
     setError(null);
     setSaving(true);
     try {
-      const body = { name: draft.name, description: draft.description, permissions: draft.permissions };
+      const maxDiscountPercent = Math.max(0, Math.min(100, Number(draft.maxDiscountPercent.replace(",", ".")) || 0));
+      const body = { name: draft.name, description: draft.description, permissions: draft.permissions, maxDiscountPercent };
       if (draft.id) await apiClient.updateAccessProfile(draft.id, body);
       else await apiClient.createAccessProfile(body);
       setDraft(null);
@@ -184,6 +192,16 @@ export function PerfisSection() {
                 placeholder="Para que serve este perfil"
                 className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Desconto máximo no Novo pedido (%)</label>
+              <input
+                inputMode="decimal"
+                value={draft.maxDiscountPercent}
+                onChange={(e) => setDraft({ ...draft, maxDiscountPercent: e.target.value })}
+                className="w-32 border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-slate-500 mt-1">Quanto quem tem este perfil pode dar de desconto por item ao digitar pedido. 0 = sem desconto.</p>
             </div>
           </div>
 
@@ -278,6 +296,7 @@ export function PerfisSection() {
                     {p.isAdmin && <span className="ml-2 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full align-middle">🔒 protegido</span>}
                   </p>
                   {p.description && <p className="text-xs text-slate-500 mt-0.5">{p.description}</p>}
+                  {!p.isAdmin && !!p.maxDiscountPercent && <p className="text-xs text-slate-500 mt-0.5">Desconto no pedido: até {p.maxDiscountPercent}%</p>}
                 </div>
                 <span className="text-xs text-slate-500 shrink-0">
                   {p.memberCount} {p.memberCount === 1 ? "pessoa" : "pessoas"}

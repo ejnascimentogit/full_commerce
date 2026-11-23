@@ -255,6 +255,8 @@ function mapAccessProfile(p: Row, memberCount: number) {
     description: p.description ?? "",
     permissions: p.is_admin ? [...PERMISSIONS] : (p.permissions ?? []),
     isAdmin: !!p.is_admin,
+    // Força de vendas: desconto máximo (%) que quem tem este perfil pode dar por item no Novo pedido. Administrador = 100.
+    maxDiscountPercent: p.is_admin ? 100 : Number(p.max_discount_percent ?? 0),
     memberCount,
   };
 }
@@ -387,7 +389,16 @@ function mapAdminUser(u: Record<string, unknown>, profile?: Record<string, unkno
     sectorId: u.sector_id ?? undefined,
     isSupervisor: u.is_supervisor ?? false,
     isManager: u.is_manager ?? false,
+    // Desconto máximo por item no Novo pedido: vem do perfil; administrador da empresa sem limite; sem perfil = 0.
+    maxDiscountPercent: sellerMaxDiscountFrom(u, profile),
   };
+}
+
+function sellerMaxDiscountFrom(u: Record<string, unknown>, profile?: Record<string, unknown> | null): number {
+  if (u.role === "platformAdmin") return 100;
+  if (u.role !== "staff" || !profile) return 0;
+  if (profile.is_admin) return 100;
+  return Math.max(0, Math.min(100, Number(profile.max_discount_percent ?? 0)));
 }
 
 function mapStaffSector(s: Record<string, unknown>) {
@@ -539,6 +550,8 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[], 
       quantity: Number(i.quantity),
       estimatedSubtotal: Number(i.estimated_subtotal),
       finalSubtotal: i.final_subtotal != null ? Number(i.final_subtotal) : undefined,
+      listPrice: i.list_price != null ? Number(i.list_price) : undefined,
+      discountPercent: i.discount_percent != null && Number(i.discount_percent) > 0 ? Number(i.discount_percent) : undefined,
     })),
     shippingAddress: o.shipping_address,
     regionId: o.region_id ?? undefined,
@@ -552,6 +565,9 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[], 
     statusHistory: (o.order_status_history ?? []).map((h: Record<string, unknown>) => ({ status: h.status, changedAt: h.changed_at })),
     tracking: o.tracking ?? undefined,
     createdAt: o.created_at,
+    origin: o.origin ?? "loja",
+    sellerName: o.seller_name ?? undefined,
+    note: o.note ?? undefined,
     itemAdjustments: adjustments.map((a) => ({
       productId: a.product_id,
       productName: a.product_name,
@@ -733,6 +749,9 @@ async function insertOrder(params: {
   shipping: number;
   total: number;
   couponCode?: string | null;
+  // Colunas a mais (ex.: pedido digitado pelo vendedor: origin, seller_admin_id, seller_name, note). Opcional: a loja e a
+  // conversão de orçamento não passam nada e continuam gravando igual a antes.
+  extra?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
   const { data: orderNumberRow } = await eco().rpc("next_order_number");
   const orderNumber = orderNumberRow as unknown as string;
@@ -754,6 +773,7 @@ async function insertOrder(params: {
       total: params.total,
       status: "PAID",
       coupon_code: params.couponCode ?? null,
+      ...(params.extra ?? {}),
     })
     .select("*")
     .single();
@@ -1977,6 +1997,238 @@ app.patch("/orders/:id/status", async (c) => {
   return c.json(mapOrder({ ...order, order_status_history: history }, items ?? [], await fetchOrderAdjustments(order.id)));
 });
 
+// ---------- Força de vendas: Novo pedido digitado pelo vendedor ----------
+// Fluxo (inspirado no maxPedido/ION Vendas): o vendedor escolhe um cliente da SUA carteira, confere a ficha (cadastro,
+// plano de pagamento, endereço, histórico), monta o pedido e envia. Tudo que a tela mostra como regra é conferido de novo
+// aqui: carteira, plano de pagamento, desconto máximo e pedido mínimo. Nada disso muda a loja nem a conversão de orçamento.
+
+function clampPercent(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n * 100) / 100));
+}
+
+// Desconto máximo por item de quem está logado: administrador da empresa = 100; equipe = o do perfil; sem perfil = 0.
+async function sellerMaxDiscount(admin: Row): Promise<number> {
+  if (admin.role === "platformAdmin") return 100;
+  if (admin.role !== "staff") return 0;
+  return sellerMaxDiscountFrom(admin, await fetchProfile(admin.company_id, admin.profile_id));
+}
+
+// Carteira do vendedor: null = vê todos os clientes da empresa (administrador, gerente, setor "vê tudo"); senão, só os
+// clientes vinculados a uma das pessoas da lista (a própria pessoa, ou o setor inteiro se for supervisor). Mesma
+// hierarquia de Atividades (visibleAssigneeIds), pra não existir duas regras de "quem vê quem".
+async function salesPortfolio(admin: Row): Promise<string[] | null> {
+  if (admin.role === "vendorAdmin") return [];
+  return visibleAssigneeIds(admin);
+}
+
+function inPortfolio(customer: Row, portfolio: string[] | null): boolean {
+  if (portfolio === null) return true;
+  return [customer.assigned_staff_id, customer.assigned_admin_id].some((id) => typeof id === "string" && portfolio.includes(id));
+}
+
+app.get("/admin/sales/customers", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const portfolio = await salesPortfolio(admin);
+  if (portfolio !== null && portfolio.length === 0) return c.json([]);
+  let query = eco().from("customers").select("*").eq("company_id", admin.company_id).order("name");
+  if (portfolio !== null) {
+    const list = portfolio.join(",");
+    query = query.or(`assigned_staff_id.in.(${list}),assigned_admin_id.in.(${list})`);
+  }
+  const { data: customers, error } = await query;
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  const ids = (customers ?? []).map((cust) => cust.id as string);
+  const { data: addresses } = ids.length ? await eco().from("addresses").select("*").in("customer_id", ids) : { data: [] };
+  const byCustomer = new Map<string, Row[]>();
+  for (const a of addresses ?? []) {
+    const list = byCustomer.get(a.customer_id as string) ?? [];
+    list.push(a);
+    byCustomer.set(a.customer_id as string, list);
+  }
+  return c.json((customers ?? []).map((cust) => mapCustomer(cust, byCustomer.get(cust.id as string) ?? [])));
+});
+
+// Histórico do cliente na ficha: últimos pedidos, só de cliente da carteira de quem pergunta.
+app.get("/admin/sales/customers/:id/orders", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const { data: customer } = await eco().from("customers").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
+  if (!customer || !inPortfolio(customer, await salesPortfolio(admin))) throw new ApiError(404, "NOT_FOUND");
+  const { data: orders } = await eco()
+    .from("orders")
+    .select("*")
+    .eq("customer_id", customer.id)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const results = await Promise.all(
+    (orders ?? []).map(async (o) => {
+      const { data: items } = await eco().from("order_items").select("*").eq("order_id", o.id);
+      return mapOrder({ ...o, order_status_history: [] }, items ?? []);
+    }),
+  );
+  return c.json(results);
+});
+
+// Tabela de produtos do vendedor: só ativos, já com o preço de promoção automática (o mesmo que o pedido vai cobrar) e o
+// preço de tabela separado, pra tela mostrar "de/por" e o estoque.
+app.get("/admin/sales/products", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const [{ data, error }, autoPromotions] = await Promise.all([
+    eco().from("products").select("*").eq("company_id", admin.company_id).eq("status", "active").order("name"),
+    getActiveAutoPromotions(admin.company_id),
+  ]);
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(
+    (data ?? []).map((p) => {
+      const promoPrice = bestPromoPrice(p, autoPromotions);
+      return { ...mapProduct(p), listPrice: unitPriceOf(p), promoPrice: promoPrice ?? undefined };
+    }),
+  );
+});
+
+app.post("/admin/orders", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const input = await c.req.json();
+  const companyId = admin.company_id as string;
+
+  const { data: customer } = await eco().from("customers").select("*").eq("id", input.customerId).eq("company_id", companyId).maybeSingle();
+  if (!customer || !inPortfolio(customer, await salesPortfolio(admin))) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Cliente fora da sua carteira.");
+  if (customer.status !== "active") throw new ApiError(422, "CUSTOMER_INACTIVE", "Cliente inativo.");
+
+  const { data: address } = await eco().from("addresses").select("*").eq("id", input.addressId).eq("customer_id", customer.id).maybeSingle();
+  if (!address) throw new ApiError(422, "ADDRESS_NOT_FOUND", "Escolha um endereço de entrega do cliente.");
+
+  // Plano de pagamento: vem do cadastro do cliente. Trocar exige a permissão pedidos.alterar_plano. Sem plano no
+  // cadastro, o vendedor escolhe entre as formas ligadas na loja.
+  const { data: settings } = await eco().from("store_settings").select("*").eq("company_id", companyId).single();
+  const enabled = (settings.enabled_payment_methods as string[] | null) ?? ["pix", "debit", "credit", "cash"];
+  const paymentMethod = String(input.paymentMethod ?? "");
+  if (!enabled.includes(paymentMethod)) throw new ApiError(422, "PAYMENT_METHOD_DISABLED", "Forma de pagamento não está ligada na loja.");
+  const customerPlan = customer.preferred_payment_method as string | null;
+  if (customerPlan && customerPlan !== paymentMethod && admin.role === "staff" && !staffPermissions(admin).has("pedidos.alterar_plano")) {
+    throw new ApiError(403, "PLAN_CHANGE_FORBIDDEN", "Você não pode trocar o plano de pagamento do cliente.");
+  }
+  let installments: number | null = null;
+  if (paymentMethod === "credit") {
+    installments = Math.max(1, Math.floor(Number(input.installments ?? 1)));
+    if (installments > Number(settings.max_installments ?? 1)) throw new ApiError(422, "TOO_MANY_INSTALLMENTS", "Parcelas acima do máximo da loja.");
+  }
+
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  if (rawItems.length === 0) throw new ApiError(422, "EMPTY_ORDER", "Inclua pelo menos um item.");
+  const maxDiscount = await sellerMaxDiscount(admin);
+  const productIds = rawItems.map((i: { productId: string }) => i.productId);
+  const [{ data: products }, autoPromotions] = await Promise.all([
+    eco().from("products").select("*").eq("company_id", companyId).eq("status", "active").in("id", productIds),
+    getActiveAutoPromotions(companyId),
+  ]);
+  const productById = new Map((products ?? []).map((p) => [p.id, p]));
+
+  const items = rawItems.map((i: { productId: string; quantity: number; discountPercent?: number }) => {
+    const product = productById.get(i.productId);
+    if (!product) throw new ApiError(422, "PRODUCT_NOT_FOUND", "Produto inexistente ou inativo.");
+    const quantity = Number(i.quantity);
+    if (!(quantity > 0)) throw new ApiError(422, "INVALID_QUANTITY", `Quantidade inválida em ${product.name}.`);
+    const discountPercent = clampPercent(i.discountPercent);
+    if (discountPercent > maxDiscount) {
+      throw new ApiError(422, "DISCOUNT_ABOVE_LIMIT", `Desconto de ${discountPercent}% em ${product.name} passa do seu limite (${maxDiscount}%).`);
+    }
+    // Espelho do pedido: preço de tabela (já com promoção automática) congelado em list_price; unit_price é o preço
+    // líquido que o cliente paga, então todo o resto do sistema (totais, separação, ajuste de peso) segue igual.
+    const base = buildOrderItem(product, quantity, autoPromotions);
+    const listPrice = Number(base.unit_price);
+    const unitPrice = Math.round(listPrice * (1 - discountPercent / 100) * 100) / 100;
+    const estimatedSubtotal = product.is_variable_weight ? unitPrice * Number(product.avg_weight ?? 1) * quantity : unitPrice * quantity;
+    return {
+      ...base,
+      unit_price: unitPrice,
+      estimated_subtotal: Math.round(estimatedSubtotal * 100) / 100,
+      list_price: listPrice,
+      discount_percent: discountPercent,
+    };
+  });
+  const subtotal = Math.round(items.reduce((sum: number, i: { estimated_subtotal: number }) => sum + i.estimated_subtotal, 0) * 100) / 100;
+  const { discount, shipping, total } = await calculateOrderTotals(companyId, customer.document_type as string, subtotal, null, []);
+
+  const order = await insertOrder({
+    companyId,
+    customerId: customer.id as string,
+    items,
+    shippingAddress: mapAddress(address),
+    regionId: customer.region_id as string | null,
+    paymentMethod,
+    installments,
+    subtotal,
+    discount,
+    shipping,
+    total,
+    couponCode: null,
+    extra: {
+      origin: "painel",
+      seller_admin_id: admin.id,
+      seller_name: admin.name,
+      note: typeof input.note === "string" && input.note.trim() ? input.note.trim().slice(0, 500) : null,
+    },
+  });
+
+  // Rascunho que virou pedido sai da lista.
+  if (typeof input.draftId === "string" && input.draftId) {
+    await eco().from("order_drafts").delete().eq("id", input.draftId).eq("admin_id", admin.id as string);
+  }
+
+  const { data: fullItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
+  return c.json(mapOrder({ ...order, order_status_history: history }, fullItems ?? [], []));
+});
+
+// Rascunhos ("Salvar e continuar depois"): ficam no servidor, por vendedor, pra abrir de qualquer aparelho.
+function mapOrderDraft(d: Row) {
+  return { id: d.id, customerId: d.customer_id, data: d.data ?? {}, updatedAt: d.updated_at };
+}
+
+app.get("/admin/order-drafts", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const { data, error } = await eco()
+    .from("order_drafts")
+    .select("*")
+    .eq("company_id", admin.company_id)
+    .eq("admin_id", admin.id)
+    .order("updated_at", { ascending: false });
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapOrderDraft));
+});
+
+app.put("/admin/order-drafts/:id", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const input = await c.req.json();
+  const id = c.req.param("id");
+  const { data: customer } = await eco().from("customers").select("*").eq("id", input.customerId).eq("company_id", admin.company_id).maybeSingle();
+  if (!customer || !inPortfolio(customer, await salesPortfolio(admin))) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Cliente fora da sua carteira.");
+  const { data: existing } = await eco().from("order_drafts").select("admin_id").eq("id", id).maybeSingle();
+  if (existing && existing.admin_id !== admin.id) throw new ApiError(404, "NOT_FOUND");
+  const { data, error } = await eco()
+    .from("order_drafts")
+    .upsert({
+      id,
+      company_id: admin.company_id,
+      admin_id: admin.id,
+      customer_id: customer.id,
+      data: input.data ?? {},
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapOrderDraft(data));
+});
+
+app.delete("/admin/order-drafts/:id", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  await eco().from("order_drafts").delete().eq("id", c.req.param("id")).eq("admin_id", admin.id as string);
+  return c.json({ ok: true });
+});
+
 app.get("/admin/quotes", async (c) => {
   const admin = await requirePerm(c, "orcamentos.ver");
   const { data: quotes } = await eco().from("quotes").select("*").eq("company_id", admin.company_id).order("created_at", { ascending: false });
@@ -2818,6 +3070,7 @@ app.post("/admin/access-profiles", async (c) => {
       name,
       description: String(input.description ?? "").trim().slice(0, 200),
       permissions,
+      max_discount_percent: clampPercent(input.maxDiscountPercent),
       sort_order: 500,
     })
     .select("*")
@@ -2846,6 +3099,7 @@ app.patch("/admin/access-profiles/:id", async (c) => {
   }
   if ("description" in patch) row.description = String(patch.description ?? "").trim().slice(0, 200);
   if ("permissions" in patch) row.permissions = withRequirements(sanitizePermissionList(patch.permissions));
+  if ("maxDiscountPercent" in patch) row.max_discount_percent = clampPercent(patch.maxDiscountPercent);
   if (Object.keys(row).length === 0) return c.json(mapAccessProfile(existing, await countProfileMembers(admin.company_id, existing.id)));
   row.updated_at = new Date().toISOString();
   const { data, error } = await eco()
@@ -2863,6 +3117,8 @@ app.patch("/admin/access-profiles/:id", async (c) => {
   const after = new Set(profilePermissionList(data));
   await logAccess(admin, "profile.update", "profile", data, {
     renamedFrom: existing.name !== data.name ? existing.name : undefined,
+    maxDiscountPercent:
+      Number(existing.max_discount_percent ?? 0) !== Number(data.max_discount_percent ?? 0) ? Number(data.max_discount_percent ?? 0) : undefined,
     added: [...after].filter((p) => !before.has(p)),
     removed: [...before].filter((p) => !after.has(p)),
   });

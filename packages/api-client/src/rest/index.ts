@@ -1,6 +1,10 @@
 import type {
   AccessAuditEntry,
   AccessProfile,
+  CreateAdminOrderInput,
+  OrderDraft,
+  OrderDraftData,
+  SalesProduct,
   Activity,
   ActivityClient,
   ActivityOutcome,
@@ -237,6 +241,18 @@ function createRestApiClient(baseUrl: string): ApiClient {
       request<Quote>(`/api/admin/quotes/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     convertAdminQuoteToOrder: (id, input) =>
       request<Order>(`/api/admin/quotes/${id}/convert`, { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    getSalesCustomers: () => request<Customer[]>("/api/admin/sales/customers", { tokenKey: ADMIN_TOKEN_KEY }),
+    getSalesCustomerOrders: (customerId: string) =>
+      request<Order[]>(`/api/admin/sales/customers/${customerId}/orders`, { tokenKey: ADMIN_TOKEN_KEY }),
+    getSalesProducts: () => request<SalesProduct[]>("/api/admin/sales/products", { tokenKey: ADMIN_TOKEN_KEY }),
+    createAdminOrder: (input: CreateAdminOrderInput) =>
+      request<Order>("/api/admin/orders", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    getOrderDrafts: () => request<OrderDraft[]>("/api/admin/order-drafts", { tokenKey: ADMIN_TOKEN_KEY }),
+    saveOrderDraft: (id: string, input: { customerId: string; data: OrderDraftData }) =>
+      request<OrderDraft>(`/api/admin/order-drafts/${id}`, { method: "PUT", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
+    deleteOrderDraft: async (id: string) => {
+      await request<{ ok: boolean }>(`/api/admin/order-drafts/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY });
+    },
     getAdminCarts: () => request<Cart[]>("/api/admin/carts", { tokenKey: ADMIN_TOKEN_KEY }),
     getAdminCustomers: () => request<Customer[]>("/api/admin/customers", { tokenKey: ADMIN_TOKEN_KEY }),
     createAdminCustomer: (input: AdminCreateCustomerInput) =>
@@ -277,9 +293,9 @@ function createRestApiClient(baseUrl: string): ApiClient {
     deleteStaffSector: (id: string) =>
       request<void>(`/api/admin/staff-sectors/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
     getAccessProfiles: () => request<AccessProfile[]>("/api/admin/access-profiles", { tokenKey: ADMIN_TOKEN_KEY }),
-    createAccessProfile: (input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }) =>
+    createAccessProfile: (input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string; maxDiscountPercent?: number }) =>
       request<AccessProfile>("/api/admin/access-profiles", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
-    updateAccessProfile: (id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }) =>
+    updateAccessProfile: (id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[]; maxDiscountPercent?: number }) =>
       request<AccessProfile>(`/api/admin/access-profiles/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     deleteAccessProfile: (id: string) =>
       request<void>(`/api/admin/access-profiles/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
