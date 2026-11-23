@@ -1,13 +1,22 @@
 -- Força de vendas: Novo pedido digitado pelo vendedor (Comercial -> Vendas -> Pedidos -> + Novo pedido).
 -- Só acrescenta: colunas novas com valor padrão e uma tabela nova. Pedidos da loja e conversão de orçamento continuam iguais.
 
--- Desconto máximo (%) por item que cada perfil de acesso pode dar no Novo pedido. 0 = sem desconto.
-alter table ecommerce.access_profiles
-  add column if not exists max_discount_percent numeric not null default 0
-  check (max_discount_percent >= 0 and max_discount_percent <= 100);
+-- Faixa de preço do Novo pedido (proteção de markup), em % sobre o preço de tabela:
+-- padrão da empresa (0/0 = vendedor não muda o preço) e, opcional, limite próprio por produto (nulo = usa o padrão).
+alter table ecommerce.store_settings
+  add column if not exists sales_max_discount_percent numeric not null default 0
+    check (sales_max_discount_percent >= 0 and sales_max_discount_percent <= 100),
+  add column if not exists sales_max_surcharge_percent numeric not null default 0
+    check (sales_max_surcharge_percent >= 0 and sales_max_surcharge_percent <= 100);
 
--- Espelho do item: preço de tabela (com promoção automática) e o desconto dado pelo vendedor. unit_price continua sendo o
--- preço líquido cobrado. Itens antigos ficam com list_price nulo e desconto 0.
+alter table ecommerce.products
+  add column if not exists max_discount_percent numeric
+    check (max_discount_percent is null or (max_discount_percent >= 0 and max_discount_percent <= 100)),
+  add column if not exists max_surcharge_percent numeric
+    check (max_surcharge_percent is null or (max_surcharge_percent >= 0 and max_surcharge_percent <= 100));
+
+-- Espelho do item: preço de tabela (com promoção automática) e o desconto dado pelo vendedor (negativo = acréscimo).
+-- unit_price continua sendo o preço líquido cobrado. Itens antigos ficam com list_price nulo e desconto 0.
 alter table ecommerce.order_items
   add column if not exists list_price numeric,
   add column if not exists discount_percent numeric not null default 0;

@@ -13,15 +13,27 @@ export function salesBasePrice(product: Pick<SalesProduct, "listPrice" | "promoP
   return product.promoPrice != null && product.promoPrice > 0 && product.promoPrice < product.listPrice ? product.promoPrice : product.listPrice;
 }
 
-/** Preço unitário líquido depois do desconto do vendedor (%). Desconto fora de 0..100 é limitado. */
+/** Preço unitário líquido depois do desconto do vendedor (%); negativo = acréscimo. Limitado a -100..100. */
 export function netUnitPrice(basePrice: number, discountPercent: number): number {
-  const pct = Math.max(0, Math.min(100, Number.isFinite(discountPercent) ? discountPercent : 0));
+  const pct = Math.max(-100, Math.min(100, Number.isFinite(discountPercent) ? discountPercent : 0));
   return round2(basePrice * (1 - pct / 100));
 }
 
-/** Menor preço unitário que o vendedor pode digitar, dado o limite de desconto dele. */
+/** Menor preço unitário permitido, dado o desconto máximo (%). */
 export function minUnitPrice(basePrice: number, maxDiscountPercent: number): number {
   return netUnitPrice(basePrice, maxDiscountPercent);
+}
+
+/** Maior preço unitário permitido, dado o acréscimo máximo (%). */
+export function maxUnitPrice(basePrice: number, maxSurchargePercent: number): number {
+  return netUnitPrice(basePrice, -maxSurchargePercent);
+}
+
+/** Faixa de preço do item no Novo pedido (proteção de markup): da tabela menos o desconto máximo à tabela mais o acréscimo máximo. */
+export function salesPriceRange(product: Pick<SalesProduct, "listPrice" | "promoPrice" | "priceLimits">): { base: number; min: number; max: number } {
+  const base = salesBasePrice(product);
+  const limits = product.priceLimits ?? { maxDiscountPercent: 0, maxSurchargePercent: 0 };
+  return { base, min: minUnitPrice(base, limits.maxDiscountPercent), max: maxUnitPrice(base, limits.maxSurchargePercent) };
 }
 
 /** Desconto (%) equivalente a um preço digitado, com 2 casas. Preço acima da tabela dá negativo (acréscimo). */
@@ -111,7 +123,6 @@ export interface SalesAlertInput {
   canChangePlan: boolean;
   lines: SalesOrderLine[];
   productsById: Map<string, SalesProduct>;
-  maxDiscountPercent: number;
   subtotal: number;
   minOrderValue?: number;
 }
@@ -150,19 +161,20 @@ export function salesOrderAlerts(input: SalesAlertInput): SalesAlert[] {
       continue;
     }
     if (!(line.quantity > 0)) alerts.push({ level: "error", code: "INVALID_QUANTITY", message: `Quantidade inválida em ${product.name}.`, productId: product.id });
-    const base = salesBasePrice(product);
-    if (line.unitPrice != null && round2(line.unitPrice) > base) {
+    const range = salesPriceRange(product);
+    const price = lineNetPrice(product, line);
+    if (price < range.min) {
       alerts.push({
         level: "error",
-        code: "PRICE_ABOVE_TABLE",
-        message: `${product.name}: preço digitado acima da tabela (${brl(base)}).`,
+        code: "PRICE_BELOW_MIN",
+        message: `${product.name}: desconto acima do máximo (${product.priceLimits.maxDiscountPercent}%). Preço mínimo ${brl(range.min)}.`,
         productId: product.id,
       });
-    } else if (line.unitPrice != null ? round2(line.unitPrice) < minUnitPrice(base, input.maxDiscountPercent) : line.discountPercent > input.maxDiscountPercent) {
+    } else if (price > range.max) {
       alerts.push({
         level: "error",
-        code: "DISCOUNT_ABOVE_LIMIT",
-        message: `${product.name}: desconto de ${lineDiscountPercent(product, line)}% passa do seu limite (${input.maxDiscountPercent}%, preço mínimo ${brl(minUnitPrice(base, input.maxDiscountPercent))}).`,
+        code: "PRICE_ABOVE_MAX",
+        message: `${product.name}: acréscimo acima do máximo (${product.priceLimits.maxSurchargePercent}%). Preço máximo ${brl(range.max)}.`,
         productId: product.id,
       });
     }

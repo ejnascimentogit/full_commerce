@@ -42,12 +42,14 @@ export {
   lineDiscountPercent,
   lineNetPrice,
   lineSubtotal,
+  maxUnitPrice,
   minUnitPrice,
   netUnitPrice,
   salesBasePrice,
   salesLineSubtotal,
   salesOrderAlerts,
   salesOrderTotals,
+  salesPriceRange,
 } from "./sales";
 export type { SalesAlert, SalesAlertLevel, SalesOrderTotals } from "./sales";
 export { formatPhone } from "./phone";

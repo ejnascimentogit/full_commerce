@@ -51,6 +51,8 @@ const EXPECTED: Record<string, string> = {
   "GET /admin/sales/customers/:id/orders": P("pedidos.criar"),
   "GET /admin/sales/products": P("pedidos.criar"),
   "POST /admin/orders": P("pedidos.criar"),
+  "GET /admin/sales/pricing": "requirePlatformAdmin()",
+  "PATCH /admin/sales/pricing": "requirePlatformAdmin()",
   "GET /admin/order-drafts": P("pedidos.criar"),
   "PUT /admin/order-drafts/:id": P("pedidos.criar"),
   "DELETE /admin/order-drafts/:id": P("pedidos.criar"),

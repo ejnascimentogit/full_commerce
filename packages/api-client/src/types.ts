@@ -30,6 +30,7 @@ import type {
   PermissionKey,
   Promotion,
   Quote,
+  SalesPricingSettings,
   SalesProduct,
   QuoteStatus,
   StaffSector,
@@ -230,17 +231,8 @@ export interface ApiClient {
   deleteStaffSector(id: string): Promise<void>;
   /** Perfis de acesso e histórico de mudanças — só platformAdmin (Configurações); o backend recusa os outros com 403. */
   getAccessProfiles(): Promise<AccessProfile[]>;
-  createAccessProfile(input: {
-    name: string;
-    description?: string;
-    permissions?: PermissionKey[];
-    copyFromId?: string;
-    maxDiscountPercent?: number;
-  }): Promise<AccessProfile>;
-  updateAccessProfile(
-    id: string,
-    patch: { name?: string; description?: string; permissions?: PermissionKey[]; maxDiscountPercent?: number },
-  ): Promise<AccessProfile>;
+  createAccessProfile(input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }): Promise<AccessProfile>;
+  updateAccessProfile(id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }): Promise<AccessProfile>;
   deleteAccessProfile(id: string): Promise<void>;
   getAccessAudit(): Promise<AccessAuditEntry[]>;
 
@@ -303,9 +295,12 @@ export interface ApiClient {
   getSalesCustomers(): Promise<Customer[]>;
   /** Últimos pedidos do cliente (aba Histórico da ficha) — só de cliente da carteira. */
   getSalesCustomerOrders(customerId: string): Promise<Order[]>;
-  /** Produtos ativos com preço de tabela, promoção automática e estoque (aba Produtos do pedido). */
+  /** Produtos ativos com preço de tabela, promoção automática, estoque e faixa de preço (aba Produtos do pedido). */
   getSalesProducts(): Promise<SalesProduct[]>;
-  /** Envia o pedido em nome do cliente. O servidor confere carteira, plano de pagamento, desconto máximo e pedido mínimo. */
+  /** Padrão da empresa para a faixa de preço (desconto e acréscimo máximos) — só o administrador. */
+  getSalesPricing(): Promise<SalesPricingSettings>;
+  updateSalesPricing(patch: Partial<SalesPricingSettings>): Promise<SalesPricingSettings>;
+  /** Envia o pedido em nome do cliente. O servidor confere carteira, plano de pagamento, faixa de preço e pedido mínimo. */
   createAdminOrder(input: CreateAdminOrderInput): Promise<Order>;
   /** Rascunhos de pedido de quem está logado (ficam no servidor, abrem de qualquer aparelho). */
   getOrderDrafts(): Promise<OrderDraft[]>;

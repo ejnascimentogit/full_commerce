@@ -6,12 +6,14 @@ import {
   lineDiscountPercent,
   lineNetPrice,
   lineSubtotal,
+  maxUnitPrice,
   minUnitPrice,
   netUnitPrice,
   salesBasePrice,
   salesLineSubtotal,
   salesOrderAlerts,
   salesOrderTotals,
+  salesPriceRange,
 } from "./sales";
 
 function product(overrides: Partial<SalesProduct> = {}): SalesProduct {
@@ -32,6 +34,7 @@ function product(overrides: Partial<SalesProduct> = {}): SalesProduct {
     weight: 5,
     dimensions: { length: 0, width: 0, height: 0 },
     listPrice: 20,
+    priceLimits: { maxDiscountPercent: 5, maxSurchargePercent: 0 },
     ...overrides,
   } as SalesProduct;
 }
@@ -46,7 +49,7 @@ describe("preço do item no Novo pedido", () => {
     expect(netUnitPrice(20, 10)).toBe(18);
     expect(netUnitPrice(9.99, 3)).toBe(9.69);
     expect(netUnitPrice(20, 150)).toBe(0);
-    expect(netUnitPrice(20, -5)).toBe(20);
+    expect(netUnitPrice(20, -5)).toBe(21);
   });
   it("peso variável usa o peso médio", () => {
     expect(salesLineSubtotal(product({ listPrice: 40, isVariableWeight: true, avgWeight: 1.5 }), 2, 0)).toBe(120);
@@ -80,7 +83,6 @@ describe("alertas do Novo pedido", () => {
     canChangePlan: false,
     lines: [{ productId: "p1", quantity: 2, discountPercent: 0 }],
     productsById: new Map([["p1", product()]]),
-    maxDiscountPercent: 5,
     subtotal: 40,
   };
   const codes = (input: Parameters<typeof salesOrderAlerts>[0]) => salesOrderAlerts(input).map((a) => a.code);
@@ -88,9 +90,9 @@ describe("alertas do Novo pedido", () => {
   it("pedido certinho não tem alerta", () => {
     expect(salesOrderAlerts(base)).toEqual([]);
   });
-  it("desconto acima do limite do vendedor bloqueia", () => {
-    const alerts = salesOrderAlerts({ ...base, lines: [{ productId: "p1", quantity: 2, discountPercent: 6 }] });
-    expect(alerts[0]).toMatchObject({ level: "error", code: "DISCOUNT_ABOVE_LIMIT" });
+  it("desconto acima do máximo do produto bloqueia; acréscimo sem permissão do produto também", () => {
+    expect(salesOrderAlerts({ ...base, lines: [{ productId: "p1", quantity: 2, discountPercent: 6 }] })[0]).toMatchObject({ level: "error", code: "PRICE_BELOW_MIN" });
+    expect(salesOrderAlerts({ ...base, lines: [{ productId: "p1", quantity: 2, discountPercent: -1 }] })[0]).toMatchObject({ level: "error", code: "PRICE_ABOVE_MAX" });
   });
   it("trocar o plano do cliente: bloqueia sem permissão, só avisa com permissão", () => {
     expect(salesOrderAlerts({ ...base, paymentMethod: "credit" })[0]).toMatchObject({ level: "error", code: "PLAN_CHANGE_FORBIDDEN" });
@@ -134,24 +136,31 @@ describe("preço digitado pelo vendedor", () => {
   it("sem preço digitado, usa o %", () => {
     expect(lineNetPrice(product(), { discountPercent: 10 })).toBe(18);
   });
-  it("preço mínimo = tabela menos o limite do vendedor", () => {
+  it("faixa de preço: desconto e acréscimo máximos do produto", () => {
     expect(minUnitPrice(52.47, 5)).toBe(49.85);
+    expect(maxUnitPrice(52.47, 10)).toBe(57.72);
+    expect(salesPriceRange(product({ listPrice: 20, promoPrice: 18, priceLimits: { maxDiscountPercent: 10, maxSurchargePercent: 5 } }))).toEqual({
+      base: 18,
+      min: 16.2,
+      max: 18.9,
+    });
+    expect(salesPriceRange(product({ priceLimits: { maxDiscountPercent: 0, maxSurchargePercent: 0 } }))).toEqual({ base: 20, min: 20, max: 20 });
   });
-  it("alertas: abaixo do mínimo e acima da tabela bloqueiam; no mínimo exato passa", () => {
+  it("alertas: fora da faixa bloqueia; nas pontas exatas passa", () => {
     const base = {
       customer: { status: "active" as const, regionId: "r1", preferredPaymentMethod: "pix" as const },
       addressId: "a1",
       paymentMethod: "pix" as const,
       enabledPaymentMethods: ["pix"] as "pix"[],
       canChangePlan: false,
-      productsById: new Map([["p1", product({ listPrice: 52.47 })]]),
-      maxDiscountPercent: 5,
+      productsById: new Map([["p1", product({ listPrice: 52.47, priceLimits: { maxDiscountPercent: 5, maxSurchargePercent: 10 } })]]),
       subtotal: 100,
     };
     const at = (unitPrice: number) => salesOrderAlerts({ ...base, lines: [{ productId: "p1", quantity: 1, discountPercent: 0, unitPrice }] }).map((a) => a.code);
-    expect(at(49.84)).toEqual(["DISCOUNT_ABOVE_LIMIT"]);
+    expect(at(49.84)).toEqual(["PRICE_BELOW_MIN"]);
     expect(at(49.85)).toEqual([]);
-    expect(at(52.48)).toEqual(["PRICE_ABOVE_TABLE"]);
+    expect(at(57.72)).toEqual([]);
+    expect(at(57.73)).toEqual(["PRICE_ABOVE_MAX"]);
   });
   it("totais usam o preço digitado", () => {
     const products = new Map([["p1", product({ listPrice: 20 })]]);

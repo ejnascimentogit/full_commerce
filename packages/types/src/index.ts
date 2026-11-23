@@ -49,8 +49,6 @@ export interface AccessProfile {
   description: string;
   permissions: PermissionKey[];
   isAdmin: boolean;
-  /** Força de vendas: desconto máximo (%) por item que quem tem este perfil pode dar no Novo pedido. Administrador = 100. */
-  maxDiscountPercent?: number;
   /** Quantas pessoas da equipe usam este perfil hoje (perfil em uso não pode ser excluído). */
   memberCount: number;
 }
@@ -103,8 +101,6 @@ export interface AdminUser {
   /** ajustes só desta pessoa em relação ao perfil: o que foi liberado a mais e o que foi bloqueado. */
   permissionGrants?: PermissionKey[];
   permissionRevokes?: PermissionKey[];
-  /** Desconto máximo (%) por item no Novo pedido, já resolvido pelo servidor (administrador = 100, sem perfil = 0). */
-  maxDiscountPercent?: number;
 }
 
 /** "wholesale" = atacado B2B multi-fornecedor (modelo padrão, Praso-like). "televendas" = varejo B2C por telemarketing com crediário próprio. Ver .claude/skills/ecommerce/references/televendas.md. */
@@ -282,6 +278,11 @@ export interface Product {
   variants: ProductVariant[];
   status: "active" | "inactive" | "draft";
   weight?: number;
+  /** Força de vendas (só nas rotas do admin, nunca no catálogo público): desconto máximo (%) que o vendedor pode dar neste
+   * produto no Novo pedido. Ausente/null = usa o padrão da empresa (SalesPricingSettings); null no update limpa. */
+  maxDiscountPercent?: number | null;
+  /** Idem, acréscimo máximo (%) acima do preço de tabela. Ausente/null = padrão da empresa. */
+  maxSurchargePercent?: number | null;
 }
 
 // Carrinho persistido no servidor a partir do momento em que o cliente
@@ -342,7 +343,7 @@ export interface OrderItem {
   finalSubtotal?: number;
   /** Pedido digitado pelo vendedor: preço de tabela (com promoção automática) antes do desconto do vendedor. unitPrice é o líquido. */
   listPrice?: number;
-  /** Pedido digitado pelo vendedor: desconto (%) dado no item. Ausente = sem desconto. */
+  /** Pedido digitado pelo vendedor: desconto (%) dado no item; negativo = acréscimo. Ausente = preço de tabela. */
   discountPercent?: number;
 }
 
@@ -380,14 +381,25 @@ export interface Order {
 export interface SalesProduct extends Product {
   listPrice: number;
   promoPrice?: number;
+  /** Faixa de preço já resolvida pelo servidor (limite do produto ou, sem ele, o padrão da empresa). */
+  priceLimits: SalesPriceLimits;
 }
+
+/** Faixa de preço do Novo pedido, em % sobre o preço de tabela (proteção de markup). 0/0 = preço travado. */
+export interface SalesPriceLimits {
+  maxDiscountPercent: number;
+  maxSurchargePercent: number;
+}
+
+/** Padrão da empresa para a faixa de preço (Configurações -> Força de vendas). Só o administrador lê e altera. */
+export type SalesPricingSettings = SalesPriceLimits;
 
 export interface SalesOrderLine {
   productId: string;
   quantity: number;
-  /** Desconto do vendedor no item, em %, limitado por AdminUser.maxDiscountPercent (o servidor confere). */
+  /** Desconto do vendedor no item, em % (negativo = acréscimo), dentro da faixa do produto (o servidor confere). */
   discountPercent: number;
-  /** Preço unitário digitado pelo vendedor. Quando presente, vale ele (o % é só reflexo); não pode passar do preço de tabela nem ficar abaixo do limite de desconto. */
+  /** Preço unitário digitado pelo vendedor. Quando presente, vale ele (o % é só reflexo); precisa ficar dentro da faixa do produto. */
   unitPrice?: number;
 }
 

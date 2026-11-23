@@ -255,8 +255,6 @@ function mapAccessProfile(p: Row, memberCount: number) {
     description: p.description ?? "",
     permissions: p.is_admin ? [...PERMISSIONS] : (p.permissions ?? []),
     isAdmin: !!p.is_admin,
-    // Força de vendas: desconto máximo (%) que quem tem este perfil pode dar por item no Novo pedido. Administrador = 100.
-    maxDiscountPercent: p.is_admin ? 100 : Number(p.max_discount_percent ?? 0),
     memberCount,
   };
 }
@@ -389,16 +387,7 @@ function mapAdminUser(u: Record<string, unknown>, profile?: Record<string, unkno
     sectorId: u.sector_id ?? undefined,
     isSupervisor: u.is_supervisor ?? false,
     isManager: u.is_manager ?? false,
-    // Desconto máximo por item no Novo pedido: vem do perfil; administrador da empresa sem limite; sem perfil = 0.
-    maxDiscountPercent: sellerMaxDiscountFrom(u, profile),
   };
-}
-
-function sellerMaxDiscountFrom(u: Record<string, unknown>, profile?: Record<string, unknown> | null): number {
-  if (u.role === "platformAdmin") return 100;
-  if (u.role !== "staff" || !profile) return 0;
-  if (profile.is_admin) return 100;
-  return Math.max(0, Math.min(100, Number(profile.max_discount_percent ?? 0)));
 }
 
 function mapStaffSector(s: Record<string, unknown>) {
@@ -1599,6 +1588,9 @@ app.post("/products", async (c) => {
       is_variable_weight: input.isVariableWeight ?? false,
       avg_weight: input.avgWeight ?? null,
       is_seasonal: input.isSeasonal ?? false,
+      // Limites de preço do Novo pedido: fornecedor (vendorAdmin) não define a margem da plataforma.
+      max_discount_percent: admin.role === "vendorAdmin" ? null : productLimitValue(input.maxDiscountPercent),
+      max_surcharge_percent: admin.role === "vendorAdmin" ? null : productLimitValue(input.maxSurchargePercent),
       stock: input.stock ?? 0,
       status: input.status ?? "active",
       weight: input.weight ?? null,
@@ -1609,7 +1601,7 @@ app.post("/products", async (c) => {
     if (error.code === "23505") throw new ApiError(422, "DUPLICATE_REFERENCE_CODE", "Já existe um produto com esse código de referência do cliente.");
     throw new ApiError(500, "DB_ERROR", error.message);
   }
-  return c.json(mapProduct(data));
+  return c.json(mapAdminProduct(data));
 });
 
 app.patch("/products/:id", async (c) => {
@@ -1646,13 +1638,17 @@ app.patch("/products/:id", async (c) => {
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
   if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
   if ("customer_reference_code" in row && !row.customer_reference_code) row.customer_reference_code = null;
+  if (admin.role !== "vendorAdmin") {
+    if ("maxDiscountPercent" in patch) row.max_discount_percent = productLimitValue(patch.maxDiscountPercent);
+    if ("maxSurchargePercent" in patch) row.max_surcharge_percent = productLimitValue(patch.maxSurchargePercent);
+  }
 
   const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) {
     if (error.code === "23505") throw new ApiError(422, "DUPLICATE_REFERENCE_CODE", "Já existe um produto com esse código de referência do cliente.");
     throw new ApiError(500, "DB_ERROR", error.message);
   }
-  return c.json(mapProduct(data));
+  return c.json(mapAdminProduct(data));
 });
 
 app.post("/products/:id/photos", async (c) => {
@@ -1673,7 +1669,7 @@ app.get("/admin/products", async (c) => {
   if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json((data ?? []).map((p) => mapProduct(p)));
+  return c.json((data ?? []).map((p) => mapAdminProduct(p)));
 });
 
 // Sem aplicar bestPromoPrice de propósito: o admin precisa ver/editar o
@@ -1686,7 +1682,7 @@ app.get("/admin/products/:id", async (c) => {
   if (!product) throw new ApiError(404, "NOT_FOUND");
   if (admin.role === "vendorAdmin" && product.vendor_id !== admin.vendor_id) throw new ApiError(403, "FORBIDDEN");
   const { data: variants } = await eco().from("product_variants").select("*").eq("product_id", product.id);
-  return c.json(mapProduct(product, variants ?? []));
+  return c.json(mapAdminProduct(product, variants ?? []));
 });
 
 // ---------- Admin: fornecedores ----------
@@ -2008,11 +2004,30 @@ function clampPercent(value: unknown): number {
   return Math.max(0, Math.min(100, Math.round(n * 100) / 100));
 }
 
-// Desconto máximo por item de quem está logado: administrador da empresa = 100; equipe = o do perfil; sem perfil = 0.
-async function sellerMaxDiscount(admin: Row): Promise<number> {
-  if (admin.role === "platformAdmin") return 100;
-  if (admin.role !== "staff") return 0;
-  return sellerMaxDiscountFrom(admin, await fetchProfile(admin.company_id, admin.profile_id));
+// Faixa de preço do Novo pedido (proteção de markup): cada produto pode ter limite próprio de desconto e de acréscimo
+// sobre o preço de tabela; sem limite próprio, vale o padrão da empresa (store_settings). Padrão 0/0 = preço travado.
+function productPriceLimits(product: Row, settings: Row): { maxDiscountPercent: number; maxSurchargePercent: number } {
+  const pick = (own: unknown, fallback: unknown) => (own != null ? clampPercent(own) : clampPercent(fallback ?? 0));
+  return {
+    maxDiscountPercent: pick(product.max_discount_percent, settings.sales_max_discount_percent),
+    maxSurchargePercent: pick(product.max_surcharge_percent, settings.sales_max_surcharge_percent),
+  };
+}
+
+// Produto para as telas do admin: inclui os limites próprios de preço. Fora do mapProduct de propósito, porque o
+// catálogo público usa o mapProduct e o cliente não deve ver até onde o vendedor pode negociar.
+function mapAdminProduct(p: Row, variants: Row[] = []) {
+  return {
+    ...mapProduct(p, variants),
+    maxDiscountPercent: p.max_discount_percent != null ? Number(p.max_discount_percent) : undefined,
+    maxSurchargePercent: p.max_surcharge_percent != null ? Number(p.max_surcharge_percent) : undefined,
+  };
+}
+
+// Limites próprios do produto vindos do cadastro: vazio/nulo = usa o padrão da empresa.
+function productLimitValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  return clampPercent(value);
 }
 
 // Carteira do vendedor: null = vê todos os clientes da empresa (administrador, gerente, setor "vê tudo"); senão, só os
@@ -2074,17 +2089,52 @@ app.get("/admin/sales/customers/:id/orders", async (c) => {
 // preço de tabela separado, pra tela mostrar "de/por" e o estoque.
 app.get("/admin/sales/products", async (c) => {
   const admin = await requirePerm(c, "pedidos.criar");
-  const [{ data, error }, autoPromotions] = await Promise.all([
+  const [{ data, error }, autoPromotions, { data: settings }] = await Promise.all([
     eco().from("products").select("*").eq("company_id", admin.company_id).eq("status", "active").order("name"),
     getActiveAutoPromotions(admin.company_id),
+    eco().from("store_settings").select("sales_max_discount_percent, sales_max_surcharge_percent").eq("company_id", admin.company_id).single(),
   ]);
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
   return c.json(
     (data ?? []).map((p) => {
       const promoPrice = bestPromoPrice(p, autoPromotions);
-      return { ...mapProduct(p), listPrice: unitPriceOf(p), promoPrice: promoPrice ?? undefined };
+      return { ...mapProduct(p), listPrice: unitPriceOf(p), promoPrice: promoPrice ?? undefined, priceLimits: productPriceLimits(p, settings ?? {}) };
     }),
   );
+});
+
+// Padrão da empresa para a faixa de preço do Novo pedido (Configurações -> Força de vendas). Só o administrador: é
+// margem da empresa, e fica fora do GET /settings público pra loja não mostrar até onde dá pra negociar.
+app.get("/admin/sales/pricing", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { data } = await eco()
+    .from("store_settings")
+    .select("sales_max_discount_percent, sales_max_surcharge_percent")
+    .eq("company_id", admin.company_id)
+    .single();
+  return c.json({
+    maxDiscountPercent: Number(data?.sales_max_discount_percent ?? 0),
+    maxSurchargePercent: Number(data?.sales_max_surcharge_percent ?? 0),
+  });
+});
+
+app.patch("/admin/sales/pricing", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const patch = await c.req.json();
+  const row: Row = { updated_at: new Date().toISOString() };
+  if ("maxDiscountPercent" in patch) row.sales_max_discount_percent = clampPercent(patch.maxDiscountPercent);
+  if ("maxSurchargePercent" in patch) row.sales_max_surcharge_percent = clampPercent(patch.maxSurchargePercent);
+  const { data, error } = await eco()
+    .from("store_settings")
+    .update(row)
+    .eq("company_id", admin.company_id)
+    .select("sales_max_discount_percent, sales_max_surcharge_percent")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json({
+    maxDiscountPercent: Number(data.sales_max_discount_percent ?? 0),
+    maxSurchargePercent: Number(data.sales_max_surcharge_percent ?? 0),
+  });
 });
 
 app.post("/admin/orders", async (c) => {
@@ -2117,7 +2167,6 @@ app.post("/admin/orders", async (c) => {
 
   const rawItems = Array.isArray(input.items) ? input.items : [];
   if (rawItems.length === 0) throw new ApiError(422, "EMPTY_ORDER", "Inclua pelo menos um item.");
-  const maxDiscount = await sellerMaxDiscount(admin);
   const productIds = rawItems.map((i: { productId: string }) => i.productId);
   const [{ data: products }, autoPromotions] = await Promise.all([
     eco().from("products").select("*").eq("company_id", companyId).eq("status", "active").in("id", productIds),
@@ -2134,25 +2183,26 @@ app.post("/admin/orders", async (c) => {
     // líquido que o cliente paga, então todo o resto do sistema (totais, separação, ajuste de peso) segue igual.
     const base = buildOrderItem(product, quantity, autoPromotions);
     const listPrice = Number(base.unit_price);
-    const minPrice = Math.round(listPrice * (1 - maxDiscount / 100) * 100) / 100;
+    // Faixa permitida (proteção de markup): do desconto máximo ao acréscimo máximo do produto (ou padrão da empresa).
+    const limits = productPriceLimits(product, settings);
+    const minPrice = Math.round(listPrice * (1 - limits.maxDiscountPercent / 100) * 100) / 100;
+    const maxPrice = Math.round(listPrice * (1 + limits.maxSurchargePercent / 100) * 100) / 100;
     let unitPrice: number;
-    let discountPercent: number;
     if (i.unitPrice != null) {
-      // O vendedor digitou o preço: não pode passar da tabela (acréscimo fica para a Fase 2) nem do limite de desconto.
       unitPrice = Math.round(Number(i.unitPrice) * 100) / 100;
-      if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new ApiError(422, "INVALID_PRICE", `Preço inválido em ${product.name}.`);
-      if (unitPrice > listPrice) throw new ApiError(422, "PRICE_ABOVE_TABLE", `Preço de ${product.name} acima da tabela.`);
-      if (unitPrice < minPrice) {
-        throw new ApiError(422, "DISCOUNT_ABOVE_LIMIT", `Preço de ${product.name} abaixo do seu limite de desconto (${maxDiscount}%).`);
-      }
-      discountPercent = listPrice > 0 ? Math.round((1 - unitPrice / listPrice) * 10000) / 100 : 0;
     } else {
-      discountPercent = clampPercent(i.discountPercent);
-      if (discountPercent > maxDiscount) {
-        throw new ApiError(422, "DISCOUNT_ABOVE_LIMIT", `Desconto de ${discountPercent}% em ${product.name} passa do seu limite (${maxDiscount}%).`);
-      }
-      unitPrice = Math.round(listPrice * (1 - discountPercent / 100) * 100) / 100;
+      // Só o %: positivo = desconto, negativo = acréscimo.
+      const pct = Math.max(-100, Math.min(100, Number(i.discountPercent ?? 0) || 0));
+      unitPrice = Math.round(listPrice * (1 - pct / 100) * 100) / 100;
     }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new ApiError(422, "INVALID_PRICE", `Preço inválido em ${product.name}.`);
+    if (unitPrice < minPrice) {
+      throw new ApiError(422, "PRICE_BELOW_MIN", `${product.name}: desconto acima do máximo (${limits.maxDiscountPercent}%, preço mínimo ${minPrice.toFixed(2)}).`);
+    }
+    if (unitPrice > maxPrice) {
+      throw new ApiError(422, "PRICE_ABOVE_MAX", `${product.name}: acréscimo acima do máximo (${limits.maxSurchargePercent}%, preço máximo ${maxPrice.toFixed(2)}).`);
+    }
+    const discountPercent = listPrice > 0 ? Math.round((1 - unitPrice / listPrice) * 10000) / 100 : 0;
     const estimatedSubtotal = product.is_variable_weight ? unitPrice * Number(product.avg_weight ?? 1) * quantity : unitPrice * quantity;
     return {
       ...base,
@@ -3084,7 +3134,6 @@ app.post("/admin/access-profiles", async (c) => {
       name,
       description: String(input.description ?? "").trim().slice(0, 200),
       permissions,
-      max_discount_percent: clampPercent(input.maxDiscountPercent),
       sort_order: 500,
     })
     .select("*")
@@ -3113,7 +3162,6 @@ app.patch("/admin/access-profiles/:id", async (c) => {
   }
   if ("description" in patch) row.description = String(patch.description ?? "").trim().slice(0, 200);
   if ("permissions" in patch) row.permissions = withRequirements(sanitizePermissionList(patch.permissions));
-  if ("maxDiscountPercent" in patch) row.max_discount_percent = clampPercent(patch.maxDiscountPercent);
   if (Object.keys(row).length === 0) return c.json(mapAccessProfile(existing, await countProfileMembers(admin.company_id, existing.id)));
   row.updated_at = new Date().toISOString();
   const { data, error } = await eco()
@@ -3131,8 +3179,6 @@ app.patch("/admin/access-profiles/:id", async (c) => {
   const after = new Set(profilePermissionList(data));
   await logAccess(admin, "profile.update", "profile", data, {
     renamedFrom: existing.name !== data.name ? existing.name : undefined,
-    maxDiscountPercent:
-      Number(existing.max_discount_percent ?? 0) !== Number(data.max_discount_percent ?? 0) ? Number(data.max_discount_percent ?? 0) : undefined,
     added: [...after].filter((p) => !before.has(p)),
     removed: [...before].filter((p) => !after.has(p)),
   });

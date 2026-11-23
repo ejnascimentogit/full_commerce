@@ -4,6 +4,7 @@ import type {
   CreateAdminOrderInput,
   OrderDraft,
   OrderDraftData,
+  SalesPricingSettings,
   SalesProduct,
   Activity,
   ActivityClient,
@@ -245,6 +246,9 @@ function createRestApiClient(baseUrl: string): ApiClient {
     getSalesCustomerOrders: (customerId: string) =>
       request<Order[]>(`/api/admin/sales/customers/${customerId}/orders`, { tokenKey: ADMIN_TOKEN_KEY }),
     getSalesProducts: () => request<SalesProduct[]>("/api/admin/sales/products", { tokenKey: ADMIN_TOKEN_KEY }),
+    getSalesPricing: () => request<SalesPricingSettings>("/api/admin/sales/pricing", { tokenKey: ADMIN_TOKEN_KEY }),
+    updateSalesPricing: (patch: Partial<SalesPricingSettings>) =>
+      request<SalesPricingSettings>("/api/admin/sales/pricing", { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     createAdminOrder: (input: CreateAdminOrderInput) =>
       request<Order>("/api/admin/orders", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
     getOrderDrafts: () => request<OrderDraft[]>("/api/admin/order-drafts", { tokenKey: ADMIN_TOKEN_KEY }),
@@ -293,9 +297,9 @@ function createRestApiClient(baseUrl: string): ApiClient {
     deleteStaffSector: (id: string) =>
       request<void>(`/api/admin/staff-sectors/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),
     getAccessProfiles: () => request<AccessProfile[]>("/api/admin/access-profiles", { tokenKey: ADMIN_TOKEN_KEY }),
-    createAccessProfile: (input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string; maxDiscountPercent?: number }) =>
+    createAccessProfile: (input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }) =>
       request<AccessProfile>("/api/admin/access-profiles", { method: "POST", body: JSON.stringify(input), tokenKey: ADMIN_TOKEN_KEY }),
-    updateAccessProfile: (id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[]; maxDiscountPercent?: number }) =>
+    updateAccessProfile: (id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }) =>
       request<AccessProfile>(`/api/admin/access-profiles/${id}`, { method: "PATCH", body: JSON.stringify(patch), tokenKey: ADMIN_TOKEN_KEY }),
     deleteAccessProfile: (id: string) =>
       request<void>(`/api/admin/access-profiles/${id}`, { method: "DELETE", tokenKey: ADMIN_TOKEN_KEY }),

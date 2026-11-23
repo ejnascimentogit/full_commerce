@@ -33,6 +33,8 @@ import type {
   Order,
   OrderDraft,
   OrderDraftData,
+  SalesPriceLimits,
+  SalesPricingSettings,
   SalesProduct,
   OrderItem,
   OrderStatus,
@@ -62,7 +64,6 @@ import {
 import {
   createAccessProfile as createAccessProfileStore,
   deleteAccessProfile as deleteAccessProfileStore,
-  findProfile,
   listAccessAudit,
   listAccessProfiles,
   updateAccessProfile as updateAccessProfileStore,
@@ -133,7 +134,7 @@ import {
 } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
 import { deleteDraft as deleteDraftStore, listDrafts, saveDraft as saveDraftStore } from "./order-drafts-store";
-import { customersInPortfolio, lineDiscountPercent, lineNetPrice, netUnitPrice, salesBasePrice } from "../sales";
+import { customersInPortfolio, lineDiscountPercent, lineNetPrice, salesPriceRange } from "../sales";
 import {
   clearAdminSession,
   createAdminUser,
@@ -214,11 +215,23 @@ function mockCurrentAdmin(): AdminUser {
   return user;
 }
 
-function mockMaxDiscount(admin: AdminUser): number {
-  if (admin.role === "platformAdmin") return 100;
-  if (admin.role !== "staff" || !admin.profileId) return 0;
-  const profile = findProfile(admin.profileId);
-  return profile?.isAdmin ? 100 : profile?.maxDiscountPercent ?? 0;
+// Padrão da empresa para a faixa de preço do Novo pedido (mock, em localStorage). No real: store_settings.
+const SALES_PRICING_KEY = "ecommerce.mock.salesPricing";
+function readSalesPricing(): SalesPricingSettings {
+  if (typeof window === "undefined") return { maxDiscountPercent: 0, maxSurchargePercent: 0 };
+  try {
+    return { maxDiscountPercent: 0, maxSurchargePercent: 0, ...JSON.parse(localStorage.getItem(SALES_PRICING_KEY) ?? "{}") };
+  } catch {
+    return { maxDiscountPercent: 0, maxSurchargePercent: 0 };
+  }
+}
+
+function mockPriceLimits(product: Product): SalesPriceLimits {
+  const company = readSalesPricing();
+  return {
+    maxDiscountPercent: product.maxDiscountPercent ?? company.maxDiscountPercent,
+    maxSurchargePercent: product.maxSurchargePercent ?? company.maxSurchargePercent,
+  };
 }
 
 export const mockApiClient: ApiClient = {
@@ -781,7 +794,24 @@ export const mockApiClient: ApiClient = {
     await delay();
     return listProducts()
       .filter((p) => p.status === "active")
-      .map((p) => ({ ...p, listPrice: unitPriceOf(p) }));
+      .map((p) => ({ ...p, listPrice: unitPriceOf(p), priceLimits: mockPriceLimits(p) }));
+  },
+
+  async getSalesPricing(): Promise<SalesPricingSettings> {
+    await delay();
+    return readSalesPricing();
+  },
+
+  async updateSalesPricing(patch: Partial<SalesPricingSettings>): Promise<SalesPricingSettings> {
+    await delay(200);
+    const clamp = (n: number) => Math.max(0, Math.min(100, Number(n) || 0));
+    const current = readSalesPricing();
+    const next = {
+      maxDiscountPercent: patch.maxDiscountPercent != null ? clamp(patch.maxDiscountPercent) : current.maxDiscountPercent,
+      maxSurchargePercent: patch.maxSurchargePercent != null ? clamp(patch.maxSurchargePercent) : current.maxSurchargePercent,
+    };
+    if (typeof window !== "undefined") localStorage.setItem(SALES_PRICING_KEY, JSON.stringify(next));
+    return next;
   },
 
   async createAdminOrder(input: CreateAdminOrderInput): Promise<Order> {
@@ -792,15 +822,16 @@ export const mockApiClient: ApiClient = {
     const address = customer.addresses.find((a) => a.id === input.addressId);
     if (!address) throw new Error("ADDRESS_NOT_FOUND");
     if (!input.items.length) throw new Error("EMPTY_ORDER");
-    const maxDiscount = mockMaxDiscount(admin);
     const items: OrderItem[] = input.items.map((line) => {
       const product = findProductById(line.productId);
       if (!product) throw new Error("PRODUCT_NOT_FOUND");
-      const listPrice = salesBasePrice({ listPrice: unitPriceOf(product) });
-      const unitPrice = lineNetPrice({ listPrice }, line);
-      if (unitPrice > listPrice) throw new Error("PRICE_ABOVE_TABLE");
-      if (unitPrice < netUnitPrice(listPrice, maxDiscount)) throw new Error("DISCOUNT_ABOVE_LIMIT");
-      const discountPercent = lineDiscountPercent({ listPrice }, line);
+      const sales = { listPrice: unitPriceOf(product), priceLimits: mockPriceLimits(product) };
+      const range = salesPriceRange(sales);
+      const listPrice = range.base;
+      const unitPrice = lineNetPrice(sales, line);
+      if (unitPrice < range.min) throw new Error("PRICE_BELOW_MIN");
+      if (unitPrice > range.max) throw new Error("PRICE_ABOVE_MAX");
+      const discountPercent = lineDiscountPercent(sales, line);
       const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
       return {
         ...buildOrderItem(product, line.quantity),

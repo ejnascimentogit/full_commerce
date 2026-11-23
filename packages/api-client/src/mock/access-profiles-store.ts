@@ -96,11 +96,6 @@ function memberCounts(): Map<string, number> {
   return counts;
 }
 
-function clampPercent(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
-}
-
 export function findProfile(id: string): StoredProfile | undefined {
   return readAll().find((p) => p.id === id);
 }
@@ -110,13 +105,7 @@ export function listAccessProfiles(): AccessProfile[] {
   return readAll().map((p) => ({ ...p, memberCount: counts.get(p.id) ?? 0 }));
 }
 
-export function createAccessProfile(input: {
-  name: string;
-  description?: string;
-  permissions?: PermissionKey[];
-  copyFromId?: string;
-  maxDiscountPercent?: number;
-}): AccessProfile {
+export function createAccessProfile(input: { name: string; description?: string; permissions?: PermissionKey[]; copyFromId?: string }): AccessProfile {
   const profiles = readAll();
   const name = input.name.trim();
   if (!name) throw new Error("INVALID_INPUT");
@@ -128,17 +117,13 @@ export function createAccessProfile(input: {
     description: (input.description ?? "").trim(),
     permissions: source ? [...source.permissions] : withRequirements(input.permissions ?? []),
     isAdmin: false,
-    maxDiscountPercent: clampPercent(input.maxDiscountPercent),
   };
   profiles.push(profile);
   writeAll(profiles);
   return { ...profile, memberCount: 0 };
 }
 
-export function updateAccessProfile(
-  id: string,
-  patch: { name?: string; description?: string; permissions?: PermissionKey[]; maxDiscountPercent?: number },
-): AccessProfile {
+export function updateAccessProfile(id: string, patch: { name?: string; description?: string; permissions?: PermissionKey[] }): AccessProfile {
   const profiles = readAll();
   const index = profiles.findIndex((p) => p.id === id);
   if (index === -1) throw new Error("NOT_FOUND");
@@ -152,7 +137,6 @@ export function updateAccessProfile(
   }
   if (patch.description !== undefined) next.description = patch.description.trim();
   if (patch.permissions !== undefined) next.permissions = withRequirements(patch.permissions);
-  if (patch.maxDiscountPercent !== undefined) next.maxDiscountPercent = clampPercent(patch.maxDiscountPercent);
   profiles[index] = next;
   writeAll(profiles);
   return { ...next, memberCount: memberCounts().get(id) ?? 0 };

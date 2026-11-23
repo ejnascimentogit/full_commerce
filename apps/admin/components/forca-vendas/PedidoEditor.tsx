@@ -9,12 +9,12 @@ import {
   lineDiscountPercent,
   lineNetPrice,
   lineSubtotal,
-  minUnitPrice,
   netUnitPrice,
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHOD_ORDER,
   salesBasePrice,
   salesOrderAlerts,
+  salesPriceRange,
   salesOrderTotals,
   userCan,
 } from "@ecommerce/api-client";
@@ -36,8 +36,8 @@ const SERVER_ERRORS: Record<string, string> = {
   EMPTY_ORDER: "Inclua pelo menos um item.",
   PRODUCT_NOT_FOUND: "Um produto saiu de linha. Atualize a tela e tire o item.",
   INVALID_QUANTITY: "Quantidade inválida em um item.",
-  DISCOUNT_ABOVE_LIMIT: "Preço abaixo do seu limite de desconto.",
-  PRICE_ABOVE_TABLE: "Preço acima da tabela.",
+  PRICE_BELOW_MIN: "Um item ficou com desconto acima do máximo permitido.",
+  PRICE_ABOVE_MAX: "Um item ficou com acréscimo acima do máximo permitido.",
   INVALID_PRICE: "Preço inválido em um item.",
   BELOW_MIN_ORDER_VALUE: "Pedido abaixo do valor mínimo da loja.",
   FORBIDDEN: "Você não tem permissão para digitar pedidos.",
@@ -72,7 +72,6 @@ export function PedidoEditor({
 }) {
   const enabledMethods = PAYMENT_METHOD_ORDER.filter((m) => settings.enabledPaymentMethods.includes(m));
   const canChangePlan = userCan(user, "pedidos.alterar_plano");
-  const maxDiscount = user.maxDiscountPercent ?? (user.role === "platformAdmin" ? 100 : 0);
   const planLocked = !!customer.preferredPaymentMethod && !canChangePlan;
 
   const [tab, setTab] = useState<PedidoTab>(draft?.data.items.length ? "itens" : "produtos");
@@ -103,7 +102,6 @@ export function PedidoEditor({
           canChangePlan,
           lines,
           productsById,
-          maxDiscountPercent: maxDiscount,
           subtotal: totals.subtotal,
           minOrderValue: settings.minOrderValue,
         });
@@ -373,6 +371,7 @@ export function PedidoEditor({
                       <span className="block text-xs text-slate-500">
                         {line.quantity} {UNIT_LABEL[p.unitType] ?? p.unitType} × {money(unit)}
                         {pct > 0 && <span className="text-green-700"> · −{pct.toString().replace(".", ",")}%</span>}
+                        {pct < 0 && <span className="text-amber-700"> · +{(-pct).toString().replace(".", ",")}%</span>}
                       </span>
                     </span>
                     <span className="text-sm font-semibold text-slate-900 shrink-0">{money(lineSubtotal(p, line))}</span>
@@ -389,6 +388,7 @@ export function PedidoEditor({
             <dl className="space-y-1.5 text-sm">
               <Row label={`Itens (${lines.length})`} value={money(totals.grossSubtotal)} />
               {totals.sellerDiscount > 0 && <Row label="Desconto do vendedor" value={`− ${money(totals.sellerDiscount)}`} tone="green" />}
+              {totals.sellerDiscount < 0 && <Row label="Acréscimo do vendedor" value={`+ ${money(-totals.sellerDiscount)}`} />}
               <Row label="Subtotal" value={money(totals.subtotal)} />
               <Row label="Frete" value={totals.shipping === 0 ? "Grátis" : money(totals.shipping)} />
               <div className="border-t border-slate-200 pt-2 mt-2">
@@ -401,7 +401,6 @@ export function PedidoEditor({
               <Row label="Plano" value={paymentMethod ? `${PAYMENT_METHOD_LABEL[paymentMethod]}${paymentMethod === "credit" ? ` em ${installments}x` : ""}` : "—"} />
               <Row label="Entrega" value={address ? `${address.street}, ${address.number} · ${address.neighborhood}` : "—"} />
               {note.trim() && <Row label="Observação" value={note.trim()} />}
-              <Row label="Seu limite de desconto" value={`${maxDiscount}% por item`} />
             </dl>
           </Card>
           <p className="text-xs text-slate-500">Valores de itens com peso variável são estimados; o total final pode mudar na separação.</p>
@@ -471,7 +470,6 @@ export function PedidoEditor({
         <ItemSheet
           product={editing}
           line={lines.find((l) => l.productId === editing.id)}
-          maxDiscount={maxDiscount}
           onClose={() => setEditing(null)}
           onSave={(line) => {
             upsertLine(line);
@@ -496,26 +494,24 @@ function Row({ label, value, strong, tone }: { label: string; value: string; str
   );
 }
 
-// Tela do item (abre ao tocar no produto), como no maxPedido: digita a quantidade e o preço unitário. O % de desconto
-// acompanha o preço (e vice-versa); o que o vendedor mexeu por último é o que vale. Limite: preço de tabela no máximo e o
-// desconto do perfil no mínimo. O servidor confere de novo.
+// Tela do item (abre ao tocar no produto), como no maxPedido: digita a quantidade e o preço unitário. O % acompanha o
+// preço (e vice-versa; negativo = acréscimo); o que o vendedor mexeu por último é o que vale. Faixa permitida: desconto e
+// acréscimo máximos do produto (ou o padrão da empresa) — protege o markup. O servidor confere de novo.
 function ItemSheet({
   product,
   line,
-  maxDiscount,
   onClose,
   onSave,
   onRemove,
 }: {
   product: SalesProduct;
   line?: SalesOrderLine;
-  maxDiscount: number;
   onClose: () => void;
   onSave: (line: SalesOrderLine) => void;
   onRemove: () => void;
 }) {
-  const base = salesBasePrice(product);
-  const minPrice = minUnitPrice(base, maxDiscount);
+  const { base, min: minPrice, max: maxPrice } = salesPriceRange(product);
+  const limits = product.priceLimits;
   const initialPrice = line ? lineNetPrice(product, line) : base;
   const [quantity, setQuantity] = useState(String(line?.quantity ?? 1));
   const [price, setPrice] = useState(initialPrice.toFixed(2).replace(".", ","));
@@ -530,9 +526,9 @@ function ItemSheet({
   const unit = mode === "price" ? Math.round(typedPrice * 100) / 100 : netUnitPrice(base, typedPct);
   const validQty = Number.isFinite(qty) && qty > 0;
   const validPrice = Number.isFinite(unit) && unit >= 0;
-  const aboveTable = validPrice && unit > base;
+  const aboveTable = validPrice && unit > maxPrice;
   const belowLimit = validPrice && unit < minPrice;
-  const canEditPrice = maxDiscount > 0;
+  const canEditPrice = minPrice < base || maxPrice > base;
   const step = (delta: number) => setQuantity(String(Math.max(1, (validQty ? qty : 0) + delta)));
 
   function changePrice(value: string) {
@@ -614,7 +610,7 @@ function ItemSheet({
           </div>
           <div className="col-span-2">
             <label className="block text-sm text-slate-600 mb-1" htmlFor="item-pct">
-              Desconto (%)
+              {typedPct < 0 ? "Acréscimo (−%)" : "Desconto (%)"}
             </label>
             <input
               id="item-pct"
@@ -629,10 +625,12 @@ function ItemSheet({
         </div>
         <p className={`text-xs mt-1 ${aboveTable || belowLimit ? "text-red-600" : "text-slate-500"}`}>
           {!canEditPrice
-            ? "Seu perfil não permite mudar o preço (desconto 0%)."
+            ? "Preço travado na tabela para este produto."
             : aboveTable
-              ? `Acima do preço de tabela (${money(base)}).`
-              : `Preço mínimo para você: ${money(minPrice)} (até ${maxDiscount}% de desconto).`}
+              ? `Acréscimo acima do máximo (${limits.maxSurchargePercent}%). Preço máximo ${money(maxPrice)}.`
+              : belowLimit
+                ? `Desconto acima do máximo (${limits.maxDiscountPercent}%). Preço mínimo ${money(minPrice)}.`
+                : `Faixa permitida: ${money(minPrice)} a ${money(maxPrice)} (desconto até ${limits.maxDiscountPercent}% · acréscimo até ${limits.maxSurchargePercent}%).`}
         </p>
 
         {validQty && validPrice && (
