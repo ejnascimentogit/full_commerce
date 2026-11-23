@@ -25,6 +25,8 @@ export type PermissionKey =
   | "pedidos.ver"
   | "pedidos.status"
   | "pedidos.ajustar"
+  | "pedidos.criar"
+  | "pedidos.alterar_plano"
   | "orcamentos.ver"
   | "orcamentos.responder"
   | "orcamentos.converter"
@@ -276,6 +278,11 @@ export interface Product {
   variants: ProductVariant[];
   status: "active" | "inactive" | "draft";
   weight?: number;
+  /** Força de vendas (só nas rotas do admin, nunca no catálogo público): desconto máximo (%) que o vendedor pode dar neste
+   * produto no Novo pedido. Ausente/null = usa o padrão da empresa (SalesPricingSettings); null no update limpa. */
+  maxDiscountPercent?: number | null;
+  /** Idem, acréscimo máximo (%) acima do preço de tabela. Ausente/null = padrão da empresa. */
+  maxSurchargePercent?: number | null;
 }
 
 // Carrinho persistido no servidor a partir do momento em que o cliente
@@ -334,6 +341,10 @@ export interface OrderItem {
   quantity: number;
   estimatedSubtotal: number;
   finalSubtotal?: number;
+  /** Pedido digitado pelo vendedor: preço de tabela (com promoção automática) antes do desconto do vendedor. unitPrice é o líquido. */
+  listPrice?: number;
+  /** Pedido digitado pelo vendedor: desconto (%) dado no item; negativo = acréscimo. Ausente = preço de tabela. */
+  discountPercent?: number;
 }
 
 export interface Order {
@@ -356,6 +367,67 @@ export interface Order {
   createdAt: string;
   /** Registro em Supabase de cada ajuste feito na separação — quem mudou, quando, valor antes/depois. Complementa OrderItem.finalSubtotal (que só guarda o resultado atual). */
   itemAdjustments?: OrderItemAdjustment[];
+  /** De onde veio: "loja" (o cliente comprou) ou "painel" (o vendedor digitou no Novo pedido). Pedidos antigos = "loja". */
+  origin?: "loja" | "painel";
+  /** Nome de quem digitou, quando origin = "painel" (gravado na hora, não muda se a pessoa for renomeada). */
+  sellerName?: string;
+  /** Observação do vendedor no pedido. */
+  note?: string;
+}
+
+// ---------- Força de vendas (Novo pedido digitado pelo vendedor) ----------
+
+/** Produto na tabela do vendedor: listPrice = preço de tabela; promoPrice = preço com promoção automática, quando houver. */
+export interface SalesProduct extends Product {
+  listPrice: number;
+  promoPrice?: number;
+  /** Faixa de preço já resolvida pelo servidor (limite do produto ou, sem ele, o padrão da empresa). */
+  priceLimits: SalesPriceLimits;
+}
+
+/** Faixa de preço do Novo pedido, em % sobre o preço de tabela (proteção de markup). 0/0 = preço travado. */
+export interface SalesPriceLimits {
+  maxDiscountPercent: number;
+  maxSurchargePercent: number;
+}
+
+/** Padrão da empresa para a faixa de preço (Configurações -> Força de vendas). Só o administrador lê e altera. */
+export type SalesPricingSettings = SalesPriceLimits;
+
+export interface SalesOrderLine {
+  productId: string;
+  quantity: number;
+  /** Desconto do vendedor no item, em % (negativo = acréscimo), dentro da faixa do produto (o servidor confere). */
+  discountPercent: number;
+  /** Preço unitário digitado pelo vendedor. Quando presente, vale ele (o % é só reflexo); precisa ficar dentro da faixa do produto. */
+  unitPrice?: number;
+}
+
+/** Conteúdo de um rascunho: tudo que o vendedor já preencheu, pra continuar depois de qualquer aparelho. */
+export interface OrderDraftData {
+  addressId?: string;
+  paymentMethod?: PaymentMethod;
+  installments?: number;
+  note?: string;
+  items: SalesOrderLine[];
+}
+
+export interface OrderDraft {
+  id: string;
+  customerId: string;
+  data: OrderDraftData;
+  updatedAt: string;
+}
+
+export interface CreateAdminOrderInput {
+  customerId: string;
+  addressId: string;
+  paymentMethod: PaymentMethod;
+  installments?: number;
+  note?: string;
+  items: SalesOrderLine[];
+  /** Rascunho que virou pedido: o servidor apaga. */
+  draftId?: string;
 }
 
 export interface OrderItemAdjustment {

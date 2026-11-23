@@ -539,6 +539,8 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[], 
       quantity: Number(i.quantity),
       estimatedSubtotal: Number(i.estimated_subtotal),
       finalSubtotal: i.final_subtotal != null ? Number(i.final_subtotal) : undefined,
+      listPrice: i.list_price != null ? Number(i.list_price) : undefined,
+      discountPercent: i.discount_percent != null && Number(i.discount_percent) > 0 ? Number(i.discount_percent) : undefined,
     })),
     shippingAddress: o.shipping_address,
     regionId: o.region_id ?? undefined,
@@ -552,6 +554,9 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[], 
     statusHistory: (o.order_status_history ?? []).map((h: Record<string, unknown>) => ({ status: h.status, changedAt: h.changed_at })),
     tracking: o.tracking ?? undefined,
     createdAt: o.created_at,
+    origin: o.origin ?? "loja",
+    sellerName: o.seller_name ?? undefined,
+    note: o.note ?? undefined,
     itemAdjustments: adjustments.map((a) => ({
       productId: a.product_id,
       productName: a.product_name,
@@ -733,6 +738,9 @@ async function insertOrder(params: {
   shipping: number;
   total: number;
   couponCode?: string | null;
+  // Colunas a mais (ex.: pedido digitado pelo vendedor: origin, seller_admin_id, seller_name, note). Opcional: a loja e a
+  // conversão de orçamento não passam nada e continuam gravando igual a antes.
+  extra?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
   const { data: orderNumberRow } = await eco().rpc("next_order_number");
   const orderNumber = orderNumberRow as unknown as string;
@@ -754,6 +762,7 @@ async function insertOrder(params: {
       total: params.total,
       status: "PAID",
       coupon_code: params.couponCode ?? null,
+      ...(params.extra ?? {}),
     })
     .select("*")
     .single();
@@ -1579,6 +1588,9 @@ app.post("/products", async (c) => {
       is_variable_weight: input.isVariableWeight ?? false,
       avg_weight: input.avgWeight ?? null,
       is_seasonal: input.isSeasonal ?? false,
+      // Limites de preço do Novo pedido: fornecedor (vendorAdmin) não define a margem da plataforma.
+      max_discount_percent: admin.role === "vendorAdmin" ? null : productLimitValue(input.maxDiscountPercent),
+      max_surcharge_percent: admin.role === "vendorAdmin" ? null : productLimitValue(input.maxSurchargePercent),
       stock: input.stock ?? 0,
       status: input.status ?? "active",
       weight: input.weight ?? null,
@@ -1589,7 +1601,7 @@ app.post("/products", async (c) => {
     if (error.code === "23505") throw new ApiError(422, "DUPLICATE_REFERENCE_CODE", "Já existe um produto com esse código de referência do cliente.");
     throw new ApiError(500, "DB_ERROR", error.message);
   }
-  return c.json(mapProduct(data));
+  return c.json(mapAdminProduct(data));
 });
 
 app.patch("/products/:id", async (c) => {
@@ -1626,13 +1638,17 @@ app.patch("/products/:id", async (c) => {
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
   if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
   if ("customer_reference_code" in row && !row.customer_reference_code) row.customer_reference_code = null;
+  if (admin.role !== "vendorAdmin") {
+    if ("maxDiscountPercent" in patch) row.max_discount_percent = productLimitValue(patch.maxDiscountPercent);
+    if ("maxSurchargePercent" in patch) row.max_surcharge_percent = productLimitValue(patch.maxSurchargePercent);
+  }
 
   const { data, error } = await eco().from("products").update(row).eq("id", c.req.param("id")).eq("company_id", admin.company_id).select("*").single();
   if (error) {
     if (error.code === "23505") throw new ApiError(422, "DUPLICATE_REFERENCE_CODE", "Já existe um produto com esse código de referência do cliente.");
     throw new ApiError(500, "DB_ERROR", error.message);
   }
-  return c.json(mapProduct(data));
+  return c.json(mapAdminProduct(data));
 });
 
 app.post("/products/:id/photos", async (c) => {
@@ -1653,7 +1669,7 @@ app.get("/admin/products", async (c) => {
   if (admin.role === "vendorAdmin") query = query.eq("vendor_id", admin.vendor_id);
   const { data, error } = await query;
   if (error) throw new ApiError(500, "DB_ERROR", error.message);
-  return c.json((data ?? []).map((p) => mapProduct(p)));
+  return c.json((data ?? []).map((p) => mapAdminProduct(p)));
 });
 
 // Sem aplicar bestPromoPrice de propósito: o admin precisa ver/editar o
@@ -1666,7 +1682,7 @@ app.get("/admin/products/:id", async (c) => {
   if (!product) throw new ApiError(404, "NOT_FOUND");
   if (admin.role === "vendorAdmin" && product.vendor_id !== admin.vendor_id) throw new ApiError(403, "FORBIDDEN");
   const { data: variants } = await eco().from("product_variants").select("*").eq("product_id", product.id);
-  return c.json(mapProduct(product, variants ?? []));
+  return c.json(mapAdminProduct(product, variants ?? []));
 });
 
 // ---------- Admin: fornecedores ----------
@@ -1975,6 +1991,306 @@ app.patch("/orders/:id/status", async (c) => {
   const { data: items } = await eco().from("order_items").select("*").eq("order_id", order.id);
   const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
   return c.json(mapOrder({ ...order, order_status_history: history }, items ?? [], await fetchOrderAdjustments(order.id)));
+});
+
+// ---------- Força de vendas: Novo pedido digitado pelo vendedor ----------
+// Fluxo (inspirado no maxPedido/ION Vendas): o vendedor escolhe um cliente da SUA carteira, confere a ficha (cadastro,
+// plano de pagamento, endereço, histórico), monta o pedido e envia. Tudo que a tela mostra como regra é conferido de novo
+// aqui: carteira, plano de pagamento, desconto máximo e pedido mínimo. Nada disso muda a loja nem a conversão de orçamento.
+
+function clampPercent(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n * 100) / 100));
+}
+
+// Faixa de preço do Novo pedido (proteção de markup): cada produto pode ter limite próprio de desconto e de acréscimo
+// sobre o preço de tabela; sem limite próprio, vale o padrão da empresa (store_settings). Padrão 0/0 = preço travado.
+function productPriceLimits(product: Row, settings: Row): { maxDiscountPercent: number; maxSurchargePercent: number } {
+  const pick = (own: unknown, fallback: unknown) => (own != null ? clampPercent(own) : clampPercent(fallback ?? 0));
+  return {
+    maxDiscountPercent: pick(product.max_discount_percent, settings.sales_max_discount_percent),
+    maxSurchargePercent: pick(product.max_surcharge_percent, settings.sales_max_surcharge_percent),
+  };
+}
+
+// Produto para as telas do admin: inclui os limites próprios de preço. Fora do mapProduct de propósito, porque o
+// catálogo público usa o mapProduct e o cliente não deve ver até onde o vendedor pode negociar.
+function mapAdminProduct(p: Row, variants: Row[] = []) {
+  return {
+    ...mapProduct(p, variants),
+    maxDiscountPercent: p.max_discount_percent != null ? Number(p.max_discount_percent) : undefined,
+    maxSurchargePercent: p.max_surcharge_percent != null ? Number(p.max_surcharge_percent) : undefined,
+  };
+}
+
+// Limites próprios do produto vindos do cadastro: vazio/nulo = usa o padrão da empresa.
+function productLimitValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  return clampPercent(value);
+}
+
+// Carteira do vendedor: null = vê todos os clientes da empresa (administrador, gerente, setor "vê tudo"); senão, só os
+// clientes vinculados a uma das pessoas da lista (a própria pessoa, ou o setor inteiro se for supervisor). Mesma
+// hierarquia de Atividades (visibleAssigneeIds), pra não existir duas regras de "quem vê quem".
+async function salesPortfolio(admin: Row): Promise<string[] | null> {
+  if (admin.role === "vendorAdmin") return [];
+  return visibleAssigneeIds(admin);
+}
+
+function inPortfolio(customer: Row, portfolio: string[] | null): boolean {
+  if (portfolio === null) return true;
+  return [customer.assigned_staff_id, customer.assigned_admin_id].some((id) => typeof id === "string" && portfolio.includes(id));
+}
+
+app.get("/admin/sales/customers", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const portfolio = await salesPortfolio(admin);
+  if (portfolio !== null && portfolio.length === 0) return c.json([]);
+  let query = eco().from("customers").select("*").eq("company_id", admin.company_id).order("name");
+  if (portfolio !== null) {
+    const list = portfolio.join(",");
+    query = query.or(`assigned_staff_id.in.(${list}),assigned_admin_id.in.(${list})`);
+  }
+  const { data: customers, error } = await query;
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  const ids = (customers ?? []).map((cust) => cust.id as string);
+  const { data: addresses } = ids.length ? await eco().from("addresses").select("*").in("customer_id", ids) : { data: [] };
+  const byCustomer = new Map<string, Row[]>();
+  for (const a of addresses ?? []) {
+    const list = byCustomer.get(a.customer_id as string) ?? [];
+    list.push(a);
+    byCustomer.set(a.customer_id as string, list);
+  }
+  return c.json((customers ?? []).map((cust) => mapCustomer(cust, byCustomer.get(cust.id as string) ?? [])));
+});
+
+// Histórico do cliente na ficha: últimos pedidos, só de cliente da carteira de quem pergunta.
+app.get("/admin/sales/customers/:id/orders", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const { data: customer } = await eco().from("customers").select("*").eq("id", c.req.param("id")).eq("company_id", admin.company_id).maybeSingle();
+  if (!customer || !inPortfolio(customer, await salesPortfolio(admin))) throw new ApiError(404, "NOT_FOUND");
+  const { data: orders } = await eco()
+    .from("orders")
+    .select("*")
+    .eq("customer_id", customer.id)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const results = await Promise.all(
+    (orders ?? []).map(async (o) => {
+      const { data: items } = await eco().from("order_items").select("*").eq("order_id", o.id);
+      return mapOrder({ ...o, order_status_history: [] }, items ?? []);
+    }),
+  );
+  return c.json(results);
+});
+
+// Tabela de produtos do vendedor: só ativos, já com o preço de promoção automática (o mesmo que o pedido vai cobrar) e o
+// preço de tabela separado, pra tela mostrar "de/por" e o estoque.
+app.get("/admin/sales/products", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const [{ data, error }, autoPromotions, { data: settings }] = await Promise.all([
+    eco().from("products").select("*").eq("company_id", admin.company_id).eq("status", "active").order("name"),
+    getActiveAutoPromotions(admin.company_id),
+    eco().from("store_settings").select("sales_max_discount_percent, sales_max_surcharge_percent").eq("company_id", admin.company_id).single(),
+  ]);
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(
+    (data ?? []).map((p) => {
+      const promoPrice = bestPromoPrice(p, autoPromotions);
+      return { ...mapProduct(p), listPrice: unitPriceOf(p), promoPrice: promoPrice ?? undefined, priceLimits: productPriceLimits(p, settings ?? {}) };
+    }),
+  );
+});
+
+// Padrão da empresa para a faixa de preço do Novo pedido (Configurações -> Força de vendas). Só o administrador: é
+// margem da empresa, e fica fora do GET /settings público pra loja não mostrar até onde dá pra negociar.
+app.get("/admin/sales/pricing", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const { data } = await eco()
+    .from("store_settings")
+    .select("sales_max_discount_percent, sales_max_surcharge_percent")
+    .eq("company_id", admin.company_id)
+    .single();
+  return c.json({
+    maxDiscountPercent: Number(data?.sales_max_discount_percent ?? 0),
+    maxSurchargePercent: Number(data?.sales_max_surcharge_percent ?? 0),
+  });
+});
+
+app.patch("/admin/sales/pricing", async (c) => {
+  const admin = await requirePlatformAdmin(c);
+  const patch = await c.req.json();
+  const row: Row = { updated_at: new Date().toISOString() };
+  if ("maxDiscountPercent" in patch) row.sales_max_discount_percent = clampPercent(patch.maxDiscountPercent);
+  if ("maxSurchargePercent" in patch) row.sales_max_surcharge_percent = clampPercent(patch.maxSurchargePercent);
+  const { data, error } = await eco()
+    .from("store_settings")
+    .update(row)
+    .eq("company_id", admin.company_id)
+    .select("sales_max_discount_percent, sales_max_surcharge_percent")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json({
+    maxDiscountPercent: Number(data.sales_max_discount_percent ?? 0),
+    maxSurchargePercent: Number(data.sales_max_surcharge_percent ?? 0),
+  });
+});
+
+app.post("/admin/orders", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const input = await c.req.json();
+  const companyId = admin.company_id as string;
+
+  const { data: customer } = await eco().from("customers").select("*").eq("id", input.customerId).eq("company_id", companyId).maybeSingle();
+  if (!customer || !inPortfolio(customer, await salesPortfolio(admin))) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Cliente fora da sua carteira.");
+  if (customer.status !== "active") throw new ApiError(422, "CUSTOMER_INACTIVE", "Cliente inativo.");
+
+  const { data: address } = await eco().from("addresses").select("*").eq("id", input.addressId).eq("customer_id", customer.id).maybeSingle();
+  if (!address) throw new ApiError(422, "ADDRESS_NOT_FOUND", "Escolha um endereço de entrega do cliente.");
+
+  // Plano de pagamento: vem do cadastro do cliente. Trocar exige a permissão pedidos.alterar_plano. Sem plano no
+  // cadastro, o vendedor escolhe entre as formas ligadas na loja.
+  const { data: settings } = await eco().from("store_settings").select("*").eq("company_id", companyId).single();
+  const enabled = (settings.enabled_payment_methods as string[] | null) ?? ["pix", "debit", "credit", "cash"];
+  const paymentMethod = String(input.paymentMethod ?? "");
+  if (!enabled.includes(paymentMethod)) throw new ApiError(422, "PAYMENT_METHOD_DISABLED", "Forma de pagamento não está ligada na loja.");
+  const customerPlan = customer.preferred_payment_method as string | null;
+  if (customerPlan && customerPlan !== paymentMethod && admin.role === "staff" && !staffPermissions(admin).has("pedidos.alterar_plano")) {
+    throw new ApiError(403, "PLAN_CHANGE_FORBIDDEN", "Você não pode trocar o plano de pagamento do cliente.");
+  }
+  let installments: number | null = null;
+  if (paymentMethod === "credit") {
+    installments = Math.max(1, Math.floor(Number(input.installments ?? 1)));
+    if (installments > Number(settings.max_installments ?? 1)) throw new ApiError(422, "TOO_MANY_INSTALLMENTS", "Parcelas acima do máximo da loja.");
+  }
+
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  if (rawItems.length === 0) throw new ApiError(422, "EMPTY_ORDER", "Inclua pelo menos um item.");
+  const productIds = rawItems.map((i: { productId: string }) => i.productId);
+  const [{ data: products }, autoPromotions] = await Promise.all([
+    eco().from("products").select("*").eq("company_id", companyId).eq("status", "active").in("id", productIds),
+    getActiveAutoPromotions(companyId),
+  ]);
+  const productById = new Map((products ?? []).map((p) => [p.id, p]));
+
+  const items = rawItems.map((i: { productId: string; quantity: number; discountPercent?: number; unitPrice?: number }) => {
+    const product = productById.get(i.productId);
+    if (!product) throw new ApiError(422, "PRODUCT_NOT_FOUND", "Produto inexistente ou inativo.");
+    const quantity = Number(i.quantity);
+    if (!(quantity > 0)) throw new ApiError(422, "INVALID_QUANTITY", `Quantidade inválida em ${product.name}.`);
+    // Espelho do pedido: preço de tabela (já com promoção automática) congelado em list_price; unit_price é o preço
+    // líquido que o cliente paga, então todo o resto do sistema (totais, separação, ajuste de peso) segue igual.
+    const base = buildOrderItem(product, quantity, autoPromotions);
+    const listPrice = Number(base.unit_price);
+    // Faixa permitida (proteção de markup): do desconto máximo ao acréscimo máximo do produto (ou padrão da empresa).
+    const limits = productPriceLimits(product, settings);
+    const minPrice = Math.round(listPrice * (1 - limits.maxDiscountPercent / 100) * 100) / 100;
+    const maxPrice = Math.round(listPrice * (1 + limits.maxSurchargePercent / 100) * 100) / 100;
+    let unitPrice: number;
+    if (i.unitPrice != null) {
+      unitPrice = Math.round(Number(i.unitPrice) * 100) / 100;
+    } else {
+      // Só o %: positivo = desconto, negativo = acréscimo.
+      const pct = Math.max(-100, Math.min(100, Number(i.discountPercent ?? 0) || 0));
+      unitPrice = Math.round(listPrice * (1 - pct / 100) * 100) / 100;
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new ApiError(422, "INVALID_PRICE", `Preço inválido em ${product.name}.`);
+    if (unitPrice < minPrice) {
+      throw new ApiError(422, "PRICE_BELOW_MIN", `${product.name}: desconto acima do máximo (${limits.maxDiscountPercent}%, preço mínimo ${minPrice.toFixed(2)}).`);
+    }
+    if (unitPrice > maxPrice) {
+      throw new ApiError(422, "PRICE_ABOVE_MAX", `${product.name}: acréscimo acima do máximo (${limits.maxSurchargePercent}%, preço máximo ${maxPrice.toFixed(2)}).`);
+    }
+    const discountPercent = listPrice > 0 ? Math.round((1 - unitPrice / listPrice) * 10000) / 100 : 0;
+    const estimatedSubtotal = product.is_variable_weight ? unitPrice * Number(product.avg_weight ?? 1) * quantity : unitPrice * quantity;
+    return {
+      ...base,
+      unit_price: unitPrice,
+      estimated_subtotal: Math.round(estimatedSubtotal * 100) / 100,
+      list_price: listPrice,
+      discount_percent: discountPercent,
+    };
+  });
+  const subtotal = Math.round(items.reduce((sum: number, i: { estimated_subtotal: number }) => sum + i.estimated_subtotal, 0) * 100) / 100;
+  const { discount, shipping, total } = await calculateOrderTotals(companyId, customer.document_type as string, subtotal, null, []);
+
+  const order = await insertOrder({
+    companyId,
+    customerId: customer.id as string,
+    items,
+    shippingAddress: mapAddress(address),
+    regionId: customer.region_id as string | null,
+    paymentMethod,
+    installments,
+    subtotal,
+    discount,
+    shipping,
+    total,
+    couponCode: null,
+    extra: {
+      origin: "painel",
+      seller_admin_id: admin.id,
+      seller_name: admin.name,
+      note: typeof input.note === "string" && input.note.trim() ? input.note.trim().slice(0, 500) : null,
+    },
+  });
+
+  // Rascunho que virou pedido sai da lista.
+  if (typeof input.draftId === "string" && input.draftId) {
+    await eco().from("order_drafts").delete().eq("id", input.draftId).eq("admin_id", admin.id as string);
+  }
+
+  const { data: fullItems } = await eco().from("order_items").select("*").eq("order_id", order.id);
+  const { data: history } = await eco().from("order_status_history").select("*").eq("order_id", order.id);
+  return c.json(mapOrder({ ...order, order_status_history: history }, fullItems ?? [], []));
+});
+
+// Rascunhos ("Salvar e continuar depois"): ficam no servidor, por vendedor, pra abrir de qualquer aparelho.
+function mapOrderDraft(d: Row) {
+  return { id: d.id, customerId: d.customer_id, data: d.data ?? {}, updatedAt: d.updated_at };
+}
+
+app.get("/admin/order-drafts", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const { data, error } = await eco()
+    .from("order_drafts")
+    .select("*")
+    .eq("company_id", admin.company_id)
+    .eq("admin_id", admin.id)
+    .order("updated_at", { ascending: false });
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json((data ?? []).map(mapOrderDraft));
+});
+
+app.put("/admin/order-drafts/:id", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  const input = await c.req.json();
+  const id = c.req.param("id");
+  const { data: customer } = await eco().from("customers").select("*").eq("id", input.customerId).eq("company_id", admin.company_id).maybeSingle();
+  if (!customer || !inPortfolio(customer, await salesPortfolio(admin))) throw new ApiError(404, "CUSTOMER_NOT_FOUND", "Cliente fora da sua carteira.");
+  const { data: existing } = await eco().from("order_drafts").select("admin_id").eq("id", id).maybeSingle();
+  if (existing && existing.admin_id !== admin.id) throw new ApiError(404, "NOT_FOUND");
+  const { data, error } = await eco()
+    .from("order_drafts")
+    .upsert({
+      id,
+      company_id: admin.company_id,
+      admin_id: admin.id,
+      customer_id: customer.id,
+      data: input.data ?? {},
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+  if (error) throw new ApiError(500, "DB_ERROR", error.message);
+  return c.json(mapOrderDraft(data));
+});
+
+app.delete("/admin/order-drafts/:id", async (c) => {
+  const admin = await requirePerm(c, "pedidos.criar");
+  await eco().from("order_drafts").delete().eq("id", c.req.param("id")).eq("admin_id", admin.id as string);
+  return c.json({ ok: true });
 });
 
 app.get("/admin/quotes", async (c) => {

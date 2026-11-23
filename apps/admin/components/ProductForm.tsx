@@ -40,6 +40,11 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [avgWeight, setAvgWeight] = useState(product?.avgWeight?.toString() ?? "");
   const [isSeasonal, setIsSeasonal] = useState(product?.isSeasonal ?? false);
   const [stock, setStock] = useState(product?.stock?.toString() ?? "0");
+  // Força de vendas: faixa de preço do Novo pedido para este produto. Vazio = usa o padrão da empresa (Configurações).
+  const [maxDiscountPercent, setMaxDiscountPercent] = useState(product?.maxDiscountPercent?.toString() ?? "");
+  const [maxSurchargePercent, setMaxSurchargePercent] = useState(product?.maxSurchargePercent?.toString() ?? "");
+  const canSetPriceLimits = user?.role !== "vendorAdmin";
+  const limitValue = (v: string) => (v.trim() === "" ? null : Math.max(0, Math.min(100, Number(v.replace(",", ".")) || 0)));
   const [status, setStatus] = useState<Product["status"]>(product?.status ?? "active");
   const [photos, setPhotos] = useState<string[]>(product?.photos ?? []);
   const [uploading, setUploading] = useState(false);
@@ -113,6 +118,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         stock: Number(stock),
         variants: product?.variants ?? [],
         status,
+        ...(canSetPriceLimits ? { maxDiscountPercent: limitValue(maxDiscountPercent), maxSurchargePercent: limitValue(maxSurchargePercent) } : {}),
       };
 
       if (product) {
@@ -282,6 +288,20 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         Esse campo é o preço promocional gravado direto no cadastro — diferente de uma Promoção de campanha (tela Promoções), que se
         aplica automaticamente sem mudar esse valor.
       </p>
+
+      {canSetPriceLimits && (
+        <div>
+          <p className="text-sm font-medium text-slate-700 mb-2">Força de vendas: faixa de preço no Novo pedido</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Desconto máximo (%)" value={maxDiscountPercent} onChange={setMaxDiscountPercent} type="number" />
+            <Field label="Acréscimo máximo (%)" value={maxSurchargePercent} onChange={setMaxSurchargePercent} type="number" />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Quanto o vendedor pode baixar ou subir o preço deste produto ao digitar pedido, para proteger o markup. Em branco = usa o padrão
+            da empresa (Configurações → Força de vendas). A loja não mostra esses limites.
+          </p>
+        </div>
+      )}
 
       <div>
         <label className="flex items-center gap-2 text-sm text-slate-700">

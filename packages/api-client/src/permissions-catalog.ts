@@ -25,6 +25,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "pedidos.ver", label: "Ver pedidos", description: "Lista e abre os pedidos da loja." },
       { key: "pedidos.status", label: "Mudar o status do pedido", description: "Marca como pago, separado, enviado, entregue ou cancelado." },
       { key: "pedidos.ajustar", label: "Ajustar itens do pedido", description: "Corrige quantidade ou peso de um item na separação." },
+      { key: "pedidos.criar", label: "Digitar pedido (força de vendas)", description: "Abre o pedido em nome do cliente pela tela Novo pedido. Vendedor só vê os clientes vinculados a ele." },
+      { key: "pedidos.alterar_plano", label: "Trocar o plano de pagamento do pedido", description: "Permite usar no pedido uma forma de pagamento diferente da que está no cadastro do cliente." },
       { key: "orcamentos.ver", label: "Ver orçamentos", description: "Lista e abre os orçamentos pedidos pelos clientes." },
       { key: "orcamentos.responder", label: "Responder orçamentos", description: "Define o valor e responde o cliente." },
       { key: "orcamentos.converter", label: "Converter orçamento em pedido", description: "Fecha a venda em nome do cliente." },
@@ -79,6 +81,8 @@ export const ALL_PERMISSION_KEYS: PermissionKey[] = PERMISSION_GROUPS.flatMap((g
 export const PERMISSION_REQUIRES: Partial<Record<PermissionKey, PermissionKey>> = {
   "pedidos.status": "pedidos.ver",
   "pedidos.ajustar": "pedidos.ver",
+  "pedidos.criar": "pedidos.ver",
+  "pedidos.alterar_plano": "pedidos.ver",
   "orcamentos.responder": "orcamentos.ver",
   "orcamentos.converter": "orcamentos.ver",
   "promocoes.editar": "promocoes.ver",

@@ -16,17 +16,22 @@ import type {
   CompanyDeployResult,
   CompanyAdminLogin,
   CompanyProfile,
+  CreateAdminOrderInput,
   Customer,
   DeliveryRegion,
   DocumentType,
   EcommerceType,
   Order,
+  OrderDraft,
+  OrderDraftData,
   OrderStatus,
   PaymentMethod,
   Product,
   PermissionKey,
   Promotion,
   Quote,
+  SalesPricingSettings,
+  SalesProduct,
   QuoteStatus,
   StaffSector,
   StoreSettings,
@@ -285,6 +290,22 @@ export interface ApiClient {
   respondAdminQuote(id: string, patch: Partial<{ status: QuoteStatus; quotedTotal: number; responseNote: string }>): Promise<Quote>;
   /** Mesma conversão de convertQuoteToOrder, disparada pelo vendedor em nome do cliente (ex: fechou a venda por telefone) — não exige ser o dono do orçamento. */
   convertAdminQuoteToOrder(id: string, input: { addressId?: string; paymentMethod: PaymentMethod; installments?: number }): Promise<Order>;
+  // ---------- Força de vendas (Novo pedido digitado pelo vendedor) — tudo exige pedidos.criar ----------
+  /** Carteira de quem está logado: vendedor vê só os clientes vinculados a ele; supervisor, o setor; administrador/gerente, todos. */
+  getSalesCustomers(): Promise<Customer[]>;
+  /** Últimos pedidos do cliente (aba Histórico da ficha) — só de cliente da carteira. */
+  getSalesCustomerOrders(customerId: string): Promise<Order[]>;
+  /** Produtos ativos com preço de tabela, promoção automática, estoque e faixa de preço (aba Produtos do pedido). */
+  getSalesProducts(): Promise<SalesProduct[]>;
+  /** Padrão da empresa para a faixa de preço (desconto e acréscimo máximos) — só o administrador. */
+  getSalesPricing(): Promise<SalesPricingSettings>;
+  updateSalesPricing(patch: Partial<SalesPricingSettings>): Promise<SalesPricingSettings>;
+  /** Envia o pedido em nome do cliente. O servidor confere carteira, plano de pagamento, faixa de preço e pedido mínimo. */
+  createAdminOrder(input: CreateAdminOrderInput): Promise<Order>;
+  /** Rascunhos de pedido de quem está logado (ficam no servidor, abrem de qualquer aparelho). */
+  getOrderDrafts(): Promise<OrderDraft[]>;
+  saveOrderDraft(id: string, input: { customerId: string; data: OrderDraftData }): Promise<OrderDraft>;
+  deleteOrderDraft(id: string): Promise<void>;
   /** Todos os carrinhos ativos da empresa com pelo menos 1 item (tela Perdidos). */
   getAdminCarts(): Promise<Cart[]>;
   /** Lista todos os clientes cadastrados — só platformAdmin. */

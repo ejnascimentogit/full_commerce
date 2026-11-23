@@ -27,9 +27,15 @@ import type {
   Company,
   CompanyDeployResult,
   CompanyAdminLogin,
+  CreateAdminOrderInput,
   Customer,
   DeliveryRegion,
   Order,
+  OrderDraft,
+  OrderDraftData,
+  SalesPriceLimits,
+  SalesPricingSettings,
+  SalesProduct,
   OrderItem,
   OrderStatus,
   PaymentMethod,
@@ -127,6 +133,8 @@ import {
   verifyPassword,
 } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
+import { deleteDraft as deleteDraftStore, listDrafts, saveDraft as saveDraftStore } from "./order-drafts-store";
+import { customersInPortfolio, lineDiscountPercent, lineNetPrice, salesPriceRange } from "../sales";
 import {
   clearAdminSession,
   createAdminUser,
@@ -198,6 +206,32 @@ function convertQuoteToOrderMock(
   const saved = saveOrder(order);
   updateQuoteStore(quote.id, { convertedOrderId: saved.id, status: "converted", addressId: finalAddressId });
   return saved;
+}
+
+function mockCurrentAdmin(): AdminUser {
+  const id = getAdminSessionUserId();
+  const user = id ? findAdminUserById(id) : undefined;
+  if (!user) throw new Error("UNAUTHENTICATED");
+  return user;
+}
+
+// Padrão da empresa para a faixa de preço do Novo pedido (mock, em localStorage). No real: store_settings.
+const SALES_PRICING_KEY = "ecommerce.mock.salesPricing";
+function readSalesPricing(): SalesPricingSettings {
+  if (typeof window === "undefined") return { maxDiscountPercent: 0, maxSurchargePercent: 0 };
+  try {
+    return { maxDiscountPercent: 0, maxSurchargePercent: 0, ...JSON.parse(localStorage.getItem(SALES_PRICING_KEY) ?? "{}") };
+  } catch {
+    return { maxDiscountPercent: 0, maxSurchargePercent: 0 };
+  }
+}
+
+function mockPriceLimits(product: Product): SalesPriceLimits {
+  const company = readSalesPricing();
+  return {
+    maxDiscountPercent: product.maxDiscountPercent ?? company.maxDiscountPercent,
+    maxSurchargePercent: product.maxSurchargePercent ?? company.maxSurchargePercent,
+  };
 }
 
 export const mockApiClient: ApiClient = {
@@ -742,6 +776,113 @@ export const mockApiClient: ApiClient = {
     const quote = findQuoteByIdStore(id);
     if (!quote) throw new Error("NOT_FOUND");
     return convertQuoteToOrderMock(id, quote.customerId, input);
+  },
+
+  // ---------- Força de vendas (mock): carteira = o próprio vendedor; administrador vê todos ----------
+  async getSalesCustomers(): Promise<Customer[]> {
+    await delay();
+    const admin = mockCurrentAdmin();
+    return customersInPortfolio(listCustomers(), admin.role === "platformAdmin" || admin.isManager ? null : [admin.id]);
+  },
+
+  async getSalesCustomerOrders(customerId: string): Promise<Order[]> {
+    await delay();
+    return findOrdersByCustomer(customerId).slice(0, 10);
+  },
+
+  async getSalesProducts(): Promise<SalesProduct[]> {
+    await delay();
+    return listProducts()
+      .filter((p) => p.status === "active")
+      .map((p) => ({ ...p, listPrice: unitPriceOf(p), priceLimits: mockPriceLimits(p) }));
+  },
+
+  async getSalesPricing(): Promise<SalesPricingSettings> {
+    await delay();
+    return readSalesPricing();
+  },
+
+  async updateSalesPricing(patch: Partial<SalesPricingSettings>): Promise<SalesPricingSettings> {
+    await delay(200);
+    const clamp = (n: number) => Math.max(0, Math.min(100, Number(n) || 0));
+    const current = readSalesPricing();
+    const next = {
+      maxDiscountPercent: patch.maxDiscountPercent != null ? clamp(patch.maxDiscountPercent) : current.maxDiscountPercent,
+      maxSurchargePercent: patch.maxSurchargePercent != null ? clamp(patch.maxSurchargePercent) : current.maxSurchargePercent,
+    };
+    if (typeof window !== "undefined") localStorage.setItem(SALES_PRICING_KEY, JSON.stringify(next));
+    return next;
+  },
+
+  async createAdminOrder(input: CreateAdminOrderInput): Promise<Order> {
+    await delay(400);
+    const admin = mockCurrentAdmin();
+    const customer = findCustomerById(input.customerId);
+    if (!customer) throw new Error("CUSTOMER_NOT_FOUND");
+    const address = customer.addresses.find((a) => a.id === input.addressId);
+    if (!address) throw new Error("ADDRESS_NOT_FOUND");
+    if (!input.items.length) throw new Error("EMPTY_ORDER");
+    const items: OrderItem[] = input.items.map((line) => {
+      const product = findProductById(line.productId);
+      if (!product) throw new Error("PRODUCT_NOT_FOUND");
+      const sales = { listPrice: unitPriceOf(product), priceLimits: mockPriceLimits(product) };
+      const range = salesPriceRange(sales);
+      const listPrice = range.base;
+      const unitPrice = lineNetPrice(sales, line);
+      if (unitPrice < range.min) throw new Error("PRICE_BELOW_MIN");
+      if (unitPrice > range.max) throw new Error("PRICE_ABOVE_MAX");
+      const discountPercent = lineDiscountPercent(sales, line);
+      const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
+      return {
+        ...buildOrderItem(product, line.quantity),
+        unitPrice,
+        estimatedSubtotal: Math.round(unitPrice * weight * line.quantity * 100) / 100,
+        listPrice,
+        discountPercent: discountPercent || undefined,
+      };
+    });
+    const subtotal = items.reduce((sum, i) => sum + i.estimatedSubtotal, 0);
+    const settings = getSettings();
+    if (settings.minOrderValue && subtotal < settings.minOrderValue) throw new Error("BELOW_MIN_ORDER_VALUE");
+    const totals = calculateOrderTotals(items, calculateShipping(customer, settings));
+    const now = new Date().toISOString();
+    const order = saveOrder({
+      id: `order-${Date.now()}`,
+      orderNumber: nextOrderNumber(),
+      customerId: customer.id,
+      items,
+      shippingAddress: address,
+      regionId: customer.regionId,
+      paymentMethod: input.paymentMethod,
+      installments: input.paymentMethod === "credit" ? input.installments : undefined,
+      ...totals,
+      status: "PAID",
+      statusHistory: [
+        { status: "PENDING", changedAt: now },
+        { status: "PAID", changedAt: now },
+      ],
+      createdAt: now,
+      origin: "painel",
+      sellerName: admin.name,
+      note: input.note,
+    });
+    if (input.draftId) deleteDraftStore(admin.id, input.draftId);
+    return order;
+  },
+
+  async getOrderDrafts(): Promise<OrderDraft[]> {
+    await delay();
+    return listDrafts(mockCurrentAdmin().id);
+  },
+
+  async saveOrderDraft(id: string, input: { customerId: string; data: OrderDraftData }): Promise<OrderDraft> {
+    await delay(200);
+    return saveDraftStore(mockCurrentAdmin().id, id, input.customerId, input.data);
+  },
+
+  async deleteOrderDraft(id: string): Promise<void> {
+    await delay(200);
+    deleteDraftStore(mockCurrentAdmin().id, id);
   },
 
   async getAdminCarts(): Promise<Cart[]> {

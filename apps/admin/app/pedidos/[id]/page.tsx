@@ -268,6 +268,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
                     <p className="text-slate-500">
                       {(currentTotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType} × R${" "}
                       {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+                      {!!item.discountPercent && <span className="ml-2 text-green-700">−{item.discountPercent}% do vendedor</span>}
                       {delta !== 0 && (
                         <span className={`ml-2 font-medium ${delta > 0 ? "text-green-600" : "text-amber-600"}`}>
                           {delta > 0 ? "▲" : "▼"} ajustado {delta > 0 ? "para mais" : "para menos"}
@@ -328,6 +329,13 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
           <h3 className="font-semibold text-slate-900 mb-1">Total do pedido</h3>
           <p className="text-slate-900 font-bold">R$ {order.total.toFixed(2).replace(".", ",")}</p>
         </div>
+        {order.origin === "painel" && (
+          <div className="sm:col-span-3 border-t border-slate-100 pt-3">
+            <h3 className="font-semibold text-slate-900 mb-1">Digitado pelo vendedor</h3>
+            <p className="text-slate-600">{order.sellerName ?? "Painel"}</p>
+            {order.note && <p className="text-slate-600 mt-1">Observação: {order.note}</p>}
+          </div>
+        )}
       </div>
     </AdminShell>
   );

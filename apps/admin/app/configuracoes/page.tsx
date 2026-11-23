@@ -9,6 +9,7 @@ import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerc
 import type { Banner, FooterLink, FooterSettings, PaymentMethod, SiteCopy, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { RegionsSection } from "@/components/RegionsSection";
+import { ForcaVendasSection } from "@/components/ForcaVendasSection";
 import { PerfisSection } from "@/components/PerfisSection";
 import { TeamSection } from "@/components/TeamSection";
 import { ActivityOutcomesSection } from "@/components/ActivityOutcomesSection";
@@ -58,6 +59,11 @@ const CONFIG_SECTIONS = [
     id: "pagamento",
     title: "Pagamento",
     help: "Quais formas de pagamento o cliente vê no checkout, a chave Pix pra gerar o QR Code, e as regras de parcelamento no cartão (máximo de parcelas, valor mínimo, quantas saem sem juros).",
+  },
+  {
+    id: "forca-vendas",
+    title: "Força de vendas: faixa de preço",
+    help: "Desconto máximo e acréscimo máximo (%) que o vendedor pode aplicar sobre o preço de tabela no Novo pedido. Protege o markup e evita preço abusivo. Cada produto pode ter limite próprio no cadastro.",
   },
   {
     id: "rota",
@@ -944,6 +950,9 @@ export default function ConfiguracoesPage() {
         </div>
       </CollapsibleSection>
 
+      <div id="forca-vendas" className={highlightedId === "forca-vendas" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
+        <ForcaVendasSection />
+      </div>
       <div id="rota" className={highlightedId === "rota" ? "ring-2 ring-brand-400 ring-offset-2 rounded-lg" : ""}>
         <RegionsSection />
       </div>

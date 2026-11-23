@@ -13,6 +13,8 @@ export const PERMISSIONS = [
   "pedidos.ver",
   "pedidos.status",
   "pedidos.ajustar",
+  "pedidos.criar",
+  "pedidos.alterar_plano",
   "orcamentos.ver",
   "orcamentos.responder",
   "orcamentos.converter",
@@ -49,6 +51,8 @@ export const LEGACY_PERMISSIONS: Record<string, readonly Permission[]> = {
 export const PERMISSION_REQUIRES: Readonly<Partial<Record<Permission, Permission>>> = {
   "pedidos.status": "pedidos.ver",
   "pedidos.ajustar": "pedidos.ver",
+  "pedidos.criar": "pedidos.ver",
+  "pedidos.alterar_plano": "pedidos.ver",
   "orcamentos.responder": "orcamentos.ver",
   "orcamentos.converter": "orcamentos.ver",
   "promocoes.editar": "promocoes.ver",
