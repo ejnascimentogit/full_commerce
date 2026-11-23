@@ -5,11 +5,15 @@ import type { AdminUser, Customer, Order, OrderDraft, PaymentMethod, SalesOrderL
 import {
   apiClient,
   customerNumber,
+  discountFromPrice,
+  lineDiscountPercent,
+  lineNetPrice,
+  lineSubtotal,
+  minUnitPrice,
   netUnitPrice,
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHOD_ORDER,
   salesBasePrice,
-  salesLineSubtotal,
   salesOrderAlerts,
   salesOrderTotals,
   userCan,
@@ -32,7 +36,9 @@ const SERVER_ERRORS: Record<string, string> = {
   EMPTY_ORDER: "Inclua pelo menos um item.",
   PRODUCT_NOT_FOUND: "Um produto saiu de linha. Atualize a tela e tire o item.",
   INVALID_QUANTITY: "Quantidade inválida em um item.",
-  DISCOUNT_ABOVE_LIMIT: "Desconto acima do seu limite.",
+  DISCOUNT_ABOVE_LIMIT: "Preço abaixo do seu limite de desconto.",
+  PRICE_ABOVE_TABLE: "Preço acima da tabela.",
+  INVALID_PRICE: "Preço inválido em um item.",
   BELOW_MIN_ORDER_VALUE: "Pedido abaixo do valor mínimo da loja.",
   FORBIDDEN: "Você não tem permissão para digitar pedidos.",
 };
@@ -357,7 +363,8 @@ export function PedidoEditor({
                   </li>
                 );
               }
-              const unit = netUnitPrice(salesBasePrice(p), line.discountPercent);
+              const unit = lineNetPrice(p, line);
+              const pct = lineDiscountPercent(p, line);
               return (
                 <li key={line.productId}>
                   <button type="button" onClick={() => setEditing(p)} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3">
@@ -365,10 +372,10 @@ export function PedidoEditor({
                       <span className="block text-sm font-medium text-slate-900 truncate">{p.name}</span>
                       <span className="block text-xs text-slate-500">
                         {line.quantity} {UNIT_LABEL[p.unitType] ?? p.unitType} × {money(unit)}
-                        {line.discountPercent > 0 && <span className="text-green-700"> · −{line.discountPercent}%</span>}
+                        {pct > 0 && <span className="text-green-700"> · −{pct.toString().replace(".", ",")}%</span>}
                       </span>
                     </span>
-                    <span className="text-sm font-semibold text-slate-900 shrink-0">{money(salesLineSubtotal(p, line.quantity, line.discountPercent))}</span>
+                    <span className="text-sm font-semibold text-slate-900 shrink-0">{money(lineSubtotal(p, line))}</span>
                   </button>
                 </li>
               );
@@ -489,7 +496,9 @@ function Row({ label, value, strong, tone }: { label: string; value: string; str
   );
 }
 
-// Tela do item (abre ao tocar no produto): quantidade, desconto dentro do limite e prévia do valor.
+// Tela do item (abre ao tocar no produto), como no maxPedido: digita a quantidade e o preço unitário. O % de desconto
+// acompanha o preço (e vice-versa); o que o vendedor mexeu por último é o que vale. Limite: preço de tabela no máximo e o
+// desconto do perfil no mínimo. O servidor confere de novo.
 function ItemSheet({
   product,
   line,
@@ -505,18 +514,57 @@ function ItemSheet({
   onSave: (line: SalesOrderLine) => void;
   onRemove: () => void;
 }) {
-  const [quantity, setQuantity] = useState(String(line?.quantity ?? 1));
-  const [discount, setDiscount] = useState(String(line?.discountPercent ?? 0));
-  const qty = Number(quantity.replace(",", "."));
-  const pct = Number(discount.replace(",", ".")) || 0;
   const base = salesBasePrice(product);
+  const minPrice = minUnitPrice(base, maxDiscount);
+  const initialPrice = line ? lineNetPrice(product, line) : base;
+  const [quantity, setQuantity] = useState(String(line?.quantity ?? 1));
+  const [price, setPrice] = useState(initialPrice.toFixed(2).replace(".", ","));
+  const [discount, setDiscount] = useState(String(line ? lineDiscountPercent(product, line) : 0).replace(".", ","));
+  const [mode, setMode] = useState<"price" | "pct">(line?.unitPrice != null ? "price" : "pct");
+
+  // "49,90", "1.234,50" e "49.90" (teclado com ponto) viram número.
+  const parse = (v: string) => Number(v.includes(",") ? v.replace(/\./g, "").replace(",", ".") : v);
+  const qty = Number(quantity.replace(",", "."));
+  const typedPrice = parse(price);
+  const typedPct = Number(discount.replace(",", ".")) || 0;
+  const unit = mode === "price" ? Math.round(typedPrice * 100) / 100 : netUnitPrice(base, typedPct);
   const validQty = Number.isFinite(qty) && qty > 0;
-  const overLimit = pct > maxDiscount || pct < 0;
+  const validPrice = Number.isFinite(unit) && unit >= 0;
+  const aboveTable = validPrice && unit > base;
+  const belowLimit = validPrice && unit < minPrice;
+  const canEditPrice = maxDiscount > 0;
   const step = (delta: number) => setQuantity(String(Math.max(1, (validQty ? qty : 0) + delta)));
+
+  function changePrice(value: string) {
+    setMode("price");
+    setPrice(value);
+    const n = parse(value);
+    if (Number.isFinite(n)) setDiscount(String(discountFromPrice(base, n)).replace(".", ","));
+  }
+
+  function changePct(value: string) {
+    setMode("pct");
+    setDiscount(value);
+    const n = Number(value.replace(",", "."));
+    if (Number.isFinite(n)) setPrice(netUnitPrice(base, n).toFixed(2).replace(".", ","));
+  }
+
+  const canSave = validQty && validPrice && !aboveTable && !belowLimit;
+  function save(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!canSave) return;
+    onSave(
+      mode === "price" && unit !== base
+        ? { productId: product.id, quantity: qty, discountPercent: discountFromPrice(base, unit), unitPrice: unit }
+        : { productId: product.id, quantity: qty, discountPercent: Math.round(typedPct * 100) / 100 },
+    );
+  }
+  const selectAll = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div
+      <form
+        onSubmit={save}
         className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -524,19 +572,24 @@ function ItemSheet({
       >
         <h3 className="text-base font-semibold text-slate-900">{product.name}</h3>
         <p className="text-xs text-slate-500 mb-4">
-          Cód. {product.sku} · Estoque {product.stock} · {money(base)}/{UNIT_LABEL[product.unitType] ?? product.unitType}
+          Cód. {product.sku} · Estoque {product.stock} · Tabela {money(base)}/{UNIT_LABEL[product.unitType] ?? product.unitType}
           {base < product.listPrice && <span className="text-green-700"> (promoção, de {money(product.listPrice)})</span>}
         </p>
 
-        <label className="block text-sm text-slate-600 mb-1">Quantidade</label>
+        <label className="block text-sm text-slate-600 mb-1" htmlFor="item-qty">
+          Quantidade
+        </label>
         <div className="flex items-center gap-2 mb-4">
           <button type="button" onClick={() => step(-1)} className="w-11 h-11 shrink-0 border border-slate-300 rounded-md text-lg" aria-label="Diminuir">
             −
           </button>
           <input
+            id="item-qty"
             inputMode="decimal"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
+            onFocus={selectAll}
+            autoFocus
             className="flex-1 min-w-0 w-full border border-slate-300 rounded-md px-3 py-2.5 text-center text-base"
           />
           <button type="button" onClick={() => step(1)} className="w-11 h-11 shrink-0 border border-slate-300 rounded-md text-lg" aria-label="Aumentar">
@@ -544,25 +597,53 @@ function ItemSheet({
           </button>
         </div>
 
-        <label className="block text-sm text-slate-600 mb-1">Desconto (%)</label>
-        <input
-          inputMode="decimal"
-          value={discount}
-          onChange={(e) => setDiscount(e.target.value)}
-          disabled={maxDiscount <= 0}
-          className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-50 ${overLimit ? "border-red-500" : "border-slate-300"}`}
-        />
-        <p className={`text-xs mt-1 ${overLimit ? "text-red-600" : "text-slate-500"}`}>
-          {maxDiscount <= 0 ? "Seu perfil não permite dar desconto." : `Seu limite: até ${maxDiscount}% por item.`}
+        <div className="grid grid-cols-5 gap-2">
+          <div className="col-span-3">
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="item-price">
+              Preço unitário (R$)
+            </label>
+            <input
+              id="item-price"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => changePrice(e.target.value)}
+              onFocus={selectAll}
+              disabled={!canEditPrice}
+              className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-50 ${aboveTable || belowLimit ? "border-red-500" : "border-slate-300"}`}
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm text-slate-600 mb-1" htmlFor="item-pct">
+              Desconto (%)
+            </label>
+            <input
+              id="item-pct"
+              inputMode="decimal"
+              value={discount}
+              onChange={(e) => changePct(e.target.value)}
+              onFocus={selectAll}
+              disabled={!canEditPrice}
+              className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-50 ${aboveTable || belowLimit ? "border-red-500" : "border-slate-300"}`}
+            />
+          </div>
+        </div>
+        <p className={`text-xs mt-1 ${aboveTable || belowLimit ? "text-red-600" : "text-slate-500"}`}>
+          {!canEditPrice
+            ? "Seu perfil não permite mudar o preço (desconto 0%)."
+            : aboveTable
+              ? `Acima do preço de tabela (${money(base)}).`
+              : `Preço mínimo para você: ${money(minPrice)} (até ${maxDiscount}% de desconto).`}
         </p>
 
-        {validQty && (
+        {validQty && validPrice && (
           <div className="mt-4 bg-slate-50 rounded-md p-3 text-sm flex justify-between">
             <span className="text-slate-600">
-              {money(netUnitPrice(base, pct))} × {qty}
+              {money(unit)} × {qty}
               {product.isVariableWeight ? ` × ~${product.avgWeight ?? 1}kg` : ""}
             </span>
-            <span className="font-semibold text-slate-900">{money(salesLineSubtotal(product, qty, pct))}</span>
+            <span className="font-semibold text-slate-900">
+              {money(lineSubtotal(product, { quantity: qty, discountPercent: 0, unitPrice: unit }))}
+            </span>
           </div>
         )}
         {validQty && qty > product.stock && <p className="text-xs text-amber-700 mt-2">Quantidade maior que o estoque ({product.stock}).</p>}
@@ -577,15 +658,14 @@ function ItemSheet({
             Cancelar
           </button>
           <button
-            type="button"
-            disabled={!validQty || overLimit}
-            onClick={() => onSave({ productId: product.id, quantity: qty, discountPercent: Math.round(pct * 100) / 100 })}
+            type="submit"
+            disabled={!canSave}
             className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-md"
           >
             {line ? "Atualizar" : "Adicionar"}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

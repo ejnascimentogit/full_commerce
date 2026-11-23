@@ -6,6 +6,7 @@ import { calculateShipping, type ShippingSettings } from "./domain";
 // a última palavra: é o que deixa o vendedor ver o problema antes de enviar.
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 
 /** Preço que o pedido cobra antes do desconto do vendedor: a promoção automática, se houver; senão o preço de tabela. */
 export function salesBasePrice(product: Pick<SalesProduct, "listPrice" | "promoPrice">): number {
@@ -16,6 +17,36 @@ export function salesBasePrice(product: Pick<SalesProduct, "listPrice" | "promoP
 export function netUnitPrice(basePrice: number, discountPercent: number): number {
   const pct = Math.max(0, Math.min(100, Number.isFinite(discountPercent) ? discountPercent : 0));
   return round2(basePrice * (1 - pct / 100));
+}
+
+/** Menor preço unitário que o vendedor pode digitar, dado o limite de desconto dele. */
+export function minUnitPrice(basePrice: number, maxDiscountPercent: number): number {
+  return netUnitPrice(basePrice, maxDiscountPercent);
+}
+
+/** Desconto (%) equivalente a um preço digitado, com 2 casas. Preço acima da tabela dá negativo (acréscimo). */
+export function discountFromPrice(basePrice: number, unitPrice: number): number {
+  if (!(basePrice > 0)) return 0;
+  return round2((1 - unitPrice / basePrice) * 100);
+}
+
+/** Preço líquido de uma linha: o digitado pelo vendedor, se houver; senão o calculado pelo %. */
+export function lineNetPrice(product: Pick<SalesProduct, "listPrice" | "promoPrice">, line: Pick<SalesOrderLine, "discountPercent" | "unitPrice">): number {
+  return line.unitPrice != null ? round2(line.unitPrice) : netUnitPrice(salesBasePrice(product), line.discountPercent);
+}
+
+/** Desconto efetivo (%) de uma linha, tenha o vendedor digitado o preço ou o %. */
+export function lineDiscountPercent(product: Pick<SalesProduct, "listPrice" | "promoPrice">, line: Pick<SalesOrderLine, "discountPercent" | "unitPrice">): number {
+  return line.unitPrice != null ? discountFromPrice(salesBasePrice(product), line.unitPrice) : line.discountPercent;
+}
+
+/** Subtotal da linha a partir do preço líquido (peso variável usa o peso médio). */
+export function lineSubtotal(
+  product: Pick<SalesProduct, "listPrice" | "promoPrice" | "isVariableWeight" | "avgWeight">,
+  line: Pick<SalesOrderLine, "quantity" | "discountPercent" | "unitPrice">,
+): number {
+  const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
+  return round2(lineNetPrice(product, line) * weight * line.quantity);
 }
 
 /** Subtotal estimado da linha, igual ao servidor: produto de peso variável usa o peso médio. */
@@ -53,7 +84,7 @@ export function salesOrderTotals(
     const product = get(line.productId);
     if (!product) continue;
     grossSubtotal += salesLineSubtotal(product, line.quantity, 0);
-    subtotal += salesLineSubtotal(product, line.quantity, line.discountPercent);
+    subtotal += lineSubtotal(product, line);
   }
   grossSubtotal = round2(grossSubtotal);
   subtotal = round2(subtotal);
@@ -119,11 +150,19 @@ export function salesOrderAlerts(input: SalesAlertInput): SalesAlert[] {
       continue;
     }
     if (!(line.quantity > 0)) alerts.push({ level: "error", code: "INVALID_QUANTITY", message: `Quantidade inválida em ${product.name}.`, productId: product.id });
-    if (line.discountPercent > input.maxDiscountPercent) {
+    const base = salesBasePrice(product);
+    if (line.unitPrice != null && round2(line.unitPrice) > base) {
+      alerts.push({
+        level: "error",
+        code: "PRICE_ABOVE_TABLE",
+        message: `${product.name}: preço digitado acima da tabela (${brl(base)}).`,
+        productId: product.id,
+      });
+    } else if (line.unitPrice != null ? round2(line.unitPrice) < minUnitPrice(base, input.maxDiscountPercent) : line.discountPercent > input.maxDiscountPercent) {
       alerts.push({
         level: "error",
         code: "DISCOUNT_ABOVE_LIMIT",
-        message: `Desconto de ${line.discountPercent}% em ${product.name} passa do seu limite (${input.maxDiscountPercent}%).`,
+        message: `${product.name}: desconto de ${lineDiscountPercent(product, line)}% passa do seu limite (${input.maxDiscountPercent}%, preço mínimo ${brl(minUnitPrice(base, input.maxDiscountPercent))}).`,
         productId: product.id,
       });
     }

@@ -2125,20 +2125,34 @@ app.post("/admin/orders", async (c) => {
   ]);
   const productById = new Map((products ?? []).map((p) => [p.id, p]));
 
-  const items = rawItems.map((i: { productId: string; quantity: number; discountPercent?: number }) => {
+  const items = rawItems.map((i: { productId: string; quantity: number; discountPercent?: number; unitPrice?: number }) => {
     const product = productById.get(i.productId);
     if (!product) throw new ApiError(422, "PRODUCT_NOT_FOUND", "Produto inexistente ou inativo.");
     const quantity = Number(i.quantity);
     if (!(quantity > 0)) throw new ApiError(422, "INVALID_QUANTITY", `Quantidade inválida em ${product.name}.`);
-    const discountPercent = clampPercent(i.discountPercent);
-    if (discountPercent > maxDiscount) {
-      throw new ApiError(422, "DISCOUNT_ABOVE_LIMIT", `Desconto de ${discountPercent}% em ${product.name} passa do seu limite (${maxDiscount}%).`);
-    }
     // Espelho do pedido: preço de tabela (já com promoção automática) congelado em list_price; unit_price é o preço
     // líquido que o cliente paga, então todo o resto do sistema (totais, separação, ajuste de peso) segue igual.
     const base = buildOrderItem(product, quantity, autoPromotions);
     const listPrice = Number(base.unit_price);
-    const unitPrice = Math.round(listPrice * (1 - discountPercent / 100) * 100) / 100;
+    const minPrice = Math.round(listPrice * (1 - maxDiscount / 100) * 100) / 100;
+    let unitPrice: number;
+    let discountPercent: number;
+    if (i.unitPrice != null) {
+      // O vendedor digitou o preço: não pode passar da tabela (acréscimo fica para a Fase 2) nem do limite de desconto.
+      unitPrice = Math.round(Number(i.unitPrice) * 100) / 100;
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new ApiError(422, "INVALID_PRICE", `Preço inválido em ${product.name}.`);
+      if (unitPrice > listPrice) throw new ApiError(422, "PRICE_ABOVE_TABLE", `Preço de ${product.name} acima da tabela.`);
+      if (unitPrice < minPrice) {
+        throw new ApiError(422, "DISCOUNT_ABOVE_LIMIT", `Preço de ${product.name} abaixo do seu limite de desconto (${maxDiscount}%).`);
+      }
+      discountPercent = listPrice > 0 ? Math.round((1 - unitPrice / listPrice) * 10000) / 100 : 0;
+    } else {
+      discountPercent = clampPercent(i.discountPercent);
+      if (discountPercent > maxDiscount) {
+        throw new ApiError(422, "DISCOUNT_ABOVE_LIMIT", `Desconto de ${discountPercent}% em ${product.name} passa do seu limite (${maxDiscount}%).`);
+      }
+      unitPrice = Math.round(listPrice * (1 - discountPercent / 100) * 100) / 100;
+    }
     const estimatedSubtotal = product.is_variable_weight ? unitPrice * Number(product.avg_weight ?? 1) * quantity : unitPrice * quantity;
     return {
       ...base,

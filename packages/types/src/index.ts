@@ -387,6 +387,8 @@ export interface SalesOrderLine {
   quantity: number;
   /** Desconto do vendedor no item, em %, limitado por AdminUser.maxDiscountPercent (o servidor confere). */
   discountPercent: number;
+  /** Preço unitário digitado pelo vendedor. Quando presente, vale ele (o % é só reflexo); não pode passar do preço de tabela nem ficar abaixo do limite de desconto. */
+  unitPrice?: number;
 }
 
 /** Conteúdo de um rascunho: tudo que o vendedor já preencheu, pra continuar depois de qualquer aparelho. */

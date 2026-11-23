@@ -133,7 +133,7 @@ import {
 } from "./customers-store";
 import { clearSession, getSessionCustomerId, setSessionCustomerId } from "./session";
 import { deleteDraft as deleteDraftStore, listDrafts, saveDraft as saveDraftStore } from "./order-drafts-store";
-import { customersInPortfolio, netUnitPrice, salesBasePrice } from "../sales";
+import { customersInPortfolio, lineDiscountPercent, lineNetPrice, netUnitPrice, salesBasePrice } from "../sales";
 import {
   clearAdminSession,
   createAdminUser,
@@ -796,16 +796,18 @@ export const mockApiClient: ApiClient = {
     const items: OrderItem[] = input.items.map((line) => {
       const product = findProductById(line.productId);
       if (!product) throw new Error("PRODUCT_NOT_FOUND");
-      if (line.discountPercent > maxDiscount) throw new Error("DISCOUNT_ABOVE_LIMIT");
       const listPrice = salesBasePrice({ listPrice: unitPriceOf(product) });
-      const unitPrice = netUnitPrice(listPrice, line.discountPercent);
+      const unitPrice = lineNetPrice({ listPrice }, line);
+      if (unitPrice > listPrice) throw new Error("PRICE_ABOVE_TABLE");
+      if (unitPrice < netUnitPrice(listPrice, maxDiscount)) throw new Error("DISCOUNT_ABOVE_LIMIT");
+      const discountPercent = lineDiscountPercent({ listPrice }, line);
       const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
       return {
         ...buildOrderItem(product, line.quantity),
         unitPrice,
         estimatedSubtotal: Math.round(unitPrice * weight * line.quantity * 100) / 100,
         listPrice,
-        discountPercent: line.discountPercent || undefined,
+        discountPercent: discountPercent || undefined,
       };
     });
     const subtotal = items.reduce((sum, i) => sum + i.estimatedSubtotal, 0);

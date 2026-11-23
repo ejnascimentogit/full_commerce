@@ -38,6 +38,11 @@ export { lookupCep, formatCep } from "./cep";
 export { customerNumber } from "./customer-code";
 export {
   customersInPortfolio,
+  discountFromPrice,
+  lineDiscountPercent,
+  lineNetPrice,
+  lineSubtotal,
+  minUnitPrice,
   netUnitPrice,
   salesBasePrice,
   salesLineSubtotal,

@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { SalesProduct } from "@ecommerce/types";
-import { customersInPortfolio, netUnitPrice, salesBasePrice, salesLineSubtotal, salesOrderAlerts, salesOrderTotals } from "./sales";
+import {
+  customersInPortfolio,
+  discountFromPrice,
+  lineDiscountPercent,
+  lineNetPrice,
+  lineSubtotal,
+  minUnitPrice,
+  netUnitPrice,
+  salesBasePrice,
+  salesLineSubtotal,
+  salesOrderAlerts,
+  salesOrderTotals,
+} from "./sales";
 
 function product(overrides: Partial<SalesProduct> = {}): SalesProduct {
   return {
@@ -107,5 +119,46 @@ describe("carteira do vendedor", () => {
   it("null vê todos; senão só os vinculados", () => {
     expect(customersInPortfolio(customers, null)).toHaveLength(3);
     expect(customersInPortfolio(customers, ["s1"]).map((c) => c.id)).toEqual(["1"]);
+  });
+});
+
+describe("preço digitado pelo vendedor", () => {
+  it("o preço digitado vale e o % acompanha", () => {
+    const p = product({ listPrice: 52.47 });
+    const line = { productId: "p1", quantity: 2, discountPercent: 0, unitPrice: 49 };
+    expect(lineNetPrice(p, line)).toBe(49);
+    expect(lineDiscountPercent(p, line)).toBe(6.61);
+    expect(lineSubtotal(p, line)).toBe(98);
+    expect(discountFromPrice(20, 21)).toBe(-5);
+  });
+  it("sem preço digitado, usa o %", () => {
+    expect(lineNetPrice(product(), { discountPercent: 10 })).toBe(18);
+  });
+  it("preço mínimo = tabela menos o limite do vendedor", () => {
+    expect(minUnitPrice(52.47, 5)).toBe(49.85);
+  });
+  it("alertas: abaixo do mínimo e acima da tabela bloqueiam; no mínimo exato passa", () => {
+    const base = {
+      customer: { status: "active" as const, regionId: "r1", preferredPaymentMethod: "pix" as const },
+      addressId: "a1",
+      paymentMethod: "pix" as const,
+      enabledPaymentMethods: ["pix"] as "pix"[],
+      canChangePlan: false,
+      productsById: new Map([["p1", product({ listPrice: 52.47 })]]),
+      maxDiscountPercent: 5,
+      subtotal: 100,
+    };
+    const at = (unitPrice: number) => salesOrderAlerts({ ...base, lines: [{ productId: "p1", quantity: 1, discountPercent: 0, unitPrice }] }).map((a) => a.code);
+    expect(at(49.84)).toEqual(["DISCOUNT_ABOVE_LIMIT"]);
+    expect(at(49.85)).toEqual([]);
+    expect(at(52.48)).toEqual(["PRICE_ABOVE_TABLE"]);
+  });
+  it("totais usam o preço digitado", () => {
+    const products = new Map([["p1", product({ listPrice: 20 })]]);
+    const totals = salesOrderTotals([{ productId: "p1", quantity: 3, discountPercent: 0, unitPrice: 19 }], products, { documentType: "cnpj" }, {
+      freeShippingForCnpj: true,
+      shippingCost: 10,
+    });
+    expect(totals).toMatchObject({ grossSubtotal: 60, sellerDiscount: 3, subtotal: 57, total: 57 });
   });
 });
