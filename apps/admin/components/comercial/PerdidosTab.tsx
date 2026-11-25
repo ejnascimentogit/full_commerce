@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiClient, unitPriceOf } from "@ecommerce/api-client";
+import { apiClient, packSizeOf, unitPriceOf } from "@ecommerce/api-client";
 import type { Cart, Customer, Product } from "@ecommerce/types";
 import { WhatsappButton, WhatsappPanel } from "@/components/WhatsappMessage";
 import { productList } from "@/lib/whatsapp";
@@ -74,7 +74,7 @@ export function PerdidosTab() {
   function valueOf(cart: Cart): number {
     return cart.items.reduce((sum, item) => {
       const product = productsById[item.productId];
-      return product ? sum + unitPriceOf(product) * item.quantity : sum;
+      return product ? sum + unitPriceOf(product) * item.quantity * packSizeOf(product) : sum;
     }, 0);
   }
 

@@ -117,6 +117,7 @@ import {
   getBestSellingProducts,
   isPromotionActive,
   matchRegionByNeighborhood,
+  packSizeOf,
   unitPriceOf,
 } from "../domain";
 import { isValidDocument } from "../documents";
@@ -463,6 +464,7 @@ export const mockApiClient: ApiClient = {
         sku: product.sku,
         unitType: product.unitType,
         quantity,
+        ...(packSizeOf(product) > 1 ? { packSize: packSizeOf(product), packUnit: product.masterUnit, packaging: product.packaging } : {}),
         referenceUnitPrice: unitPriceOf(product),
       };
     });
@@ -832,7 +834,7 @@ export const mockApiClient: ApiClient = {
       if (unitPrice < range.min) throw new Error("PRICE_BELOW_MIN");
       if (unitPrice > range.max) throw new Error("PRICE_ABOVE_MAX");
       const discountPercent = lineDiscountPercent(sales, line);
-      const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
+      const weight = product.isVariableWeight ? product.avgWeight ?? 1 : packSizeOf(product);
       return {
         ...buildOrderItem(product, line.quantity),
         unitPrice,

@@ -271,6 +271,11 @@ export interface Product {
   salePrice?: number;
   /** true = salePrice veio de uma Promoção ativa (Promoções no admin); false/ausente = preço promocional digitado direto no cadastro do produto. Só pra diferenciar visualmente no catálogo. */
   promotionActive?: boolean;
+  /** Unidade master: sigla da embalagem de venda (ex.: "CX", "FD", "PCT"). Aparece como "2 CX (40 kg)". */
+  masterUnit?: string;
+  /** Quant. master: quantidade da embalagem (ex.: 20 numa "CX 20KG"). Em produto padrão (un/kg, sem peso variável) com valor > 1, a quantidade
+   * do carrinho/pedido é em embalagens e o valor é quantidade × boxQuantity × preço unitário (ver packSizeOf). Em produto "cx"
+   * (preço já por caixa) é só informativo. */
   boxQuantity?: number;
   isVariableWeight: boolean;
   avgWeight?: number;
@@ -340,9 +345,16 @@ export interface OrderItem {
   sku: string;
   unitType: UnitType;
   unitPrice: number;
+  /** Em embalagens quando packSize > 1 (ex.: 2 = 2 CX); senão na unidade do produto. */
   quantity: number;
   estimatedSubtotal: number;
   finalSubtotal?: number;
+  /** Quantidade da embalagem congelada na venda (espelho do pedido). Subtotal = unitPrice × quantity × packSize. Ausente/1 = sem multiplicar. */
+  packSize?: number;
+  /** Unidade master congelada na venda, ex.: "CX" (só exibição). */
+  packUnit?: string;
+  /** Embalagem congelada na venda, ex.: "CX 20KG" (só exibição). */
+  packaging?: string;
   /** Pedido digitado pelo vendedor: preço de tabela (com promoção automática) antes do desconto do vendedor. unitPrice é o líquido. */
   listPrice?: number;
   /** Pedido digitado pelo vendedor: desconto (%) dado no item; negativo = acréscimo. Ausente = preço de tabela. */
@@ -456,7 +468,12 @@ export interface QuoteItem {
   name: string;
   sku: string;
   unitType: UnitType;
+  /** Em embalagens quando packSize > 1. */
   quantity: number;
+  /** Quantidade da embalagem congelada quando o orçamento foi criado (ver OrderItem.packSize). */
+  packSize?: number;
+  packUnit?: string;
+  packaging?: string;
   /** Preço de tabela do produto no momento em que o orçamento foi criado — congelado, não muda se o preço do produto mudar depois. Ausente só deveria acontecer por dado legado. */
   referenceUnitPrice?: number;
 }

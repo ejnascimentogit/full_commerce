@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
+import { formatItemQuantity, apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
 import type { Category, Order } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
@@ -97,6 +97,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
                   <p className="text-slate-500">
                     {(currentTotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType} × R${" "}
                     {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+                      {(item.packSize ?? 1) > 1 && <span className="ml-1">· pedido: {formatItemQuantity(item)}</span>}
                   </p>
                   {delta !== 0 && (
                     <p className={`text-xs font-medium mt-0.5 ${delta > 0 ? "text-green-600" : "text-amber-600"}`}>

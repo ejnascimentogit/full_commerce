@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { notFound, useRouter } from "next/navigation";
-import { apiClient, packageLabels } from "@ecommerce/api-client";
+import { apiClient, packageLabels, packSizeOf, packUnitLabel } from "@ecommerce/api-client";
 import type { Category, Product, Vendor } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
@@ -101,8 +101,14 @@ export default function ProdutoPage({ params }: { params: Promise<{ id: string }
               R$ {displayPrice.toFixed(2).replace(".", ",")}
               <span className="text-base font-normal text-slate-500">/{unitSuffix[product.unitType]}</span>
             </p>
-            {product.boxQuantity && (
-              <p className="text-sm text-slate-500">Caixa com {product.boxQuantity} unidades</p>
+            {packSizeOf(product) > 1 ? (
+              <p className="text-sm text-slate-700 font-medium">
+                Vendido por {packUnitLabel(product.masterUnit, product.packaging)}
+                {product.packaging ? ` (${product.packaging})` : ""}: 1 {packUnitLabel(product.masterUnit, product.packaging)} = {product.boxQuantity}{" "}
+                {product.unitType} = R$ {(displayPrice * packSizeOf(product)).toFixed(2).replace(".", ",")}
+              </p>
+            ) : (
+              product.boxQuantity && <p className="text-sm text-slate-500">Caixa com {product.boxQuantity} unidades</p>
             )}
           </div>
 

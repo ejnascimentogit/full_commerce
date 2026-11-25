@@ -12,7 +12,7 @@ import { QUOTE_STATUS_BADGE, QUOTE_STATUS_LABEL } from "@/lib/quote-status";
 
 function quoteTotal(quote: Quote): number {
   if (quote.quotedTotal != null) return quote.quotedTotal;
-  return quote.items.reduce((sum, item) => sum + (item.referenceUnitPrice ?? 0) * item.quantity, 0);
+  return quote.items.reduce((sum, item) => sum + (item.referenceUnitPrice ?? 0) * item.quantity * (item.packSize ?? 1), 0);
 }
 
 export default function MeusOrcamentosPage() {

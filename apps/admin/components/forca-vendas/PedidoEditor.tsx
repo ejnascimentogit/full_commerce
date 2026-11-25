@@ -6,12 +6,15 @@ import {
   apiClient,
   customerNumber,
   discountFromPrice,
+  formatProductQuantity,
   lineDiscountPercent,
   lineNetPrice,
   lineSubtotal,
   netUnitPrice,
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHOD_ORDER,
+  packSizeOf,
+  packUnitLabel,
   salesBasePrice,
   salesOrderAlerts,
   salesPriceRange,
@@ -328,6 +331,11 @@ export function PedidoEditor({
                           {money(base)}
                           <span className="text-xs font-normal text-slate-500">/{UNIT_LABEL[p.unitType] ?? p.unitType}</span>
                         </span>
+                        {packSizeOf(p) > 1 && (
+                          <span className="block text-xs text-slate-500">
+                            {packUnitLabel(p.masterUnit, p.packaging)} {money(base * packSizeOf(p))}
+                          </span>
+                        )}
                       </span>
                       {inOrder != null && <span className="text-xs px-2 py-0.5 rounded-full bg-brand-600 text-white shrink-0">{inOrder}</span>}
                     </button>
@@ -371,7 +379,7 @@ export function PedidoEditor({
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-medium text-slate-900 truncate">{p.name}</span>
                       <span className="block text-xs text-slate-500">
-                        {line.quantity} {UNIT_LABEL[p.unitType] ?? p.unitType} × {money(unit)}
+                        {formatProductQuantity(p, line.quantity)} × {money(unit)}/{UNIT_LABEL[p.unitType] ?? p.unitType}
                         {pct > 0 && <span className="text-green-700"> · −{pct.toString().replace(".", ",")}%</span>}
                         {pct < 0 && <span className="text-amber-700"> · +{(-pct).toString().replace(".", ",")}%</span>}
                       </span>
@@ -532,6 +540,8 @@ function ItemSheet({
   const belowLimit = validPrice && unit < minPrice;
   const canEditPrice = minPrice < base || maxPrice > base;
   const step = (delta: number) => setQuantity(String(Math.max(1, (validQty ? qty : 0) + delta)));
+  const pack = packSizeOf(product);
+  const packUnit = packUnitLabel(product.masterUnit, product.packaging);
 
   function changePrice(value: string) {
     setMode("price");
@@ -576,7 +586,7 @@ function ItemSheet({
         </p>
 
         <label className="block text-sm text-slate-600 mb-1" htmlFor="item-qty">
-          Quantidade
+          {pack > 1 ? `Quantidade em ${packUnit} (${pack} ${product.unitType} cada)` : "Quantidade"}
         </label>
         <div className="flex items-center gap-2 mb-4">
           <button type="button" onClick={() => step(-1)} className="w-11 h-11 shrink-0 border border-slate-300 rounded-md text-lg" aria-label="Diminuir">
@@ -640,14 +650,18 @@ function ItemSheet({
           <div className="mt-4 bg-slate-50 rounded-md p-3 text-sm flex justify-between">
             <span className="text-slate-600">
               {money(unit)} × {qty}
-              {product.isVariableWeight ? ` × ~${product.avgWeight ?? 1}kg` : ""}
+              {product.isVariableWeight ? ` × ~${product.avgWeight ?? 1}kg` : pack > 1 ? ` ${packUnit} × ${pack} = ${qty * pack} ${product.unitType}` : ""}
             </span>
             <span className="font-semibold text-slate-900">
               {money(lineSubtotal(product, { quantity: qty, discountPercent: 0, unitPrice: unit }))}
             </span>
           </div>
         )}
-        {validQty && qty > product.stock && <p className="text-xs text-amber-700 mt-2">Quantidade maior que o estoque ({product.stock}).</p>}
+        {validQty && qty * (product.isVariableWeight ? 1 : pack) > product.stock && (
+          <p className="text-xs text-amber-700 mt-2">
+            Quantidade maior que o estoque ({product.stock} {product.unitType}).
+          </p>
+        )}
 
         <div className="flex gap-2 mt-5">
           {line && (

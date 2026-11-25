@@ -46,6 +46,8 @@ interface SeedProduct {
   basePrice: number;
   salePrice?: number;
   boxQuantity?: number;
+  masterUnit?: string;
+  packaging?: string;
   isVariableWeight?: boolean;
   avgWeight?: number;
   label: string; // shown on the mock package/weight badge, e.g. "750g"
@@ -54,15 +56,15 @@ interface SeedProduct {
 const seed: SeedProduct[] = [
   { id: "p-linguica-calabresa", vendorId: "vendor-seara", categoryId: "cat-acougue", name: "Linguiça Calabresa Seara 2,5kg", unitType: "kg", basePrice: 57.47, salePrice: 52.47, isVariableWeight: true, avgWeight: 2.5, label: "Aprox. 2.5kg" },
   { id: "p-leite-po-ninho", vendorId: "vendor-uniao", categoryId: "cat-laticinios", name: "Leite em Pó Ninho Integral 750g", unitType: "un", basePrice: 42.19, salePrice: 32.99, label: "750g" },
-  { id: "p-farinha-trigo", vendorId: "vendor-uniao", categoryId: "cat-mercearia", name: "Farinha de Trigo Finna TP1 1kg", unitType: "cx", basePrice: 46.9, salePrice: 43.9, boxQuantity: 10, label: "CAIXA 10un" },
+  { id: "p-farinha-trigo", vendorId: "vendor-uniao", categoryId: "cat-mercearia", name: "Farinha de Trigo Finna TP1 1kg", unitType: "un", basePrice: 4.69, salePrice: 4.39, boxQuantity: 10, masterUnit: "CX", packaging: "CX 10UN", label: "CAIXA 10un" },
   { id: "p-file-peito-frango", vendorId: "vendor-seara", categoryId: "cat-acougue", name: "Filé de Peito de Frango Congelado Friato", unitType: "kg", basePrice: 16.24, salePrice: 14.74, isVariableWeight: true, avgWeight: 0.8, label: "Aprox. 0.8kg" },
   { id: "p-requeijao-tirolez", vendorId: "vendor-uniao", categoryId: "cat-frios", name: "Requeijão Cremoso Tirolez Bisnaga 1,5kg", unitType: "un", basePrice: 53.9, salePrice: 51.99, label: "1.5kg" },
   { id: "p-agua-sanitaria", vendorId: "vendor-brilux", categoryId: "cat-limpeza", name: "Água Sanitária Olimpo 1L", unitType: "un", basePrice: 2.85, salePrice: 2.29, label: "1L" },
   { id: "p-detergente-neutro", vendorId: "vendor-brilux", categoryId: "cat-limpeza", name: "Detergente Neutro Brilux 500ml", unitType: "un", basePrice: 2.55, salePrice: 2.25, label: "500ml" },
   { id: "p-cafe-pilao", vendorId: "vendor-uniao", categoryId: "cat-mercearia", name: "Café Tradicional Vácuo Pilão 250g", unitType: "un", basePrice: 13.89, salePrice: 12.99, label: "250g" },
-  { id: "p-leite-condensado", vendorId: "vendor-uniao", categoryId: "cat-laticinios", name: "Leite Condensado Integral Camponesa 395g", unitType: "cx", basePrice: 175.23, salePrice: 167.13, boxQuantity: 27, label: "CAIXA 27un" },
+  { id: "p-leite-condensado", vendorId: "vendor-uniao", categoryId: "cat-laticinios", name: "Leite Condensado Integral Camponesa 395g", unitType: "un", basePrice: 6.49, salePrice: 6.19, boxQuantity: 27, masterUnit: "CX", packaging: "CX 27UN", label: "CAIXA 27un" },
   { id: "p-ovomaltine", vendorId: "vendor-uniao", categoryId: "cat-snacks", name: "Ovomaltine Flocos Extra Crocantes 750g", unitType: "un", basePrice: 35.9, salePrice: 32.9, label: "750g" },
-  { id: "p-refrigerante-cola", vendorId: "vendor-uniao", categoryId: "cat-bebidas", name: "Refrigerante Cola 2L (Pack c/ 6)", unitType: "cx", basePrice: 47.4, salePrice: 43.9, boxQuantity: 6, label: "CAIXA 6un" },
+  { id: "p-refrigerante-cola", vendorId: "vendor-uniao", categoryId: "cat-bebidas", name: "Refrigerante Cola 2L (Pack c/ 6)", unitType: "un", basePrice: 7.9, salePrice: 7.32, boxQuantity: 6, masterUnit: "FD", packaging: "FD 6X2L", label: "CAIXA 6un" },
   { id: "p-mussarela-natville", vendorId: "vendor-seara", categoryId: "cat-frios", name: "Queijo Mussarela Natville (Peça)", unitType: "kg", basePrice: 42.0, salePrice: 38.5, isVariableWeight: true, avgWeight: 4, label: "Aprox. 4kg" },
 ];
 
@@ -78,6 +80,8 @@ export const products: Product[] = seed.map((s) => ({
   basePrice: s.basePrice,
   salePrice: s.salePrice,
   boxQuantity: s.boxQuantity,
+  masterUnit: s.masterUnit,
+  packaging: s.packaging,
   isVariableWeight: Boolean(s.isVariableWeight),
   avgWeight: s.avgWeight,
   stock: 500,

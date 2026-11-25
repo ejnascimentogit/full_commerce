@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import type { Product } from "@ecommerce/types";
+import { packSizeOf, packUnitLabel } from "@ecommerce/api-client";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 
@@ -40,6 +41,9 @@ export function AddToCartBar({ product }: { product: Product }) {
           −
         </button>
         <span className="w-10 text-center font-medium">{quantity}</span>
+        {packSizeOf(product) > 1 && (
+          <span className="pr-2 text-xs font-semibold text-slate-500">{packUnitLabel(product.masterUnit, product.packaging)}</span>
+        )}
         <button
           type="button"
           onClick={() => setQuantity((q) => q + 1)}
