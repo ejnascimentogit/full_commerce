@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
+import { apiClient, formatItemQuantity, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER, userCan } from "@ecommerce/api-client";
 import type { Customer, PaymentMethod, Quote, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -145,14 +145,14 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
               <div className="flex-1">
                 <p className="text-slate-900">{item.name}</p>
                 <p className="text-slate-500">
-                  {item.quantity} {item.unitType}
+                  {formatItemQuantity(item)}
                   {item.referenceUnitPrice != null && (
                     <> x R$ {item.referenceUnitPrice.toFixed(2).replace(".", ",")}/{item.unitType} (referencia)</>
                   )}
                 </p>
               </div>
               {item.referenceUnitPrice != null && (
-                <p className="font-medium text-slate-900">R$ {(item.referenceUnitPrice * item.quantity).toFixed(2).replace(".", ",")}</p>
+                <p className="font-medium text-slate-900">R$ {(item.referenceUnitPrice * item.quantity * (item.packSize ?? 1)).toFixed(2).replace(".", ",")}</p>
               )}
             </div>
           ))}

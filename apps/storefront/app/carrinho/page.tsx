@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, calculateShipping, packageLabels, unitPriceOf } from "@ecommerce/api-client";
+import { apiClient, calculateShipping, formatProductQuantity, packageLabels, packSizeOf, unitPriceOf } from "@ecommerce/api-client";
 import type { Category, Product, StoreSettings } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
@@ -44,7 +44,7 @@ export default function CarrinhoPage() {
     .filter((l): l is { line: (typeof lines)[number]; product: Product } => Boolean(l.product));
 
   const subtotal = resolvedLines.reduce(
-    (sum, { line, product }) => sum + unitPriceOf(product) * line.quantity,
+    (sum, { line, product }) => sum + unitPriceOf(product) * line.quantity * packSizeOf(product),
     0,
   );
   const shipping = customer && settings ? calculateShipping(customer, settings) : null;
@@ -112,6 +112,9 @@ export default function CarrinhoPage() {
                   <p className="text-sm text-slate-600 mt-1">
                     R$ {unitPriceOf(product).toFixed(2).replace(".", ",")}/{product.unitType}
                   </p>
+                  {packSizeOf(product) > 1 && (
+                    <p className="text-xs text-slate-500">{formatProductQuantity(product, line.quantity)}</p>
+                  )}
                 </div>
                 <div className="flex items-center border border-slate-300 rounded-md shrink-0">
                   <button
@@ -133,7 +136,7 @@ export default function CarrinhoPage() {
                   </button>
                 </div>
                 <p className="w-24 text-right font-semibold shrink-0">
-                  R$ {(unitPriceOf(product) * line.quantity).toFixed(2).replace(".", ",")}
+                  R$ {(unitPriceOf(product) * line.quantity * packSizeOf(product)).toFixed(2).replace(".", ",")}
                 </p>
                 <button
                   type="button"

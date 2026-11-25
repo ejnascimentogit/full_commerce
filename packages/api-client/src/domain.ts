@@ -21,11 +21,51 @@ export function unitPriceOf(product: Product): number {
   return product.salePrice && product.salePrice > 0 ? product.salePrice : product.basePrice;
 }
 
+// ---------- Venda por embalagem (ex.: CX 20KG) ----------
+// Produto padrão (un ou kg, sem peso variável) com "quantidade da embalagem" > 1 é vendido em embalagens: o cliente/vendedor
+// digita 2 e leva 2 × 20 = 40, cobrando 40 × preço unitário. Produto "cx" continua com preço por caixa (boxQuantity só
+// informa), e peso variável continua pelo peso médio. Mesma regra no servidor (supabase/functions/api/index.ts, packSizeOf).
+export function packSizeOf(product: Pick<Product, "unitType" | "isVariableWeight" | "boxQuantity">): number {
+  if (product.isVariableWeight || product.unitType === "cx") return 1;
+  const n = Number(product.boxQuantity);
+  return Number.isFinite(n) && n > 1 ? n : 1;
+}
+
+/** Sigla da embalagem pra exibir: a unidade master ("CX"); sem ela, a 1ª palavra da embalagem ("CX" de "CX 20KG"); senão "emb.". */
+export function packUnitLabel(packUnit?: string, packaging?: string): string {
+  const unit = packUnit?.trim() || packaging?.trim().split(/\s+/)[0];
+  return unit ? unit.toUpperCase() : "emb.";
+}
+
+/** Texto da quantidade: "2 CX (40 kg)" em produto por embalagem; senão "3 un". */
+export function formatPackQuantity(quantity: number, unitType: string, packSize = 1, packUnit?: string, packaging?: string): string {
+  const fmt = (n: number) => String(Math.round(n * 1000) / 1000).replace(".", ",");
+  if (packSize > 1) return `${fmt(quantity)} ${packUnitLabel(packUnit, packaging)} (${fmt(quantity * packSize)} ${unitType})`;
+  return `${fmt(quantity)} ${unitType}`;
+}
+
+/** Atalho pra item de pedido/orçamento (dados congelados). */
+export function formatItemQuantity(item: { quantity: number; unitType: string; packSize?: number; packUnit?: string; packaging?: string }): string {
+  return formatPackQuantity(item.quantity, item.unitType, item.packSize ?? 1, item.packUnit, item.packaging);
+}
+
+/** Texto da quantidade a partir do produto vivo (carrinho, Novo pedido). */
+export function formatProductQuantity(product: Product, quantity: number): string {
+  return formatPackQuantity(quantity, product.unitType, packSizeOf(product), product.masterUnit, product.packaging);
+}
+
+/** Valor de uma linha a partir do produto vivo (carrinho, checkout): embalagem e peso variável incluídos. */
+export function productLineSubtotal(product: Product, quantity: number, unitPrice = unitPriceOf(product)): number {
+  const factor = product.isVariableWeight ? product.avgWeight ?? 1 : packSizeOf(product);
+  return Math.round(unitPrice * factor * quantity * 100) / 100;
+}
+
 export function buildOrderItem(product: Product, quantity: number): OrderItem {
   const unitPrice = unitPriceOf(product);
+  const packSize = packSizeOf(product);
   const estimatedSubtotal = product.isVariableWeight
     ? unitPrice * (product.avgWeight ?? 1) * quantity
-    : unitPrice * quantity;
+    : unitPrice * quantity * packSize;
   return {
     productId: product.id,
     vendorId: product.vendorId,
@@ -35,6 +75,7 @@ export function buildOrderItem(product: Product, quantity: number): OrderItem {
     unitPrice,
     quantity,
     estimatedSubtotal,
+    ...(packSize > 1 ? { packSize, packUnit: product.masterUnit, packaging: product.packaging } : {}),
   };
 }
 
@@ -45,6 +86,7 @@ export function buildOrderItem(product: Product, quantity: number): OrderItem {
 // produto: o preço já foi congelado em QuoteItem.referenceUnitPrice.
 export function buildOrderItemFromQuoteItem(item: QuoteItem): OrderItem {
   const unitPrice = item.referenceUnitPrice ?? 0;
+  const packSize = item.packSize ?? 1;
   return {
     productId: item.productId,
     vendorId: item.vendorId,
@@ -53,7 +95,8 @@ export function buildOrderItemFromQuoteItem(item: QuoteItem): OrderItem {
     unitType: item.unitType,
     unitPrice,
     quantity: item.quantity,
-    estimatedSubtotal: unitPrice * item.quantity,
+    estimatedSubtotal: unitPrice * item.quantity * packSize,
+    ...(packSize > 1 ? { packSize, packUnit: item.packUnit, packaging: item.packaging } : {}),
   };
 }
 

@@ -451,6 +451,8 @@ function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown
     description: p.description,
     sku: p.sku,
     customerReferenceCode: p.customer_reference_code ?? undefined,
+    packaging: p.packaging ?? undefined,
+    masterUnit: p.master_unit ?? undefined,
     categoryId: p.category_id,
     brand: p.brand ?? undefined,
     photos: p.photos ?? [],
@@ -540,6 +542,9 @@ function mapOrder(o: Record<string, unknown>, items: Record<string, unknown>[], 
       estimatedSubtotal: Number(i.estimated_subtotal),
       finalSubtotal: i.final_subtotal != null ? Number(i.final_subtotal) : undefined,
       listPrice: i.list_price != null ? Number(i.list_price) : undefined,
+      packSize: Number(i.pack_size ?? 1) > 1 ? Number(i.pack_size) : undefined,
+      packUnit: Number(i.pack_size ?? 1) > 1 ? i.pack_unit ?? undefined : undefined,
+      packaging: Number(i.pack_size ?? 1) > 1 ? i.packaging ?? undefined : undefined,
       discountPercent: i.discount_percent != null && Number(i.discount_percent) > 0 ? Number(i.discount_percent) : undefined,
     })),
     shippingAddress: o.shipping_address,
@@ -593,6 +598,9 @@ function mapQuote(q: Record<string, unknown>, items: Record<string, unknown>[]) 
       sku: i.sku,
       unitType: i.unit_type,
       quantity: Number(i.quantity),
+      packSize: Number(i.pack_size ?? 1) > 1 ? Number(i.pack_size) : undefined,
+      packUnit: Number(i.pack_size ?? 1) > 1 ? i.pack_unit ?? undefined : undefined,
+      packaging: Number(i.pack_size ?? 1) > 1 ? i.packaging ?? undefined : undefined,
       referenceUnitPrice: i.reference_unit_price != null ? Number(i.reference_unit_price) : undefined,
     })),
   };
@@ -616,9 +624,25 @@ function unitPriceOf(p: Record<string, unknown>): number {
   return p.sale_price != null && Number(p.sale_price) > 0 ? Number(p.sale_price) : Number(p.base_price);
 }
 
+// Venda por embalagem (porte de packSizeOf em packages/api-client/src/domain.ts): produto padrão (un/kg, sem peso
+// variável) com quant. master > 1 é vendido em embalagens — quantidade 2 numa CX 20KG = 40 × preço unitário. Produto
+// "cx" (preço já por caixa) e peso variável não multiplicam.
+function packSizeOf(p: Record<string, unknown>): number {
+  if (p.is_variable_weight || p.unit_type === "cx") return 1;
+  const n = Number(p.box_quantity);
+  return Number.isFinite(n) && n > 1 ? n : 1;
+}
+
+// Colunas de embalagem congeladas no item (espelho do pedido/orçamento). Só preenche quando multiplica.
+function packColumns(p: Record<string, unknown>) {
+  const packSize = packSizeOf(p);
+  return { pack_size: packSize, pack_unit: packSize > 1 ? p.master_unit ?? null : null, packaging: packSize > 1 ? p.packaging ?? null : null };
+}
+
 function buildOrderItem(p: Record<string, unknown>, quantity: number, autoPromotions: Record<string, unknown>[] = []) {
   const unitPrice = bestPromoPrice(p, autoPromotions) ?? unitPriceOf(p);
-  const estimatedSubtotal = p.is_variable_weight ? unitPrice * Number(p.avg_weight ?? 1) * quantity : unitPrice * quantity;
+  const pack = packColumns(p);
+  const estimatedSubtotal = p.is_variable_weight ? unitPrice * Number(p.avg_weight ?? 1) * quantity : unitPrice * quantity * pack.pack_size;
   return {
     product_id: p.id,
     vendor_id: p.vendor_id,
@@ -627,7 +651,8 @@ function buildOrderItem(p: Record<string, unknown>, quantity: number, autoPromot
     unit_type: p.unit_type,
     unit_price: unitPrice,
     quantity,
-    estimated_subtotal: estimatedSubtotal,
+    estimated_subtotal: Math.round(estimatedSubtotal * 100) / 100,
+    ...pack,
   };
 }
 
@@ -825,7 +850,11 @@ async function convertQuoteToOrderInternal(
       unit_type: qi.unit_type,
       unit_price: unitPrice,
       quantity,
-      estimated_subtotal: unitPrice * quantity,
+      // Embalagem congelada no orçamento: quantidade em embalagens × quant. master.
+      estimated_subtotal: Math.round(unitPrice * quantity * Number(qi.pack_size ?? 1) * 100) / 100,
+      pack_size: Number(qi.pack_size ?? 1),
+      pack_unit: qi.pack_unit ?? null,
+      packaging: qi.packaging ?? null,
     };
   });
   const referenceSubtotal = items.reduce((sum, i) => sum + i.estimated_subtotal, 0);
@@ -1308,6 +1337,7 @@ app.post("/quotes", async (c) => {
       unit_type: p.unit_type,
       quantity: i.quantity,
       reference_unit_price: unitPriceOf(p),
+      ...packColumns(p),
     };
   });
   await eco().from("quote_items").insert(itemRows);
@@ -1579,6 +1609,8 @@ app.post("/products", async (c) => {
       description: input.description ?? "",
       sku: skuRow as unknown as string,
       customer_reference_code: input.customerReferenceCode || null,
+      packaging: typeof input.packaging === "string" && input.packaging.trim() ? input.packaging.trim().slice(0, 40) : null,
+      master_unit: typeof input.masterUnit === "string" && input.masterUnit.trim() ? input.masterUnit.trim().toUpperCase().slice(0, 10) : null,
       brand: input.brand ?? null,
       photos: input.photos ?? [],
       unit_type: input.unitType,
@@ -1621,6 +1653,8 @@ app.patch("/products/:id", async (c) => {
     name: "name",
     description: "description",
     customerReferenceCode: "customer_reference_code",
+    packaging: "packaging",
+    masterUnit: "master_unit",
     brand: "brand",
     photos: "photos",
     unitType: "unit_type",
@@ -1638,6 +1672,10 @@ app.patch("/products/:id", async (c) => {
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
   if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
   if ("customer_reference_code" in row && !row.customer_reference_code) row.customer_reference_code = null;
+  if ("packaging" in row) row.packaging = typeof row.packaging === "string" && row.packaging.trim() ? row.packaging.trim().slice(0, 40) : null;
+  if ("master_unit" in row) {
+    row.master_unit = typeof row.master_unit === "string" && row.master_unit.trim() ? row.master_unit.trim().toUpperCase().slice(0, 10) : null;
+  }
   if (admin.role !== "vendorAdmin") {
     if ("maxDiscountPercent" in patch) row.max_discount_percent = productLimitValue(patch.maxDiscountPercent);
     if ("maxSurchargePercent" in patch) row.max_surcharge_percent = productLimitValue(patch.maxSurchargePercent);
@@ -1939,6 +1977,7 @@ app.patch("/admin/orders/:id/items", async (c) => {
     if (!item) continue;
     if (admin.role === "vendorAdmin" && item.vendor_id !== admin.vendor_id) continue;
     const previousSubtotal = item.final_subtotal != null ? Number(item.final_subtotal) : Number(item.estimated_subtotal);
+    // finalQuantity vem na unidade do produto (kg/un), inclusive em venda por embalagem (a tela mostra 40 kg, não 2 CX).
     const newSubtotal = Math.round(Number(item.unit_price) * adj.finalQuantity * 100) / 100;
     if (newSubtotal === previousSubtotal) continue;
     await eco().from("order_items").update({ final_subtotal: newSubtotal }).eq("id", item.id);
@@ -2203,7 +2242,9 @@ app.post("/admin/orders", async (c) => {
       throw new ApiError(422, "PRICE_ABOVE_MAX", `${product.name}: acréscimo acima do máximo (${limits.maxSurchargePercent}%, preço máximo ${maxPrice.toFixed(2)}).`);
     }
     const discountPercent = listPrice > 0 ? Math.round((1 - unitPrice / listPrice) * 10000) / 100 : 0;
-    const estimatedSubtotal = product.is_variable_weight ? unitPrice * Number(product.avg_weight ?? 1) * quantity : unitPrice * quantity;
+    const estimatedSubtotal = product.is_variable_weight
+      ? unitPrice * Number(product.avg_weight ?? 1) * quantity
+      : unitPrice * quantity * packSizeOf(product);
     return {
       ...base,
       unit_price: unitPrice,

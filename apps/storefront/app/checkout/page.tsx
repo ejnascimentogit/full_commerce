@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import {
   apiClient,
+  packSizeOf,
   unitPriceOf,
   calculateShipping,
   calculatePromotionDiscount,
@@ -148,13 +149,13 @@ export default function CheckoutPage() {
       setPixQrDataUrl(null);
       return;
     }
-    const sub = resolved.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity, 0);
+    const sub = resolved.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity * packSizeOf(product), 0);
     const isFreeShip = appliedPromotion?.type === "freeShipping";
     const ship = isFreeShip ? 0 : calculateShipping(customer, settings);
     const disc = appliedPromotion
       ? calculatePromotionDiscount(
           appliedPromotion,
-          resolved.map(({ line, product }) => ({ product, subtotal: unitPriceOf(product) * line.quantity })),
+          resolved.map(({ line, product }) => ({ product, subtotal: unitPriceOf(product) * line.quantity * packSizeOf(product) })),
           sub,
         )
       : 0;
@@ -203,7 +204,7 @@ export default function CheckoutPage() {
     .map((l) => ({ line: l, product: products[l.productId] }))
     .filter((l): l is { line: (typeof lines)[number]; product: Product } => Boolean(l.product));
 
-  const subtotal = resolvedLines.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity, 0);
+  const subtotal = resolvedLines.reduce((sum, { line, product }) => sum + unitPriceOf(product) * line.quantity * packSizeOf(product), 0);
   const baseShipping = calculateShipping(customer, settings);
   const belowMinimum = Boolean(settings.minOrderValue && subtotal < settings.minOrderValue);
   const isFreeShippingCoupon = appliedPromotion?.type === "freeShipping";
@@ -211,7 +212,7 @@ export default function CheckoutPage() {
   const discount = appliedPromotion
     ? calculatePromotionDiscount(
         appliedPromotion,
-        resolvedLines.map(({ line, product }) => ({ product, subtotal: unitPriceOf(product) * line.quantity })),
+        resolvedLines.map(({ line, product }) => ({ product, subtotal: unitPriceOf(product) * line.quantity * packSizeOf(product) })),
         subtotal,
       )
     : 0;

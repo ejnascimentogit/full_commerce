@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiClient, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
+import { apiClient, formatItemQuantity, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_ORDER } from "@ecommerce/api-client";
 import type { Address, Category, PaymentMethod, Quote, StoreSettings } from "@ecommerce/types";
 import { Header } from "@/components/Header";
 import { RegionBar } from "@/components/RegionBar";
@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth-context";
 import { QUOTE_STATUS_BADGE, QUOTE_STATUS_LABEL } from "@/lib/quote-status";
 
 function referenceTotal(quote: Quote): number {
-  return quote.items.reduce((sum, item) => sum + (item.referenceUnitPrice ?? 0) * item.quantity, 0);
+  return quote.items.reduce((sum, item) => sum + (item.referenceUnitPrice ?? 0) * item.quantity * (item.packSize ?? 1), 0);
 }
 
 export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -163,7 +163,7 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
                 <div className="flex-1">
                   <p className="text-slate-900">{item.name}</p>
                   <p className="text-slate-500">
-                    {item.quantity} {item.unitType}
+                    {formatItemQuantity(item)}
                     {item.referenceUnitPrice != null && (
                       <> x R$ {item.referenceUnitPrice.toFixed(2).replace(".", ",")}/{item.unitType} (referencia)</>
                     )}
@@ -171,7 +171,7 @@ export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: 
                 </div>
                 {item.referenceUnitPrice != null && (
                   <p className="font-medium text-slate-900">
-                    R$ {(item.referenceUnitPrice * item.quantity).toFixed(2).replace(".", ",")}
+                    R$ {(item.referenceUnitPrice * item.quantity * (item.packSize ?? 1)).toFixed(2).replace(".", ",")}
                   </p>
                 )}
               </div>

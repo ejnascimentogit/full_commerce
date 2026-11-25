@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL, userCan } from "@ecommerce/api-client";
+import { formatItemQuantity, apiClient, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL, userCan } from "@ecommerce/api-client";
 import type { Order, StoreSettings } from "@ecommerce/types";
 import { AdminShell } from "@/components/AdminShell";
 import { useAdminAuth } from "@/lib/admin-auth-context";
@@ -268,6 +268,7 @@ export default function PedidoDetailPage({ params }: { params: Promise<{ id: str
                     <p className="text-slate-500">
                       {(currentTotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType} × R${" "}
                       {item.unitPrice.toFixed(2).replace(".", ",")}/{item.unitType}
+                      {(item.packSize ?? 1) > 1 && <span className="ml-1">· pedido: {formatItemQuantity(item)}</span>}
                       {!!item.discountPercent && <span className="ml-2 text-green-700">−{item.discountPercent}% do vendedor</span>}
                       {delta !== 0 && (
                         <span className={`ml-2 font-medium ${delta > 0 ? "text-green-600" : "text-amber-600"}`}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { apiClient, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
+import { apiClient, formatItemQuantity, PAYMENT_METHOD_LABEL } from "@ecommerce/api-client";
 import type { Customer, DeliveryRegion, Order, Product } from "@ecommerce/types";
 import { useAdminAuth } from "@/lib/admin-auth-context";
 
@@ -93,7 +93,7 @@ export default function ImprimirPedidoPage({ params }: { params: Promise<{ id: s
                 <p className="font-medium text-slate-900">{item.name}</p>
               </td>
               <td className="py-3 pr-4 text-slate-500">{UNIT_TYPE_LABEL[item.unitType] ?? item.unitType}</td>
-              <td className="py-3 pr-4 text-right text-slate-700">{item.quantity}</td>
+              <td className="py-3 pr-4 text-right text-slate-700">{(item.packSize ?? 1) > 1 ? formatItemQuantity(item) : item.quantity}</td>
               <td className="py-3 pr-6 text-right font-bold text-slate-900 text-base">
                 {(item.estimatedSubtotal / item.unitPrice).toFixed(item.unitType === "kg" ? 3 : 0)} {item.unitType}
               </td>

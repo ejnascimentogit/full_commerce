@@ -27,9 +27,15 @@ export {
   calculateShipping,
   deriveBrandPalette,
   findPromotionByCoupon,
+  formatItemQuantity,
+  formatPackQuantity,
+  formatProductQuantity,
   getBestSellingProducts,
   isPromotionActive,
   matchRegionByNeighborhood,
+  packSizeOf,
+  packUnitLabel,
+  productLineSubtotal,
   unitPriceOf,
 } from "./domain";
 export type { BrandPalette, ShippingSettings } from "./domain";

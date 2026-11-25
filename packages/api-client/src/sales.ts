@@ -1,5 +1,5 @@
 import type { Customer, PaymentMethod, SalesOrderLine, SalesProduct } from "@ecommerce/types";
-import { calculateShipping, type ShippingSettings } from "./domain";
+import { calculateShipping, packSizeOf, type ShippingSettings } from "./domain";
 
 // Regras puras da força de vendas (Novo pedido digitado pelo vendedor). A tela usa pra mostrar totais e alertas na hora;
 // o servidor (supabase/functions/api/index.ts, POST /admin/orders) confere as mesmas regras de novo, então nada daqui é
@@ -54,21 +54,22 @@ export function lineDiscountPercent(product: Pick<SalesProduct, "listPrice" | "p
 
 /** Subtotal da linha a partir do preço líquido (peso variável usa o peso médio). */
 export function lineSubtotal(
-  product: Pick<SalesProduct, "listPrice" | "promoPrice" | "isVariableWeight" | "avgWeight">,
+  product: Pick<SalesProduct, "listPrice" | "promoPrice" | "isVariableWeight" | "avgWeight" | "unitType" | "boxQuantity">,
   line: Pick<SalesOrderLine, "quantity" | "discountPercent" | "unitPrice">,
 ): number {
-  const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
+  // Peso variável: peso médio. Venda por embalagem (CX 20KG): quantidade × quant. master.
+  const weight = product.isVariableWeight ? product.avgWeight ?? 1 : packSizeOf(product);
   return round2(lineNetPrice(product, line) * weight * line.quantity);
 }
 
 /** Subtotal estimado da linha, igual ao servidor: produto de peso variável usa o peso médio. */
 export function salesLineSubtotal(
-  product: Pick<SalesProduct, "listPrice" | "promoPrice" | "isVariableWeight" | "avgWeight">,
+  product: Pick<SalesProduct, "listPrice" | "promoPrice" | "isVariableWeight" | "avgWeight" | "unitType" | "boxQuantity">,
   quantity: number,
   discountPercent: number,
 ): number {
   const unit = netUnitPrice(salesBasePrice(product), discountPercent);
-  const weight = product.isVariableWeight ? product.avgWeight ?? 1 : 1;
+  const weight = product.isVariableWeight ? product.avgWeight ?? 1 : packSizeOf(product);
   return round2(unit * weight * quantity);
 }
 
@@ -178,8 +179,10 @@ export function salesOrderAlerts(input: SalesAlertInput): SalesAlert[] {
         productId: product.id,
       });
     }
-    if (line.quantity > product.stock) {
-      alerts.push({ level: "warning", code: "LOW_STOCK", message: `${product.name}: pedido ${line.quantity}, estoque ${product.stock}.`, productId: product.id });
+    // Estoque é na unidade do produto: venda por embalagem compara quantidade × quant. master.
+    const baseQty = line.quantity * (product.isVariableWeight ? 1 : packSizeOf(product));
+    if (baseQty > product.stock) {
+      alerts.push({ level: "warning", code: "LOW_STOCK", message: `${product.name}: pedido ${baseQty} ${product.unitType}, estoque ${product.stock}.`, productId: product.id });
     }
     if (product.isVariableWeight) {
       alerts.push({ level: "info", code: "VARIABLE_WEIGHT", message: `${product.name} tem peso variável: o valor é estimado e pode mudar na separação.`, productId: product.id });

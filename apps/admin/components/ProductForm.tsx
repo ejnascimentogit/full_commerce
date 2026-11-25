@@ -30,6 +30,8 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [name, setName] = useState(product?.name ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
   const [customerReferenceCode, setCustomerReferenceCode] = useState(product?.customerReferenceCode ?? "");
+  const [packaging, setPackaging] = useState(product?.packaging ?? "");
+  const [masterUnit, setMasterUnit] = useState(product?.masterUnit ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? "");
   const [vendorId, setVendorId] = useState(product?.vendorId ?? (user?.role === "vendorAdmin" ? user.vendorId! : vendors[0]?.id ?? ""));
   const [unitType, setUnitType] = useState<UnitType>(product?.unitType ?? "un");
@@ -106,6 +108,9 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         name,
         description,
         customerReferenceCode: customerReferenceCode || undefined,
+        // Vazio vai como "" (não undefined) pra limpar a embalagem ao editar; o servidor grava nulo.
+        packaging: packaging.trim(),
+        masterUnit: masterUnit.trim(),
         categoryId,
         photos,
         unitType,
@@ -164,16 +169,54 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         </div>
       </div>
 
-      <div>
-        <Field
-          label="Código de referência do cliente (opcional)"
-          value={customerReferenceCode}
-          onChange={setCustomerReferenceCode}
-        />
-        <p className="text-xs text-slate-400 mt-1">
-          Confira antes de salvar — não pode repetir o código de outro produto (o sistema recusa se já estiver em uso).
-        </p>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <Field
+            label="Código de referência do cliente (opcional)"
+            value={customerReferenceCode}
+            onChange={setCustomerReferenceCode}
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Confira antes de salvar — não pode repetir o código de outro produto (o sistema recusa se já estiver em uso).
+          </p>
+        </div>
+        <div>
+          <Field label="Embalagem (opcional)" value={packaging} onChange={(v) => setPackaging(v.toUpperCase().slice(0, 40))} />
+          <p className="text-xs text-slate-400 mt-1">Como o produto vem, ex.: CX 12KG, FD 6X1L, PCT 1KG. Aparece para o vendedor no Novo pedido.</p>
+        </div>
       </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <Field label="Unidade master (opcional)" value={masterUnit} onChange={(v) => setMasterUnit(v.toUpperCase().slice(0, 10))} />
+          <p className="text-xs text-slate-400 mt-1">Sigla da embalagem de venda: CX, FD, PCT, SC…</p>
+        </div>
+        <div>
+          <Field label="Quant. master (opcional)" value={boxQuantity} onChange={setBoxQuantity} type="number" />
+          <p className="text-xs text-slate-400 mt-1">Quantas unidades/kg vêm na embalagem. Ex.: CX 20KG → 20.</p>
+        </div>
+      </div>
+      {(() => {
+        const qm = Number(boxQuantity);
+        const price = Number(salePrice) > 0 ? Number(salePrice) : Number(basePrice);
+        if (!(qm > 1)) return null;
+        if (isVariableWeight || unitType === "cx") {
+          return (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-md px-3 py-2 -mt-2">
+              {isVariableWeight ? "Produto de peso variável" : "Unidade de venda em caixa (preço já é da caixa)"}: a quant. master fica só informativa, não
+              multiplica o pedido.
+            </p>
+          );
+        }
+        const unit = (masterUnit || packaging.split(" ")[0] || "emb.").toUpperCase();
+        return (
+          <p className="text-xs text-brand-700 bg-brand-50 rounded-md px-3 py-2 -mt-2">
+            Vendido por embalagem: o cliente/vendedor digita a quantidade em {unit}. Ex.: 2 {unit} = {2 * qm} {unitType}
+            {price > 0 ? ` × R$ ${price.toFixed(2).replace(".", ",")} = R$ ${(2 * qm * price).toFixed(2).replace(".", ",")}` : ""}. O preço
+            de tabela é por {unitType}.
+          </p>
+        );
+      })()}
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
@@ -253,9 +296,9 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         )}
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Unidade de venda</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Unidade de venda (preço por)</label>
           <select value={unitType} onChange={(e) => setUnitType(e.target.value as UnitType)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
             {UNIT_TYPES.map((u) => (
               <option key={u.value} value={u.value}>
@@ -264,12 +307,8 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
             ))}
           </select>
         </div>
-        <Field label="Unidades por caixa/fardo (opcional)" value={boxQuantity} onChange={setBoxQuantity} type="number" />
-        <Field label="Estoque" value={stock} onChange={setStock} type="number" required />
+        <Field label="Estoque (na unidade de venda)" value={stock} onChange={setStock} type="number" required />
       </div>
-      <p className="text-xs text-slate-400 -mt-2">
-        Informativo — aparece na página do produto (ex: &quot;Caixa com 12 unidades&quot;), mesmo vendendo por unidade.
-      </p>
 
       {activePromotion && (
         <p className="text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-md px-3 py-2 flex items-center gap-1.5">
