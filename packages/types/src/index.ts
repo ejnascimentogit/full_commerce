@@ -261,6 +261,8 @@ export interface Product {
   sku: string;
   /** Código que o cliente já usa para esse produto no sistema dele — texto livre, opcional. */
   customerReferenceCode?: string;
+  /** Embalagem do produto, texto livre para exibição — ex.: "CX 12KG", "FD 6X1L", "PCT 1KG". Opcional. */
+  packaging?: string;
   categoryId: string;
   brand?: string;
   photos: string[];

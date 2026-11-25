@@ -451,6 +451,7 @@ function mapProduct(p: Record<string, unknown>, variants: Record<string, unknown
     description: p.description,
     sku: p.sku,
     customerReferenceCode: p.customer_reference_code ?? undefined,
+    packaging: p.packaging ?? undefined,
     categoryId: p.category_id,
     brand: p.brand ?? undefined,
     photos: p.photos ?? [],
@@ -1579,6 +1580,7 @@ app.post("/products", async (c) => {
       description: input.description ?? "",
       sku: skuRow as unknown as string,
       customer_reference_code: input.customerReferenceCode || null,
+      packaging: typeof input.packaging === "string" && input.packaging.trim() ? input.packaging.trim().slice(0, 40) : null,
       brand: input.brand ?? null,
       photos: input.photos ?? [],
       unit_type: input.unitType,
@@ -1621,6 +1623,7 @@ app.patch("/products/:id", async (c) => {
     name: "name",
     description: "description",
     customerReferenceCode: "customer_reference_code",
+    packaging: "packaging",
     brand: "brand",
     photos: "photos",
     unitType: "unit_type",
@@ -1638,6 +1641,7 @@ app.patch("/products/:id", async (c) => {
   if ("vendor_id" in row && admin.role !== "platformAdmin") delete row.vendor_id;
   if ("sale_price" in row && (!row.sale_price || Number(row.sale_price) <= 0)) row.sale_price = null;
   if ("customer_reference_code" in row && !row.customer_reference_code) row.customer_reference_code = null;
+  if ("packaging" in row) row.packaging = typeof row.packaging === "string" && row.packaging.trim() ? row.packaging.trim().slice(0, 40) : null;
   if (admin.role !== "vendorAdmin") {
     if ("maxDiscountPercent" in patch) row.max_discount_percent = productLimitValue(patch.maxDiscountPercent);
     if ("maxSurchargePercent" in patch) row.max_surcharge_percent = productLimitValue(patch.maxSurchargePercent);

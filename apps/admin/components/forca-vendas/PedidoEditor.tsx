@@ -116,7 +116,8 @@ export function PedidoEditor({
         p.name.toLowerCase().includes(q) ||
         p.sku.toLowerCase().includes(q) ||
         (p.brand ?? "").toLowerCase().includes(q) ||
-        (p.customerReferenceCode ?? "").toLowerCase().includes(q),
+        (p.customerReferenceCode ?? "").toLowerCase().includes(q) ||
+        (p.packaging ?? "").toLowerCase().includes(q),
     );
   }, [products, query]);
   const promoProducts = (products ?? []).filter((p) => p.promoPrice != null && p.promoPrice < p.listPrice);
@@ -314,7 +315,8 @@ export function PedidoEditor({
                     <button type="button" onClick={() => setEditing(p)} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center gap-3">
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-medium text-slate-900 truncate">{p.name}</span>
-                        <span className="block text-xs text-slate-500 truncate">
+                        <span className="block text-xs text-slate-500">
+                          {p.packaging && <span className="font-medium text-slate-700">{p.packaging} · </span>}
                           Cód. {p.sku}
                           {p.brand ? ` · ${p.brand}` : ""} · Estoque{" "}
                           <span className={p.stock <= 0 ? "text-red-600" : ""}>{p.stock}</span>
@@ -568,7 +570,8 @@ function ItemSheet({
       >
         <h3 className="text-base font-semibold text-slate-900">{product.name}</h3>
         <p className="text-xs text-slate-500 mb-4">
-          Cód. {product.sku} · Estoque {product.stock} · Tabela {money(base)}/{UNIT_LABEL[product.unitType] ?? product.unitType}
+          Cód. {product.sku}
+          {product.packaging ? ` · Embalagem ${product.packaging}` : ""} · Estoque {product.stock} · Tabela {money(base)}/{UNIT_LABEL[product.unitType] ?? product.unitType}
           {base < product.listPrice && <span className="text-green-700"> (promoção, de {money(product.listPrice)})</span>}
         </p>
 
@@ -605,7 +608,7 @@ function ItemSheet({
               onChange={(e) => changePrice(e.target.value)}
               onFocus={selectAll}
               disabled={!canEditPrice}
-              className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-50 ${aboveTable || belowLimit ? "border-red-500" : "border-slate-300"}`}
+              className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed ${aboveTable || belowLimit ? "border-red-500" : "border-slate-300"}`}
             />
           </div>
           <div className="col-span-2">
@@ -619,13 +622,13 @@ function ItemSheet({
               onChange={(e) => changePct(e.target.value)}
               onFocus={selectAll}
               disabled={!canEditPrice}
-              className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-50 ${aboveTable || belowLimit ? "border-red-500" : "border-slate-300"}`}
+              className={`w-full border rounded-md px-3 py-2.5 text-base disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed ${aboveTable || belowLimit ? "border-red-500" : "border-slate-300"}`}
             />
           </div>
         </div>
         <p className={`text-xs mt-1 ${aboveTable || belowLimit ? "text-red-600" : "text-slate-500"}`}>
           {!canEditPrice
-            ? "Preço travado na tabela para este produto."
+            ? "🔒 Preço travado na tabela: a faixa de desconto/acréscimo está em 0%. O administrador libera em Configurações → Força de vendas (ou no cadastro do produto)."
             : aboveTable
               ? `Acréscimo acima do máximo (${limits.maxSurchargePercent}%). Preço máximo ${money(maxPrice)}.`
               : belowLimit

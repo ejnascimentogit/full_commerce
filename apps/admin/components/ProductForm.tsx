@@ -30,6 +30,7 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
   const [name, setName] = useState(product?.name ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
   const [customerReferenceCode, setCustomerReferenceCode] = useState(product?.customerReferenceCode ?? "");
+  const [packaging, setPackaging] = useState(product?.packaging ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? "");
   const [vendorId, setVendorId] = useState(product?.vendorId ?? (user?.role === "vendorAdmin" ? user.vendorId! : vendors[0]?.id ?? ""));
   const [unitType, setUnitType] = useState<UnitType>(product?.unitType ?? "un");
@@ -106,6 +107,8 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         name,
         description,
         customerReferenceCode: customerReferenceCode || undefined,
+        // Vazio vai como "" (não undefined) pra limpar a embalagem ao editar; o servidor grava nulo.
+        packaging: packaging.trim(),
         categoryId,
         photos,
         unitType,
@@ -164,15 +167,21 @@ export function ProductForm({ product, categories, vendors }: ProductFormProps) 
         </div>
       </div>
 
-      <div>
-        <Field
-          label="Código de referência do cliente (opcional)"
-          value={customerReferenceCode}
-          onChange={setCustomerReferenceCode}
-        />
-        <p className="text-xs text-slate-400 mt-1">
-          Confira antes de salvar — não pode repetir o código de outro produto (o sistema recusa se já estiver em uso).
-        </p>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <Field
+            label="Código de referência do cliente (opcional)"
+            value={customerReferenceCode}
+            onChange={setCustomerReferenceCode}
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Confira antes de salvar — não pode repetir o código de outro produto (o sistema recusa se já estiver em uso).
+          </p>
+        </div>
+        <div>
+          <Field label="Embalagem (opcional)" value={packaging} onChange={(v) => setPackaging(v.toUpperCase().slice(0, 40))} />
+          <p className="text-xs text-slate-400 mt-1">Como o produto vem, ex.: CX 12KG, FD 6X1L, PCT 1KG. Aparece para o vendedor no Novo pedido.</p>
+        </div>
       </div>
 
       <div>
